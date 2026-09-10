@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-obsidian text-bone antialiased font-sans selection:bg-bone selection:text-ink;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(243, 230, 196, 0.07), transparent 55%),
+      linear-gradient(to bottom, #163226, #12261c);
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-variant-numeric: tabular-nums;
+    text-rendering: optimizeLegibility;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(243, 230, 196, 0.22);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  h1, h2, h3 {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid #f3e6c4;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: #f3e6c4;
+    color: #163226;
+  }
+
+  select {
+    background-color: #244536;
+    color: #f3e6c4;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-cardBg border border-borderMuted;
+  }
+  .panel-pad {
+    @apply bg-cardBg border border-borderMuted p-5;
+  }
+  .panel-tight {
+    @apply bg-cardBg border border-borderMuted;
+  }
+  .table-head {
+    @apply bg-cardLight/50 border-b border-borderMuted text-sage font-medium text-[12px];
+  }
+  .btn-primary {
+    @apply px-5 py-2.5 text-[14px] font-semibold flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .eyebrow {
+    @apply text-[13px] font-medium text-sage;
+  }
+  .score-display {
+    @apply font-display font-semibold tabular-nums tracking-tight;
+  }
+  .field {
+    @apply bg-cardLight border border-line text-[14px] text-bone;
+    background-color: #244536;
+    color: #f3e6c4;
+    border-radius: 2px;
+  }
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[80] focus:px-4 focus:py-2 focus:bg-bone focus:text-ink focus:font-semibold focus:text-[13px];
+  }
+  .page-shell {
+    @apply max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  .fascia {
+    @apply bg-ink border-b border-line;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(18, 38, 28, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(243, 230, 196, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(243, 230, 196, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

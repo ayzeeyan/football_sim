@@ -1,0 +1,100 @@
+--- a/backend_go/pkg/datamanager/datamanager.go
++++ b/backend_go/pkg/datamanager/datamanager.go
+@@ -321,27 +321,44 @@ func (dm *DataManager) DedupePlayers() int {
+ 		for _, cp := range copies {
+-			if cp.player == keepPlayer {
+-				continue
++			if cp.player != keepPlayer {
++				// Merge stats into canonical player via max()
++				keepPlayer.Appearances = maxInt(keepPlayer.Appearances, cp.player.Appearances)
++				keepPlayer.Goals = maxInt(keepPlayer.Goals, cp.player.Goals)
++				keepPlayer.Assists = maxInt(keepPlayer.Assists, cp.player.Assists)
++				keepPlayer.CareerGoals = maxInt(keepPlayer.CareerGoals, cp.player.CareerGoals)
++				keepPlayer.CareerAssists = maxInt(keepPlayer.CareerAssists, cp.player.CareerAssists)
++				keepPlayer.CareerApps = maxInt(keepPlayer.CareerApps, cp.player.CareerApps)
++				keepPlayer.BestGoals = maxInt(keepPlayer.BestGoals, cp.player.BestGoals)
++				keepPlayer.BestAssists = maxInt(keepPlayer.BestAssists, cp.player.BestAssists)
+ 			}
++		}
+ 
+-			// Merge stats into canonical player via max()
+-			keepPlayer.Appearances = maxInt(keepPlayer.Appearances, cp.player.Appearances)
+-			keepPlayer.Goals = maxInt(keepPlayer.Goals, cp.player.Goals)
+-			keepPlayer.Assists = maxInt(keepPlayer.Assists, cp.player.Assists)
+-			keepPlayer.CareerGoals = maxInt(keepPlayer.CareerGoals, cp.player.CareerGoals)
+-			keepPlayer.CareerAssists = maxInt(keepPlayer.CareerAssists, cp.player.CareerAssists)
+-			keepPlayer.CareerApps = maxInt(keepPlayer.CareerApps, cp.player.CareerApps)
++		// Identify all clubs containing copies of this player
++		affectedClubs := make(map[string]bool, len(copies))
++		for _, cp := range copies {
++			affectedClubs[cp.club.ClubID] = true
++		}
+ 
+-			// Remove duplicate player from club squad
+-			newSquad := make([]*models.Player, 0, len(cp.club.Squad))
+-			for _, p := range cp.club.Squad {
+-				if p != cp.player {
+-					newSquad = append(newSquad, p)
++		// Cleanse squads across all affected clubs:
++		// In keepClub, retain strictly the first occurrence of keepPlayer.
++		// In all other clubs, remove all occurrences.
++		for _, club := range dm.ClubsList {
++			if !affectedClubs[club.ClubID] {
++				continue
++			}
++
++			newSquad := make([]*models.Player, 0, len(club.Squad))
++			keptInClub := false
++			for _, p := range club.Squad {
++				isMatch := (p == keepPlayer) || strings.EqualFold(strings.TrimSpace(p.FullName), name)
++				if isMatch {
++					if club.ClubID == keepClub.ClubID && !keptInClub {
++						newSquad = append(newSquad, keepPlayer)
++						keptInClub = true
++					} else {
++						removed++
++					}
++				} else {
++					newSquad = append(newSquad, p)
+ 				}
+ 			}
+-			cp.club.Squad = newSquad
+-			cp.club.SquadSize = len(cp.club.Squad)
+-			removed++
++			club.Squad = newSquad
++			club.SquadSize = len(club.Squad)
+ 		}
+ 	}
+ 
+--- a/backend_go/pkg/datamanager/prodigies.go
++++ b/backend_go/pkg/datamanager/prodigies.go
+@@ -305,15 +305,23 @@ func (dm *DataManager) InitializeEliteProdigies() error {
+ 		// Clean up any lingering duplicate copies of this wonderkid across all squads
+ 		for _, c := range dm.ClubsList {
+ 			newSquad := make([]*models.Player, 0, len(c.Squad))
++			keptProdigy := false
+ 			for _, p := range c.Squad {
+-				if p != prodigy && strings.EqualFold(p.FullName, cfg.FullName) {
+-					prodigy.Appearances = maxInt(prodigy.Appearances, p.Appearances)
+-					prodigy.Goals = maxInt(prodigy.Goals, p.Goals)
+-					prodigy.Assists = maxInt(prodigy.Assists, p.Assists)
+-					// extra duplicate is eliminated
++				isWonderkidMatch := (p == prodigy) || strings.EqualFold(strings.TrimSpace(p.FullName), cfg.FullName)
++				if isWonderkidMatch {
++					if c.ClubID == cid && !keptProdigy {
++						newSquad = append(newSquad, prodigy)
++						keptProdigy = true
++					} else {
++						prodigy.Appearances = maxInt(prodigy.Appearances, p.Appearances)
++						prodigy.Goals = maxInt(prodigy.Goals, p.Goals)
++						prodigy.Assists = maxInt(prodigy.Assists, p.Assists)
++						prodigy.CareerGoals = maxInt(prodigy.CareerGoals, p.CareerGoals)
++						prodigy.CareerAssists = maxInt(prodigy.CareerAssists, p.CareerAssists)
++						prodigy.CareerApps = maxInt(prodigy.CareerApps, p.CareerApps)
++					}
+ 				} else {
+ 					newSquad = append(newSquad, p)
+ 				}
+ 			}
+ 			c.Squad = newSquad
+ 			c.SquadSize = len(c.Squad)

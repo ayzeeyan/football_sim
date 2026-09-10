@@ -1,0 +1,9 @@
+frontend/node_modules/
+backend_go/coverage*
+backend_go/cov
+backend_go/cover
+backend_go/cover-*
+backend_go/coverage.txt
+saves/*.bak
+.DS_Store
+*.exe
