@@ -51,16 +51,16 @@ type GrowthSnapshot struct {
 // TransfersSnapshot captures market activity, negotiations, completed deals,
 // budgets, and the active-window guards required for exact restart continuity.
 type TransfersSnapshot struct {
-	CurrentDay              int                              `json:"current_day"`
-	CurrentMatchweek        int                              `json:"current_matchweek"`
-	CurrentWeek             int                              `json:"current_week,omitempty"`
-	IsOffSeason             bool                             `json:"is_off_season,omitempty"`
-	TransferredThisWindow   map[string]bool                  `json:"transferred_this_window,omitempty"`
-	Feed                    []transfers.TransferFeedItem     `json:"feed"`
-	Completed               []transfers.CompletedTransfer    `json:"completed"`
-	AllTime                 []transfers.CompletedTransfer    `json:"all_time"`
-	ActiveNegotiations      []*transfers.TransferNegotiation `json:"active_negotiations,omitempty"`
-	ManagerBudgets          map[string]int64                 `json:"manager_budgets,omitempty"`
+	CurrentDay            int                              `json:"current_day"`
+	CurrentMatchweek      int                              `json:"current_matchweek"`
+	CurrentWeek           int                              `json:"current_week,omitempty"`
+	IsOffSeason           bool                             `json:"is_off_season,omitempty"`
+	TransferredThisWindow map[string]bool                  `json:"transferred_this_window,omitempty"`
+	Feed                  []transfers.TransferFeedItem     `json:"feed"`
+	Completed             []transfers.CompletedTransfer    `json:"completed"`
+	AllTime               []transfers.CompletedTransfer    `json:"all_time"`
+	ActiveNegotiations    []*transfers.TransferNegotiation `json:"active_negotiations,omitempty"`
+	ManagerBudgets        map[string]int64                 `json:"manager_budgets,omitempty"`
 }
 
 // CareerSnapshot contains the full serialized state of the football universe across seasons.
@@ -573,6 +573,7 @@ func RestoreCareer(
 						if destClub, ok := tm.Clubs[targetClubID]; ok {
 							destClub.Squad = append(destClub.Squad, livePlayer)
 						}
+					}
 				} else {
 					// New regen or academy player
 					savedPlayer.ClubID = clubID
