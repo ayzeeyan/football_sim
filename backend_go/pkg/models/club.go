@@ -367,11 +367,15 @@ func (c *Club) GetBench(starters []*Player, n int, fixture ...string) []*Player 
 func (c *Club) RecalculateRatings() {
 	c.SquadSize = len(c.Squad)
 	if c.SquadSize == 0 {
+		c.SquadAvgOVR = 0
+		c.OverallTeamRating = 0
 		return
 	}
 	total := 0
 	for _, p := range c.Squad {
-		total += p.OVR
+		if p != nil {
+			total += p.OVR
+		}
 	}
 	avg := float64(total) / float64(c.SquadSize)
 	c.SquadAvgOVR = math.Round(avg*10) / 10
@@ -384,6 +388,8 @@ func (c *Club) RecalculateRatings() {
 			xiTotal += s.OVR
 		}
 		c.OverallTeamRating = int(math.Round(float64(xiTotal) / float64(len(starters))))
+	} else {
+		c.OverallTeamRating = 0
 	}
 }
 

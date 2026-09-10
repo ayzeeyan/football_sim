@@ -1,9 +1,25 @@
+# Frontend dependencies and generated output
 frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Go coverage/build output
 backend_go/coverage*
 backend_go/cov
 backend_go/cover
 backend_go/cover-*
 backend_go/coverage.txt
-saves/*.bak
-.DS_Store
 *.exe
+
+# Runtime career state (never commit user saves)
+saves/career.json
+saves/clubs/
+saves/*.bak
+saves/*.tmp
+
+# Logs and local tooling
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

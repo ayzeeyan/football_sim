@@ -21,9 +21,13 @@ import (
 	"football_sim/pkg/transfers"
 )
 
-func isPortInUse(port int) bool {
+func isPortInUse(host string, port int) bool {
 	timeout := 250 * time.Millisecond
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), timeout)
+	probeHost := host
+	if probeHost == "" || probeHost == "0.0.0.0" || probeHost == "::" {
+		probeHost = "127.0.0.1"
+	}
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(probeHost, fmt.Sprintf("%d", port)), timeout)
 	if err == nil {
 		_ = conn.Close()
 		return true
@@ -31,9 +35,9 @@ func isPortInUse(port int) bool {
 	return false
 }
 
-func getFreePort(preferred int) int {
+func getFreePort(host string, preferred int) int {
 	port := preferred
-	for isPortInUse(port) {
+	for isPortInUse(host, port) {
 		log.Printf("[Server] Port %d is currently in use. Checking port %d...", port, port+1)
 		port++
 	}
@@ -83,6 +87,7 @@ func findUp(rel string) string {
 }
 
 func main() {
+	hostFlag := flag.String("host", "127.0.0.1", "Host/IP to bind (use 0.0.0.0 explicitly for LAN access)")
 	portFlag := flag.Int("port", 8000, "Port to bind the HTTP and WebSocket server")
 	datasetFlag := flag.String("dataset", "", "Path to dataset.json")
 	saveFlag := flag.String("save", "", "Path to career.json save file")
@@ -148,11 +153,11 @@ func main() {
 	}
 
 	// 4. Configure HTTP & WebSocket Server
-	port := getFreePort(*portFlag)
+	port := getFreePort(*hostFlag, *portFlag)
 	srv := server.NewServer(dm, ge, tm, te, savePath, staticDir)
 
 	httpServer := &http.Server{
-		Addr:              fmt.Sprintf("0.0.0.0:%d", port),
+		Addr:              net.JoinHostPort(*hostFlag, fmt.Sprintf("%d", port)),
 		Handler:           srv,
 		ReadHeaderTimeout: 15 * time.Second,
 		IdleTimeout:       120 * time.Second,
@@ -163,8 +168,11 @@ func main() {
 	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("[Server] 🚀 Server running at http://localhost:%d", port)
-		log.Printf("[Server] Open http://localhost:%d in your browser to view the frontend.", port)
+		displayHost := *hostFlag
+		if displayHost == "127.0.0.1" || displayHost == "::1" {
+			displayHost = "localhost"
+		}
+		log.Printf("[Server] 🚀 Server running at http://%s:%d", displayHost, port)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[Server] ListenAndServe error: %v", err)
 		}

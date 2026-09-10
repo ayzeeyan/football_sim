@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	SaveVersion     = 1
+	SaveVersion     = 2
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -48,15 +48,19 @@ type GrowthSnapshot struct {
 	Timeline          map[string][]growth.TimelineEntry      `json:"timeline"`
 }
 
-// TransfersSnapshot captures market activity, negotiations, completed deals, and budgets.
+// TransfersSnapshot captures market activity, negotiations, completed deals,
+// budgets, and the active-window guards required for exact restart continuity.
 type TransfersSnapshot struct {
-	CurrentDay         int                              `json:"current_day"`
-	CurrentMatchweek   int                              `json:"current_matchweek"`
-	Feed               []transfers.TransferFeedItem     `json:"feed"`
-	Completed          []transfers.CompletedTransfer    `json:"completed"`
-	AllTime            []transfers.CompletedTransfer    `json:"all_time"`
-	ActiveNegotiations []*transfers.TransferNegotiation `json:"active_negotiations,omitempty"`
-	ManagerBudgets     map[string]int64                 `json:"manager_budgets,omitempty"`
+	CurrentDay            int                              `json:"current_day"`
+	CurrentMatchweek      int                              `json:"current_matchweek"`
+	CurrentWeek           int                              `json:"current_week,omitempty"`
+	IsOffSeason           bool                             `json:"is_off_season,omitempty"`
+	TransferredThisWindow map[string]bool                  `json:"transferred_this_window,omitempty"`
+	Feed                  []transfers.TransferFeedItem     `json:"feed"`
+	Completed             []transfers.CompletedTransfer    `json:"completed"`
+	AllTime               []transfers.CompletedTransfer    `json:"all_time"`
+	ActiveNegotiations    []*transfers.TransferNegotiation `json:"active_negotiations,omitempty"`
+	ManagerBudgets        map[string]int64                 `json:"manager_budgets,omitempty"`
 }
 
 // CareerSnapshot contains the full serialized state of the football universe across seasons.
@@ -194,13 +198,16 @@ func BuildSnapshot(
 			budgets[cid] = m.BudgetEur
 		}
 		snap.Transfers = TransfersSnapshot{
-			CurrentDay:         te.CurrentDay,
-			CurrentMatchweek:   te.CurrentMatchweek,
-			Feed:               te.TransferFeed,
-			Completed:          te.CompletedTransfers,
-			AllTime:            te.AllTimeTransfers,
-			ActiveNegotiations: te.ActiveNegotiations,
-			ManagerBudgets:     budgets,
+			CurrentDay:            te.CurrentDay,
+			CurrentMatchweek:      te.CurrentMatchweek,
+			CurrentWeek:           te.CurrentWeek,
+			IsOffSeason:           te.IsOffSeason,
+			TransferredThisWindow: copyBoolMap(te.TransferredThisWindow),
+			Feed:                  te.TransferFeed,
+			Completed:             te.CompletedTransfers,
+			AllTime:               te.AllTimeTransfers,
+			ActiveNegotiations:    te.ActiveNegotiations,
+			ManagerBudgets:        budgets,
 		}
 	}
 
@@ -687,6 +694,13 @@ func RestoreCareer(
 		if snap.Transfers.CurrentMatchweek > 0 {
 			te.CurrentMatchweek = snap.Transfers.CurrentMatchweek
 		}
+		if snap.Transfers.CurrentWeek > 0 {
+			te.CurrentWeek = snap.Transfers.CurrentWeek
+		}
+		te.IsOffSeason = snap.Transfers.IsOffSeason
+		if snap.Transfers.TransferredThisWindow != nil {
+			te.TransferredThisWindow = copyBoolMap(snap.Transfers.TransferredThisWindow)
+		}
 		if snap.Transfers.Feed != nil {
 			te.TransferFeed = snap.Transfers.Feed
 		}
@@ -792,6 +806,17 @@ func copyStringMap(in map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func copyBoolMap(in map[string]bool) map[string]bool {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(in))
 	for k, v := range in {
 		out[k] = v
 	}

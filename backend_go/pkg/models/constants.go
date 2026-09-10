@@ -49,7 +49,7 @@ func GetPositionCategory(pos string) string {
 		return "GK"
 	case "CB", "LB", "RB", "LWB", "RWB":
 		return "DEF"
-	case "CDM", "CM":
+	case "CDM", "CM", "LM", "RM":
 		return "MID"
 	default:
 		// Includes CAM, CF, ST, LW, RW, etc.
