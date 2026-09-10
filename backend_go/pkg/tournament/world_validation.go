@@ -2,6 +2,7 @@ package tournament
 
 import (
 	"fmt"
+	"math"
 
 	"football_sim/pkg/models"
 )
@@ -148,6 +149,38 @@ func (tm *TournamentManager) ValidateWorldState() error {
 		}
 	}
 
+	if tm.GrowthEngine != nil {
+		for playerID, bio := range tm.GrowthEngine.Biometrics {
+			if bio == nil {
+				return fmt.Errorf("world validation: biometric profile for player %q is nil", playerID)
+			}
+			if bio.PlayerID != "" && bio.PlayerID != playerID {
+				return fmt.Errorf("world validation: biometric map key %q does not match profile player id %q", playerID, bio.PlayerID)
+			}
+			values := []struct {
+				name  string
+				value float64
+			}{
+				{"current height", bio.CurrentHeightCM},
+				{"baseline height", bio.BaselineHeightCM},
+				{"current weight", bio.CurrentWeightKG},
+				{"baseline weight", bio.BaselineWeightKG},
+				{"growth velocity", bio.GrowthVelocity},
+				{"accumulated XP", bio.AccumulatedXP},
+				{"level XP target", bio.LevelXPTarget},
+				{"yearly height taken", bio.YearlyHeightTaken},
+			}
+			for _, item := range values {
+				if math.IsNaN(item.value) || math.IsInf(item.value, 0) {
+					return fmt.Errorf("world validation: player %q biometric %s is not finite", playerID, item.name)
+				}
+			}
+			if bio.Age < 0 || bio.Potential < 0 || bio.Potential > 100 || bio.CurrentHeightCM <= 0 || bio.CurrentWeightKG <= 0 || bio.LevelXPTarget < 0 || bio.AccumulatedXP < 0 {
+				return fmt.Errorf("world validation: player %q has invalid biometric bounds", playerID)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -159,7 +192,7 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 		return fmt.Errorf("world validation: club %q played=%d but W+D+L=%d", club.ClubID, club.Played, club.Won+club.Drawn+club.Lost)
 	}
 	if club.GoalDifference != club.GoalsFor-club.GoalsAgainst {
-		return fmt.Errorf("world validation: club %q goal difference=%d but GF-GA=%d", club.ClubID, club.GoalDifference, club.GoalsFor-club.GoalsAgainst)
+		return fmt.Errorf("world validation: club %q goal difference=%d but GF-GA=%d", club.ClubID, club.GoalsFor-club.GoalsAgainst)
 	}
 	if club.OverallTeamRating < 0 || club.OverallTeamRating > 100 {
 		return fmt.Errorf("world validation: club %q team rating %d outside 0..100", club.ClubID, club.OverallTeamRating)
