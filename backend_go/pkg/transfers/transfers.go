@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
-	"strings"
 	"sync"
 
 	"football_sim/pkg/managers"
@@ -12,9 +11,9 @@ import (
 )
 
 const (
-	TransferWindowWeeks          = 12
+	TransferWindowWeeks           = 12
 	transferIncomeReinvestmentPct = 100
-	minimumActiveWarchest         = int64(5_000_000)
+	minimumActiveWarchest          = int64(5_000_000)
 )
 
 // TransferFeedItem represents a breaking news wire item.
@@ -78,17 +77,9 @@ type TransferRecordsData struct {
 	TotalTransfersCount int                     `json:"total_transfers_count"`
 }
 
-var superLeagueClubIDs = map[string]bool{
-	"LAL-BAR": true, "LAL-RMA": true, "LAL-ATM": true,
-	"EPL-ARS": true, "EPL-LIV": true, "EPL-TOT": true,
-	"BUN-BAY": true, "BUN-DOR": true,
-	"SEA-INT": true, "SEA-NAP": true, "SEA-MIL": true,
-	"FL1-PSG": true, "FRA-PSG": true,
-}
-
-func isSuperLeagueClub(clubID string) bool { return superLeagueClubIDs[clubID] }
+func isSuperLeagueClub(clubID string) bool { return models.IsDesignatedWonderkidClubID(clubID) }
 func isCanonicalWonderkid(p *models.Player) bool {
-	return p != nil && (p.UniverseWonderkid || strings.HasPrefix(p.PlayerID, "WK_"))
+	return p != nil && models.IsCanonicalWonderkidID(p.PlayerID)
 }
 
 // CalculateClubWarchest is retained for compatibility with existing callers.
@@ -218,9 +209,13 @@ func (te *TransferEngine) RevertToBaselines(pull ...float64) {
 		p = pull[0]
 	}
 	for _, club := range te.Clubs {
-		if club == nil { continue }
+		if club == nil {
+			continue
+		}
 		for _, pl := range club.Squad {
-			if pl == nil || pl.MarketValueEUR <= 0 { continue }
+			if pl == nil || pl.MarketValueEUR <= 0 {
+				continue
+			}
 			anchor := models.BaselineValue(pl.OVR, pl.Age, pl.UniverseWonderkid)
 			pl.MarketValueEUR += int64(float64(anchor-pl.MarketValueEUR) * p)
 			models.ClampPlayer(pl)
@@ -240,9 +235,13 @@ func (te *TransferEngine) BeginOffSeasonWindow() {
 	te.CompletedTransfers = te.CompletedTransfers[:0]
 	te.TransferredThisWindow = make(map[string]bool)
 	for cid, club := range te.Clubs {
-		if club == nil { continue }
+		if club == nil {
+			continue
+		}
 		club.Finances.TransferBudget = calculateClubWindowBudget(club)
-		if club.Finances.TransferBudget < 0 { club.Finances.TransferBudget = 0 }
+		if club.Finances.TransferBudget < 0 {
+			club.Finances.TransferBudget = 0
+		}
 		te.syncManagerBudget(cid)
 	}
 	te.prependFeed(TransferFeedItem{Headline: "Summer transfer window opens: Week 1 of 12.", Category: "EXCLUSIVE", Timestamp: "Week 1"})
@@ -259,7 +258,9 @@ func (te *TransferEngine) ResetForNewSeason() {
 	te.CurrentDay = 1
 	te.CurrentMatchweek = 1
 	te.IsOffSeason = false
-	for cid := range te.Clubs { te.syncManagerBudget(cid) }
+	for cid := range te.Clubs {
+		te.syncManagerBudget(cid)
+	}
 	te.prependFeed(TransferFeedItem{Headline: "New season squads confirmed. The transfer market is closed until season completion.", Category: "EXCLUSIVE", Matchweek: 1, Timestamp: "MW 1"})
 }
 
@@ -272,18 +273,24 @@ func (te *TransferEngine) UpdateDailyMarket() {
 func (te *TransferEngine) AdvanceOpenWindow() {
 	te.mu.Lock()
 	defer te.mu.Unlock()
-	if !te.IsOffSeason || te.CurrentWeek > TransferWindowWeeks { return }
+	if !te.IsOffSeason || te.CurrentWeek > TransferWindowWeeks {
+		return
+	}
 	te.advanceWeeklyMarketUnlocked()
 }
 
 func (te *TransferEngine) advanceWeeklyMarketUnlocked() {
 	var surviving []*TransferNegotiation
 	for _, neg := range te.ActiveNegotiations {
-		if !te.progressNegotiation(neg) { surviving = append(surviving, neg) }
+		if !te.progressNegotiation(neg) {
+			surviving = append(surviving, neg)
+		}
 	}
 	te.ActiveNegotiations = surviving
 	numBids := 2 + te.RNG.Intn(3)
-	for i := 0; i < numBids; i++ { te.aiInitiateBid() }
+	for i := 0; i < numBids; i++ {
+		te.aiInitiateBid()
+	}
 	te.CurrentWeek++
 	te.CurrentDay++
 }
@@ -291,22 +298,42 @@ func (te *TransferEngine) advanceWeeklyMarketUnlocked() {
 func (te *TransferEngine) updateDailyMarketUnlocked(windowOpen bool) {
 	var surviving []*TransferNegotiation
 	for _, neg := range te.ActiveNegotiations {
-		if !te.progressNegotiation(neg) { surviving = append(surviving, neg) }
+		if !te.progressNegotiation(neg) {
+			surviving = append(surviving, neg)
+		}
 	}
 	te.ActiveNegotiations = surviving
 	if windowOpen {
-		for i, n := 0, 1+te.RNG.Intn(2); i < n; i++ { te.aiInitiateBid() }
+		for i, n := 0, 1+te.RNG.Intn(2); i < n; i++ {
+			te.aiInitiateBid()
+		}
 	}
 	te.CurrentDay++
 }
 
 func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
-	if neg == nil || neg.Player == nil || neg.Seller == nil || neg.Buyer == nil { return true }
-	if te.TransferredThisWindow[neg.Player.PlayerID] { neg.StageName = "COLLAPSED"; return true }
+	if neg == nil || neg.Player == nil || neg.Seller == nil || neg.Buyer == nil {
+		return true
+	}
+	if te.TransferredThisWindow[neg.Player.PlayerID] {
+		neg.StageName = "COLLAPSED"
+		return true
+	}
 	found := false
-	for _, p := range neg.Seller.Squad { if p != nil && p.PlayerID == neg.Player.PlayerID { found = true; break } }
-	if !found { neg.StageName = "COLLAPSED"; return true }
-	if isCanonicalWonderkid(neg.Player) && !isSuperLeagueClub(neg.Buyer.ClubID) { neg.StageName = "COLLAPSED"; return true }
+	for _, p := range neg.Seller.Squad {
+		if p != nil && p.PlayerID == neg.Player.PlayerID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		neg.StageName = "COLLAPSED"
+		return true
+	}
+	if isCanonicalWonderkid(neg.Player) && !isSuperLeagueClub(neg.Buyer.ClubID) {
+		neg.StageName = "COLLAPSED"
+		return true
+	}
 	if !canAfford(neg.Buyer, neg.CurrentBid) {
 		neg.StageName = "COLLAPSED"
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("DEAL COLLAPSED: %s cannot fund %s move for %s due to budget limits", neg.Buyer.ShortName, models.FormatCurrency(neg.CurrentBid), neg.Player.FullName), Category: "REJECTED", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
@@ -319,9 +346,16 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 		neg.StageName, neg.ProgressPct = "COUNTER_OFFER", 40
 		newBid := neg.CurrentBid + int64(float64(neg.CurrentBid)*(0.10+te.RNG.Float64()*0.15))
 		available := neg.Buyer.Finances.TransferBudget
-		if neg.Buyer.Finances.Balance < available { available = neg.Buyer.Finances.Balance }
-		if newBid > available { newBid = available }
-		if newBid <= 0 { neg.StageName = "COLLAPSED"; return true }
+		if neg.Buyer.Finances.Balance < available {
+			available = neg.Buyer.Finances.Balance
+		}
+		if newBid > available {
+			newBid = available
+		}
+		if newBid <= 0 {
+			neg.StageName = "COLLAPSED"
+			return true
+		}
 		neg.AskingPrice, neg.CurrentBid = newBid, newBid
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s submit improved bid of %s for %s (%s)", neg.Buyer.ShortName, models.FormatCurrency(newBid), neg.Player.FullName, neg.Seller.ShortName), Category: "TWIST", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 		return false
@@ -331,9 +365,15 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 			hijackCost := int64(float64(neg.CurrentBid) * 1.15)
 			var rivals []*models.Club
 			for _, c := range te.Clubs {
-				if c == nil || c.ClubID == neg.Buyer.ClubID || c.ClubID == neg.Seller.ClubID { continue }
-				if isCanonicalWonderkid(neg.Player) && !isSuperLeagueClub(c.ClubID) { continue }
-				if canAfford(c, hijackCost) { rivals = append(rivals, c) }
+				if c == nil || c.ClubID == neg.Buyer.ClubID || c.ClubID == neg.Seller.ClubID {
+					continue
+				}
+				if isCanonicalWonderkid(neg.Player) && !isSuperLeagueClub(c.ClubID) {
+					continue
+				}
+				if canAfford(c, hijackCost) {
+					rivals = append(rivals, c)
+				}
 			}
 			if len(rivals) > 0 {
 				hijacker := rivals[te.RNG.Intn(len(rivals))]
@@ -347,7 +387,10 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("Medical booked: %s arrives at %s training ground ahead of final signature", neg.Player.FullName, neg.Buyer.ShortName), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 		return false
 	case 5:
-		if !te.executeTransfer(neg) { neg.StageName = "COLLAPSED"; return true }
+		if !te.executeTransfer(neg) {
+			neg.StageName = "COLLAPSED"
+			return true
+		}
 		neg.StageName, neg.ProgressPct = "COMPLETED", 100
 		return true
 	default:
@@ -358,18 +401,41 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 // executeTransfer performs final backend commit validation and only mutates
 // transfer eligibility/finances after every invariant has passed.
 func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
-	if neg == nil || neg.Player == nil || neg.Seller == nil || neg.Buyer == nil || neg.CurrentBid <= 0 { return false }
+	if neg == nil || neg.Player == nil || neg.Seller == nil || neg.Buyer == nil || neg.CurrentBid <= 0 {
+		return false
+	}
 	p := neg.Player
-	if te.TransferredThisWindow[p.PlayerID] || neg.Seller.ClubID == neg.Buyer.ClubID { return false }
-	if isCanonicalWonderkid(p) && !isSuperLeagueClub(neg.Buyer.ClubID) { return false }
-	if !canAfford(neg.Buyer, neg.CurrentBid) { return false }
+	if te.TransferredThisWindow[p.PlayerID] || neg.Seller.ClubID == neg.Buyer.ClubID {
+		return false
+	}
+	if isCanonicalWonderkid(p) && !isSuperLeagueClub(neg.Buyer.ClubID) {
+		return false
+	}
+	if !canAfford(neg.Buyer, neg.CurrentBid) {
+		return false
+	}
 	found := false
-	for _, sp := range neg.Seller.Squad { if sp != nil && sp.PlayerID == p.PlayerID { found = true; break } }
-	if !found { return false }
-	for _, bp := range neg.Buyer.Squad { if bp != nil && bp.PlayerID == p.PlayerID { return false } }
+	for _, sp := range neg.Seller.Squad {
+		if sp != nil && sp.PlayerID == p.PlayerID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return false
+	}
+	for _, bp := range neg.Buyer.Squad {
+		if bp != nil && bp.PlayerID == p.PlayerID {
+			return false
+		}
+	}
 
 	newSellerSquad := make([]*models.Player, 0, len(neg.Seller.Squad)-1)
-	for _, sp := range neg.Seller.Squad { if sp != nil && sp.PlayerID != p.PlayerID { newSellerSquad = append(newSellerSquad, sp) } }
+	for _, sp := range neg.Seller.Squad {
+		if sp != nil && sp.PlayerID != p.PlayerID {
+			newSellerSquad = append(newSellerSquad, sp)
+		}
+	}
 	neg.Seller.Squad = newSellerSquad
 	p.ClubID = neg.Buyer.ClubID
 	// OriginalClubID is historical metadata. Permanent transfers never rewrite it.
@@ -380,7 +446,9 @@ func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
 	neg.Seller.Finances.Balance += neg.CurrentBid
 	reinvest := neg.CurrentBid * transferIncomeReinvestmentPct / 100
 	neg.Seller.Finances.TransferBudget += reinvest
-	if neg.Seller.Finances.TransferBudget > neg.Seller.Finances.Balance { neg.Seller.Finances.TransferBudget = neg.Seller.Finances.Balance }
+	if neg.Seller.Finances.TransferBudget > neg.Seller.Finances.Balance {
+		neg.Seller.Finances.TransferBudget = neg.Seller.Finances.Balance
+	}
 	te.syncManagerBudget(neg.Buyer.ClubID)
 	te.syncManagerBudget(neg.Seller.ClubID)
 	te.TransferredThisWindow[p.PlayerID] = true
@@ -396,69 +464,144 @@ func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
 
 func (te *TransferEngine) aiInitiateBid() {
 	var clubs []*models.Club
-	for _, c := range te.Clubs { clubs = append(clubs, c) }
-	if len(clubs) < 2 { return }
+	for _, c := range te.Clubs {
+		clubs = append(clubs, c)
+	}
+	if len(clubs) < 2 {
+		return
+	}
 	var solvent []*models.Club
-	for _, c := range clubs { if canAfford(c, minimumActiveWarchest) { solvent = append(solvent, c) } }
-	if len(solvent) == 0 { return }
+	for _, c := range clubs {
+		if canAfford(c, minimumActiveWarchest) {
+			solvent = append(solvent, c)
+		}
+	}
+	if len(solvent) == 0 {
+		return
+	}
 	buyer := solvent[te.RNG.Intn(len(solvent))]
 	var sellers []*models.Club
-	for _, c := range clubs { if c.ClubID != buyer.ClubID && len(c.Squad) > 15 { sellers = append(sellers, c) } }
-	if len(sellers) == 0 { return }
+	for _, c := range clubs {
+		if c.ClubID != buyer.ClubID && len(c.Squad) > 15 {
+			sellers = append(sellers, c)
+		}
+	}
+	if len(sellers) == 0 {
+		return
+	}
 	seller := sellers[te.RNG.Intn(len(sellers))]
 
 	var validTargets []*models.Player
 	for _, p := range seller.Squad {
-		if p == nil || te.TransferredThisWindow[p.PlayerID] { continue }
+		if p == nil || te.TransferredThisWindow[p.PlayerID] {
+			continue
+		}
 		alreadyNeg := false
-		for _, n := range te.ActiveNegotiations { if n != nil && n.Player != nil && n.Player.PlayerID == p.PlayerID { alreadyNeg = true; break } }
-		if alreadyNeg { continue }
-		if isCanonicalWonderkid(p) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) { continue }
+		for _, n := range te.ActiveNegotiations {
+			if n != nil && n.Player != nil && n.Player.PlayerID == p.PlayerID {
+				alreadyNeg = true
+				break
+			}
+		}
+		if alreadyNeg {
+			continue
+		}
+		if isCanonicalWonderkid(p) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) {
+			continue
+		}
 		baseVal := models.BaselineValue(p.OVR, p.Age, p.UniverseWonderkid)
 		estBid := int64(float64(baseVal) * 1.10)
-		if !canAfford(buyer, estBid) { continue }
-		if p.OVR >= 76 || isCanonicalWonderkid(p) { validTargets = append(validTargets, p) }
+		if !canAfford(buyer, estBid) {
+			continue
+		}
+		if p.OVR >= 76 || isCanonicalWonderkid(p) {
+			validTargets = append(validTargets, p)
+		}
 	}
-	if len(validTargets) == 0 { return }
+	if len(validTargets) == 0 {
+		return
+	}
 	target := validTargets[te.RNG.Intn(len(validTargets))]
 	baseVal := models.BaselineValue(target.OVR, target.Age, target.UniverseWonderkid)
 	initialBid := int64(float64(baseVal) * (0.95 + te.RNG.Float64()*0.20))
 	available := buyer.Finances.TransferBudget
-	if buyer.Finances.Balance < available { available = buyer.Finances.Balance }
-	if initialBid > available { initialBid = available }
-	if initialBid <= 0 { return }
+	if buyer.Finances.Balance < available {
+		available = buyer.Finances.Balance
+	}
+	if initialBid > available {
+		initialBid = available
+	}
+	if initialBid <= 0 {
+		return
+	}
 	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, target.PlayerID, te.CurrentDay), Player: target, Buyer: buyer, Seller: seller, CurrentBid: initialBid, AskingPrice: initialBid, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(target), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(initialBid))}}
 	te.ActiveNegotiations = append(te.ActiveNegotiations, neg)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s open talks with %s for %s with opening %s bid", buyer.ShortName, seller.ShortName, target.FullName, models.FormatCurrency(initialBid)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 }
 
 func (te *TransferEngine) GetTransferRecords() TransferRecordsData {
-	te.mu.RLock(); defer te.mu.RUnlock()
+	te.mu.RLock()
+	defer te.mu.RUnlock()
 	all := append([]CompletedTransfer(nil), te.AllTimeTransfers...)
 	sort.Slice(all, func(i, j int) bool { return all[i].FeeEUR > all[j].FeeEUR })
-	top := all; if len(top) > 10 { top = top[:10] }
+	top := all
+	if len(top) > 10 {
+		top = top[:10]
+	}
 	netSpend := make(map[string]ClubNetSpend)
-	for _, club := range te.Clubs { netSpend[club.ClubID] = ClubNetSpend{ClubID: club.ClubID, ClubName: club.ClubName, ShortName: club.ShortName, PrimaryColor: club.PrimaryColor} }
+	for _, club := range te.Clubs {
+		netSpend[club.ClubID] = ClubNetSpend{ClubID: club.ClubID, ClubName: club.ClubName, ShortName: club.ShortName, PrimaryColor: club.PrimaryColor}
+	}
 	for _, tr := range te.AllTimeTransfers {
-		if b, ok := netSpend[tr.BuyerID]; ok { b.Spent += tr.FeeEUR; b.Net -= tr.FeeEUR; netSpend[tr.BuyerID] = b }
-		if s, ok := netSpend[tr.SellerID]; ok { s.Received += tr.FeeEUR; s.Net += tr.FeeEUR; netSpend[tr.SellerID] = s }
+		if b, ok := netSpend[tr.BuyerID]; ok {
+			b.Spent += tr.FeeEUR
+			b.Net -= tr.FeeEUR
+			netSpend[tr.BuyerID] = b
+		}
+		if s, ok := netSpend[tr.SellerID]; ok {
+			s.Received += tr.FeeEUR
+			s.Net += tr.FeeEUR
+			netSpend[tr.SellerID] = s
+		}
 	}
 	return TransferRecordsData{TopSignings: top, NetSpend: netSpend, TotalTransfersCount: len(te.AllTimeTransfers)}
 }
 
 func (te *TransferEngine) InitiateBid(playerID string, buyerID string, bidAmount int64) *TransferNegotiation {
-	te.mu.Lock(); defer te.mu.Unlock()
-	if !te.IsWindowOpen() || te.TransferredThisWindow[playerID] { return nil }
-	buyer := te.Clubs[buyerID]; if buyer == nil { return nil }
-	var target *models.Player; var seller *models.Club
-	for _, c := range te.Clubs {
-		for _, p := range c.Squad { if p != nil && p.PlayerID == playerID { target, seller = p, c; break } }
-		if target != nil { break }
+	te.mu.Lock()
+	defer te.mu.Unlock()
+	if !te.IsWindowOpen() || te.TransferredThisWindow[playerID] {
+		return nil
 	}
-	if target == nil || seller == nil || seller.ClubID == buyerID { return nil }
-	if isCanonicalWonderkid(target) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) { return nil }
-	if bidAmount <= 0 { bidAmount = int64(float64(models.BaselineValue(target.OVR, target.Age, target.UniverseWonderkid)) * 1.05) }
-	if !canAfford(buyer, bidAmount) { return nil }
+	buyer := te.Clubs[buyerID]
+	if buyer == nil {
+		return nil
+	}
+	var target *models.Player
+	var seller *models.Club
+	for _, c := range te.Clubs {
+		for _, p := range c.Squad {
+			if p != nil && p.PlayerID == playerID {
+				target, seller = p, c
+				break
+			}
+		}
+		if target != nil {
+			break
+		}
+	}
+	if target == nil || seller == nil || seller.ClubID == buyerID {
+		return nil
+	}
+	if isCanonicalWonderkid(target) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) {
+		return nil
+	}
+	if bidAmount <= 0 {
+		bidAmount = int64(float64(models.BaselineValue(target.OVR, target.Age, target.UniverseWonderkid)) * 1.05)
+	}
+	if !canAfford(buyer, bidAmount) {
+		return nil
+	}
 	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, target.PlayerID, te.CurrentDay), Player: target, Buyer: buyer, Seller: seller, CurrentBid: bidAmount, AskingPrice: bidAmount, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(target), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(bidAmount))}}
 	te.ActiveNegotiations = append(te.ActiveNegotiations, neg)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s open talks with %s for %s with opening %s bid", buyer.ShortName, seller.ShortName, target.FullName, models.FormatCurrency(bidAmount)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
@@ -467,29 +610,70 @@ func (te *TransferEngine) InitiateBid(playerID string, buyerID string, bidAmount
 
 func (te *TransferEngine) prependFeed(item TransferFeedItem) {
 	te.TransferFeed = append([]TransferFeedItem{item}, te.TransferFeed...)
-	if len(te.TransferFeed) > 120 { te.TransferFeed = te.TransferFeed[:120] }
+	if len(te.TransferFeed) > 120 {
+		te.TransferFeed = te.TransferFeed[:120]
+	}
 }
 
 func (te *TransferEngine) TriggerSpecificBid(buyerID, sellerID, playerID string) *TransferNegotiation {
-	te.mu.Lock(); defer te.mu.Unlock()
-	if !te.IsWindowOpen() || te.TransferredThisWindow[playerID] { return nil }
-	buyer, seller := te.Clubs[buyerID], te.Clubs[sellerID]
-	if buyer == nil { return nil }
-	if seller == nil && playerID != "" {
-		for _, c := range te.Clubs { for _, p := range c.Squad { if p != nil && p.PlayerID == playerID { seller = c; break } }; if seller != nil { break } }
+	te.mu.Lock()
+	defer te.mu.Unlock()
+	if !te.IsWindowOpen() || te.TransferredThisWindow[playerID] {
+		return nil
 	}
-	if seller == nil || buyer.ClubID == seller.ClubID { return nil }
+	buyer, seller := te.Clubs[buyerID], te.Clubs[sellerID]
+	if buyer == nil {
+		return nil
+	}
+	if seller == nil && playerID != "" {
+		for _, c := range te.Clubs {
+			for _, p := range c.Squad {
+				if p != nil && p.PlayerID == playerID {
+					seller = c
+					break
+				}
+			}
+			if seller != nil {
+				break
+			}
+		}
+	}
+	if seller == nil || buyer.ClubID == seller.ClubID {
+		return nil
+	}
 	var player *models.Player
-	for _, p := range seller.Squad { if p != nil && p.PlayerID == playerID { player = p; break } }
-	if player == nil { return nil }
-	if isCanonicalWonderkid(player) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) { return nil }
-	for _, active := range te.ActiveNegotiations { if active != nil && active.Player != nil && active.Player.PlayerID == player.PlayerID { return active } }
-	mult := 1.10; if isCanonicalWonderkid(player) { mult = 1.30 }
+	for _, p := range seller.Squad {
+		if p != nil && p.PlayerID == playerID {
+			player = p
+			break
+		}
+	}
+	if player == nil {
+		return nil
+	}
+	if isCanonicalWonderkid(player) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) {
+		return nil
+	}
+	for _, active := range te.ActiveNegotiations {
+		if active != nil && active.Player != nil && active.Player.PlayerID == player.PlayerID {
+			return active
+		}
+	}
+	mult := 1.10
+	if isCanonicalWonderkid(player) {
+		mult = 1.30
+	}
 	initialBid := int64(float64(player.MarketValueEUR) * mult)
 	cap := int64(float64(models.BaselineValue(player.OVR, player.Age, player.UniverseWonderkid)) * 2.5)
-	if cap > 0 && initialBid > cap { initialBid = cap }
-	if initialBid < 1 { initialBid = models.BaselineValue(player.OVR, player.Age, player.UniverseWonderkid) }
-	if !canAfford(buyer, initialBid) { return nil }
+	if cap > 0 && initialBid > cap {
+		initialBid = cap
+	}
+	if initialBid < 1 {
+		initialBid = models.BaselineValue(player.OVR, player.Age, player.UniverseWonderkid)
+	}
+	if !canAfford(buyer, initialBid) {
+		return nil
+	}
 	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, player.PlayerID, te.CurrentDay), Player: player, Buyer: buyer, Seller: seller, CurrentBid: initialBid, AskingPrice: initialBid, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(player), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(initialBid))}}
 	te.ActiveNegotiations = append([]*TransferNegotiation{neg}, te.ActiveNegotiations...)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("EXCLUSIVE: %s submit official offer to %s for %s worth %s!", buyer.ClubName, seller.ClubName, player.FullName, models.FormatCurrency(initialBid)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
