@@ -12,7 +12,6 @@ import (
 // presentation order. The winner is selected from football criteria first;
 // finalists are then deterministically shuffled for presentation so card
 // position can never reveal the result.
-
 func (tm *TournamentManager) GetAwardsCeremony() map[string]interface{} {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
@@ -26,6 +25,7 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 			if p != nil {
 				all = append(all, p)
 			}
+		}
 	}
 
 	nominee := func(p *models.Player) map[string]interface{} {
@@ -34,18 +34,11 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 			clubName, short = c.ClubName, c.ShortName
 		}
 		return map[string]interface{}{
-			"player_id":    p.PlayerID,
-			"full_name":    p.FullName,
-			"position":     p.Position,
-			"ovr":          p.OVR,
-			"age":          p.Age,
-			"goals":        p.Goals,
-			"assists":      p.Assists,
-			"appearances":  p.Appearances,
-			"club_name":    clubName,
-			"short_name":   short,
+			"player_id": p.PlayerID, "full_name": p.FullName, "position": p.Position,
+			"ovr": p.OVR, "age": p.Age, "goals": p.Goals, "assists": p.Assists,
+			"appearances": p.Appearances, "club_name": clubName, "short_name": short,
 			"is_wonderkid": p.UniverseWonderkid,
-			"stats_line":   fmt.Sprintf("%d G · %d A · %d OVR", p.Goals, p.Assists, p.OVR),
+			"stats_line": fmt.Sprintf("%d G · %d A · %d OVR", p.Goals, p.Assists, p.OVR),
 		}
 	}
 
@@ -61,24 +54,16 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 			}
 		}
 		sort.SliceStable(rows, func(i, j int) bool {
-			if rows[i].score != rows[j].score {
-				return rows[i].score > rows[j].score
-			}
-			if rows[i].player.OVR != rows[j].player.OVR {
-				return rows[i].player.OVR > rows[j].player.OVR
-			}
+			if rows[i].score != rows[j].score { return rows[i].score > rows[j].score }
+			if rows[i].player.OVR != rows[j].player.OVR { return rows[i].player.OVR > rows[j].player.OVR }
 			return rows[i].player.PlayerID < rows[j].player.PlayerID
 		})
-		if len(rows) > n {
-			rows = rows[:n]
-		}
+		if len(rows) > n { rows = rows[:n] }
 		return rows
 	}
 
 	presentationOrder := func(key string, rows []rankedPlayer) []rankedPlayer {
 		out := append([]rankedPlayer(nil), rows...)
-		// Stable hash keys produce a deterministic presentation shuffle without
-		// consuming simulation RNG or coupling winner selection to display order.
 		hashKey := func(p *models.Player) uint64 {
 			h := fnv.New64a()
 			_, _ = h.Write([]byte(tm.SeasonName + "|" + key + "|" + p.PlayerID))
@@ -86,9 +71,7 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 		}
 		sort.SliceStable(out, func(i, j int) bool {
 			hi, hj := hashKey(out[i].player), hashKey(out[j].player)
-			if hi != hj {
-				return hi < hj
-			}
+			if hi != hj { return hi < hj }
 			return out[i].player.PlayerID < out[j].player.PlayerID
 		})
 		return out
@@ -116,28 +99,22 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 
 	goldenBoyPool := make([]*models.Player, 0)
 	for _, p := range all {
-		if p.UniverseWonderkid && p.Age <= 21 {
-			goldenBoyPool = append(goldenBoyPool, p)
-		}
+		if p.UniverseWonderkid && p.Age <= 21 { goldenBoyPool = append(goldenBoyPool, p) }
 	}
 
 	goalScore := func(p *models.Player) float64 {
-		return float64(p.Goals)*10000 + float64(p.Assists)*10 + float64(p.OVR)/100.0
+		return float64(p.Goals)*10000 + float64(p.Assists)*10 + float64(p.OVR)/100
 	}
 	assistScore := func(p *models.Player) float64 {
-		return float64(p.Assists)*10000 + float64(p.Goals)*10 + float64(p.OVR)/100.0
+		return float64(p.Assists)*10000 + float64(p.Goals)*10 + float64(p.OVR)/100
 	}
 	seasonScore := func(p *models.Player) float64 {
 		return float64(p.Goals)*3 + float64(p.Assists)*2 + float64(p.Appearances)*0.5 + float64(p.OVR)
 	}
 	ballonScore := func(p *models.Player) float64 {
 		teamBonus := 0.0
-		if tm.UCLChampionID == p.ClubID {
-			teamBonus += 12
-		}
-		if tm.SuperCupChampionID == p.ClubID {
-			teamBonus += 5
-		}
+		if tm.UCLChampionID == p.ClubID { teamBonus += 12 }
+		if tm.SuperCupChampionID == p.ClubID { teamBonus += 5 }
 		standings := tm.standingsUnlocked()
 		for i, c := range standings {
 			if c.ClubID == p.ClubID {
@@ -155,8 +132,5 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 		category("player_of_the_season", "Player of the Season", "Best overall season performance.", rank(all, seasonScore, 4)),
 		category("ballon_dor", "European Ballon d'Or", "Top overall player across performance and team achievement.", rank(all, ballonScore, 4)),
 	}
-	return map[string]interface{}{
-		"season_name": tm.SeasonName,
-		"categories":  categories,
-	}
+	return map[string]interface{}{"season_name": tm.SeasonName, "categories": categories}
 }
