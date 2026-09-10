@@ -21,6 +21,8 @@ import type {
   HeadToHeadData,
   ClubHistoryResponse,
   TransferRecordsData,
+  BatchSimResult,
+  ProdigyWatchRow,
 } from '../types';
 
 const API_BASE = '/api';
@@ -28,11 +30,23 @@ const API_BASE = '/api';
 async function apiFetch<T>(path: string, init?: RequestInit, fallback?: T): Promise<T> {
   try {
     const res = await fetch(`${API_BASE}${path}`, init);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`);
+    if (!res.ok) {
+      let errMsg = `HTTP ${res.status} for ${path}`;
+      try {
+        const body = await res.json();
+        if (body.detail) errMsg = body.detail;
+        else if (body.message) errMsg = body.message;
+      } catch {
+        // ignore json parse error
+      }
+      throw new Error(errMsg);
+    }
     return (await res.json()) as T;
   } catch (err) {
     console.warn(`[API] ${path} failed`, err);
-    if (fallback !== undefined) return fallback;
+    if (fallback !== undefined && (!(err instanceof Error) || !err.message || err.message.startsWith('HTTP'))) {
+      return fallback;
+    }
     throw err;
   }
 }
@@ -82,6 +96,14 @@ export function fetchHeadToHead(clubA: string, clubB: string): Promise<HeadToHea
 
 export function fetchProdigies(): Promise<ProdigyData[]> {
   return apiFetch<ProdigyData[]>('/prodigies', undefined, []);
+}
+
+export function fetchProdigyWatch(): Promise<{ season_name: string; matchweek: number; rankings: ProdigyWatchRow[] }> {
+  return apiFetch<{ season_name: string; matchweek: number; rankings: ProdigyWatchRow[] }>(
+    '/prodigies/watch',
+    undefined,
+    { season_name: '2026-27', matchweek: 1, rankings: [] },
+  );
 }
 
 export function fetchProdigyTimeline(playerId: string): Promise<ProdigyTimelineResponse> {
@@ -252,6 +274,48 @@ export function simulateRemaining(excludeFixtureId?: string): Promise<{ status: 
     },
     { status: 'error', played: 0, is_finished: false },
   );
+}
+
+const macroFallback = (mode: 'week' | 'month' | 'season'): BatchSimResult => ({
+  status: 'error',
+  mode,
+  season_name: '2026-27',
+  season_phase: 'season',
+  current_matchweek: 1,
+  digests: [],
+  weeks_advanced: 0,
+  played: 0,
+  skipped: 0,
+  season_finished: false,
+  awards_ready: false,
+  message: 'Macro simulation failed.',
+});
+
+export async function simulateWeek(): Promise<BatchSimResult> {
+  try {
+    return await apiFetch<BatchSimResult>('/sim/week', { method: 'POST' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Macro simulation failed.';
+    return { ...macroFallback('week'), message: msg };
+  }
+}
+
+export async function simulateMonth(): Promise<BatchSimResult> {
+  try {
+    return await apiFetch<BatchSimResult>('/sim/month', { method: 'POST' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Macro simulation failed.';
+    return { ...macroFallback('month'), message: msg };
+  }
+}
+
+export async function simulateSeason(): Promise<BatchSimResult> {
+  try {
+    return await apiFetch<BatchSimResult>('/sim/season', { method: 'POST' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Macro simulation failed.';
+    return { ...macroFallback('season'), message: msg };
+  }
 }
 
 export interface WeekWatch {
@@ -638,6 +702,7 @@ export interface CalendarWeek {
   matchweek: number;
   phase: string;
   month: string;
+  year?: number;
   chapter?: string;
   league: number;
   ucl: number;
@@ -648,8 +713,10 @@ export interface CalendarWeek {
 export interface CalendarState {
   current_matchweek: number;
   max_matchweeks: number;
+  season_name?: string;
   phase: string;
   month: string;
+  year?: number;
   chapter?: string;
   this_week?: number;
   next_cup_night?: number | null;

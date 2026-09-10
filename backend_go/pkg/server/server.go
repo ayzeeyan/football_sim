@@ -173,6 +173,7 @@ func (s *Server) setupRoutes() {
 
 	// Wonderkids & Growth
 	s.mux.HandleFunc("GET /api/prodigies", s.handleGetProdigies)
+	s.mux.HandleFunc("GET /api/prodigies/watch", s.handleGetProdigyWatch)
 	s.mux.HandleFunc("GET /api/wonderkids", s.handleGetWonderkids)
 	s.mux.HandleFunc("POST /api/prodigies/{player_id}/train", s.handleTrainProdigy)
 	s.mux.HandleFunc("POST /api/prodigies/{player_id}/position-path", s.handleSetPositionPath)
@@ -192,6 +193,9 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("GET /api/fixtures/{fixture_id}", s.handleGetFixture)
 	s.mux.HandleFunc("POST /api/fixtures/{fixture_id}/simulate", s.handleSimulateFixture)
 	s.mux.HandleFunc("POST /api/fixtures/simulate-remaining", s.handleSimulateRemaining)
+	s.mux.HandleFunc("POST /api/sim/week", s.handleSimWeek)
+	s.mux.HandleFunc("POST /api/sim/month", s.handleSimMonth)
+	s.mux.HandleFunc("POST /api/sim/season", s.handleSimSeason)
 	s.mux.HandleFunc("GET /api/scoring-race", s.handleGetScoringRace)
 	s.mux.HandleFunc("GET /api/trophies", s.handleGetTrophies)
 	s.mux.HandleFunc("GET /api/records", s.handleGetRecords)
@@ -835,21 +839,25 @@ func (s *Server) serializeManager(m *managers.ManagerProfile) map[string]interfa
 
 	arch := m.ArchetypeInfo()
 	return map[string]interface{}{
-		"name":             m.Name,
-		"tactic":           m.Tactic(),
-		"style":            m.Style,
-		"canonical_style":  m.CanonicalStyle(),
-		"dogma_title":      m.DogmaTitle(),
-		"description":      arch.Description,
-		"line_height":      arch.LineHeight,
-		"press_intensity":  arch.PressIntensity,
-		"tempo":            arch.Tempo,
-		"focus":            m.FocusLabel(),
-		"budget_eur":       m.BudgetEur,
-		"formatted_budget": models.FormatCurrency(m.BudgetEur),
-		"adaptability":     m.Adaptability,
-		"archetype":        m.CanonicalStyle(),
-		"archetype_label":  m.DogmaTitle(),
+		"name":                m.Name,
+		"tactic":              m.Tactic(),
+		"style":               m.Style,
+		"canonical_style":     m.CanonicalStyle(),
+		"dogma_title":         m.DogmaTitle(),
+		"description":         arch.Description,
+		"line_height":         arch.LineHeight,
+		"press_intensity":     arch.PressIntensity,
+		"tempo":               arch.Tempo,
+		"focus":               m.FocusLabel(),
+		"budget_eur":          m.BudgetEur,
+		"formatted_budget":    models.FormatCurrency(m.BudgetEur),
+		"adaptability":        m.Adaptability,
+		"archetype":           m.CanonicalStyle(),
+		"archetype_label":     m.DogmaTitle(),
+		"job_security":        m.JobSecurity,
+		"appointed_season":    m.AppointedSeason,
+		"appointed_matchweek": m.AppointedMatchweek,
+		"history":             m.History,
 	}
 }
 
@@ -1455,6 +1463,17 @@ func (s *Server) handleGetProdigies(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, list)
 }
 
+func (s *Server) handleGetProdigyWatch(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	payload := map[string]interface{}{
+		"season_name": s.TournamentManager.SeasonName,
+		"matchweek":   s.TournamentManager.CurrentMatchweek,
+		"rankings":    s.TournamentManager.GetProdigyWatch(),
+	}
+	s.worldMu.RUnlock()
+	writeJSON(w, payload)
+}
+
 func (s *Server) handleGetWonderkids(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()
 	wks := s.DataManager.Wonderkids
@@ -1995,6 +2014,7 @@ func (s *Server) serializeFinal(v interface{}) interface{} {
 		"penalties":  m["penalties"],
 	}
 }
+
 
 func (s *Server) handleGetScoringRace(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()

@@ -36,6 +36,8 @@ type TournamentManager struct {
 	DerbiesPlayedThisMW   map[string]bool
 	MilestonesFired       map[string]map[string]bool
 	ManagerConsecutiveHot map[string]int
+	ManagerLastChange     map[string]int
+	ManagerHistory        []ManagerHistoryEntry
 	SeasonHistory         []map[string]interface{}
 	ClubSeasonHistory     map[string][]map[string]interface{}
 	TransferEngine        *transfers.TransferEngine // optional; enables market-watch wire
@@ -81,6 +83,11 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 	}
 
 	mgrs := managers.BuildManagers(eliteClubs)
+	for _, manager := range mgrs {
+		manager.AppointedSeason = "2026-27"
+		manager.AppointedMatchweek = 1
+		manager.JobSecurity = "Safe"
+	}
 	fixtures := GenerateLeagueFixtures(eliteClubs, rng)
 
 	heat := make(map[string]int)
@@ -105,6 +112,8 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 		DerbiesPlayedThisMW:   map[string]bool{},
 		MilestonesFired:       make(map[string]map[string]bool),
 		ManagerConsecutiveHot: make(map[string]int),
+		ManagerLastChange:     make(map[string]int),
+		ManagerHistory:        make([]ManagerHistoryEntry, 0),
 		SeasonHistory:         make([]map[string]interface{}, 0),
 		ClubSeasonHistory:     map[string][]map[string]interface{}{},
 		RNG:                   rng,
@@ -120,6 +129,12 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 	for _, c := range eliteClubs {
 		tm.MoraleStoryStatus[c.ClubID] = "normal"
 		tm.ClubSeasonHistory[c.ClubID] = nil
+		if m := tm.Managers[c.ClubID]; m != nil {
+			tm.ManagerHistory = append(tm.ManagerHistory, ManagerHistoryEntry{
+				SeasonName: tm.SeasonName, Matchweek: 1, ClubID: c.ClubID, ClubName: c.ClubName,
+				Action: "appointed", NewManager: m.Name, NewStyle: m.CanonicalStyle(), Reason: "Opening appointment", JobSecurity: "Safe",
+			})
+		}
 	}
 	for mw := 1; mw <= 44; mw++ {
 		tm.MatchweekWeather[mw] = WeatherOptions[rng.Intn(len(WeatherOptions))]
@@ -594,14 +609,9 @@ func (tm *TournamentManager) seasonAwardsUnlocked() map[string]interface{} {
 			}
 		}
 		if p.UniverseWonderkid {
-			gb := p.Goals*3 + p.Assists*2 + p.Appearances + p.OVR
-			if goldenBoy == nil {
+			gb := tm.goldenBoyScoreUnlocked(p)
+			if goldenBoy == nil || gb > tm.goldenBoyScoreUnlocked(goldenBoy) {
 				goldenBoy = p
-			} else {
-				best := goldenBoy.Goals*3 + goldenBoy.Assists*2 + goldenBoy.Appearances + goldenBoy.OVR
-				if gb > best {
-					goldenBoy = p
-				}
 			}
 		}
 	}
@@ -622,7 +632,7 @@ func (tm *TournamentManager) seasonAwardsUnlocked() map[string]interface{} {
 		"super_cup_champion":     clubMini(scChamp),
 		"top_scorer":             playerMini(topScorer, nil),
 		"top_assister":           playerMini(topAssister, nil),
-		"golden_boy":             playerMini(goldenBoy, nil),
+		"golden_boy":             playerMini(goldenBoy, map[string]interface{}{"score": tm.goldenBoyScoreUnlocked(goldenBoy)}),
 		"player_of_the_season":   playerMini(pots, nil),
 		"ballon_dor":             ballonDor,
 		"monthly_awards":         tm.MonthlyAwards,

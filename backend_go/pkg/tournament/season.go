@@ -30,6 +30,7 @@ func (tm *TournamentManager) archiveSeasonUnlocked() {
 		"top_scorer":           awards["top_scorer"],
 		"top_assister":         awards["top_assister"],
 		"golden_boy":           awards["golden_boy"],
+		"ballon_dor":           awards["ballon_dor"],
 		"player_of_the_season": awards["player_of_the_season"],
 		"super_cup_champion":   awards["super_cup_champion"],
 		"monthly_awards":       tm.MonthlyAwards,
@@ -359,6 +360,7 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 		tm.GrowthEngine.ReplenishTrainingEnergy()
 	}
 	tm.ManagerConsecutiveHot = map[string]int{}
+	tm.ManagerLastChange = map[string]int{}
 	tm.MatchweekWeather = map[int]string{}
 	for mw := 1; mw <= 44; mw++ {
 		tm.MatchweekWeather[mw] = tm.weatherUnlocked(mw)
@@ -501,6 +503,7 @@ func (tm *TournamentManager) RestartCurrentSeason() map[string]interface{} {
 	sortClubsByRating(ordered)
 	tm.drawSuperCup(ordered)
 	tm.ManagerConsecutiveHot = map[string]int{}
+	tm.ManagerLastChange = map[string]int{}
 	tm.MatchweekWeather = map[int]string{}
 	for mw := 1; mw <= 44; mw++ {
 		tm.MatchweekWeather[mw] = tm.weatherUnlocked(mw)
