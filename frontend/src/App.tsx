@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { BatchSimResult, Club, Fixture, SeasonAwards } from './types';
 import { fetchCalendar, fetchFavourite, fetchInbox, fetchSeasonAwards, setFavourite, simulateMonth, simulateRemaining, simulateSeason, simulateWeek, type CalendarState } from './services/api';
 import { slugFromTab, tabFromSlug, type TabId } from './lib/constants';
@@ -45,6 +45,7 @@ export const App: React.FC = () => {
   const [digestData, setDigestData] = useState<BatchSimResult | null>(null);
   const [digestOpen, setDigestOpen] = useState(false);
   const [simulating, setSimulating] = useState(false);
+  const simLockRef = useRef(false);
 
   const handleSelectClub = useCallback(
     (selected: Club) => {
@@ -63,7 +64,8 @@ export const App: React.FC = () => {
   }, []);
 
   const handleMacroSim = useCallback(async (mode: 'week' | 'month' | 'season') => {
-    if (simulating) return;
+    if (simLockRef.current) return;
+    simLockRef.current = true;
     setSimulating(true);
     soundManager.playClick();
     showToast(`Simulating ${mode}…`);
@@ -89,12 +91,13 @@ export const App: React.FC = () => {
         setDigestOpen(true);
         showToast(result.message || `Advanced ${result.weeks_advanced} week${result.weeks_advanced === 1 ? '' : 's'}.`);
       }
-    } catch {
-      showToast('Simulation failed.');
+    } catch (err: unknown) {
+      showToast(err instanceof Error && err.message ? err.message : 'Simulation failed.');
     } finally {
+      simLockRef.current = false;
       setSimulating(false);
     }
-  }, [reloadClubs, showToast, simulating]);
+  }, [reloadClubs, showToast]);
 
   const watchClub = useCallback(
     (c: Club) => {
@@ -256,7 +259,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showToast, reloadClubs, setSpeed, activeTab, matchData?.state, handleMacroSim]);
+  }, [showToast, reloadClubs, setSpeed, activeTab, matchData?.state, handleMacroSim, simulating]);
 
   return (
     <PlayerSheetProvider>
