@@ -127,6 +127,14 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 	// action: Week 1, fresh eligibility markers, and club-owned window budgets.
 	// Subsequent Sim Week/Month calls must never reset that state.
 	if !s.TransferEngine.IsOffSeason {
+		// Apply the completed campaign before budgets are derived from club
+		// reputation. The tournament helper verifies that all league and cup
+		// inputs are available and is idempotent for repeated phase actions.
+		if !tm.ApplyCompletedSeasonReputation() && tm.ReputationAppliedSeason != tm.SeasonName {
+			out.Status = "error"
+			out.Message = "The completed season is not ready for the transfer window; finish all league and cup results first."
+			return out, http.StatusConflict
+		}
 		s.TransferEngine.BeginOffSeasonWindow()
 	}
 	if s.TransferEngine.CurrentWeek < 1 {

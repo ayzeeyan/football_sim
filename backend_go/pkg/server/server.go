@@ -2151,9 +2151,19 @@ func (s *Server) handleResetSeason(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	res := s.TournamentManager.FinalizeSeasonTransition()
+	if status, ok := res["status"].(string); !ok || status != "success" {
+		message := "Season transition could not be finalized."
+		if detail, ok := res["message"].(string); ok && detail != "" {
+			message = detail
+		}
+		s.worldMu.Unlock()
+		held = false
+		writeErrorJSON(w, http.StatusBadRequest, message)
+		return
+	}
 	s.clearLiveFixtureSelection()
 	s.lastCommittedLiveInstance = -1
-	res := s.TournamentManager.ResetNewSeason()
 	snap, gen := s.takeCareerSnapshotLocked()
 	s.worldMu.Unlock()
 	held = false

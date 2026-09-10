@@ -446,6 +446,7 @@ func (tm *TournamentManager) RestartCurrentSeason() map[string]interface{} {
 	tm.PlayerOfTheWeek = nil
 	tm.MonthlyAwards = nil
 	tm.SeasonPhase = "season"
+	tm.ReputationAppliedSeason = ""
 	var keptInbox []InboxItem
 	for _, item := range tm.Inbox {
 		if item.SeasonName != tm.SeasonName {

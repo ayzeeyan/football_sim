@@ -112,6 +112,8 @@ type CareerSnapshot struct {
 	SuperCupFinal         tournament.CupTie                    `json:"super_cup_final,omitempty"`
 	FavouriteClubID       string                               `json:"favourite_club_id,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
+
+	ReputationAppliedSeason string `json:"reputation_applied_season,omitempty"`
 }
 
 // SavePath returns the resolved file path for saving career snapshots,
@@ -179,6 +181,8 @@ func BuildSnapshot(
 		SuperCupFinal:         tm.SuperCupFinal,
 		FavouriteClubID:       tm.FavouriteClubID,
 		LastCareerShuffle:     tm.LastCareerShuffle,
+
+		ReputationAppliedSeason: tm.ReputationAppliedSeason,
 	}
 
 	// Snapshot all clubs and rosters
@@ -451,6 +455,7 @@ func RestoreCareer(
 	if snap.SeasonPhase != "" {
 		tm.SeasonPhase = snap.SeasonPhase
 	}
+	tm.ReputationAppliedSeason = snap.ReputationAppliedSeason
 	if snap.SeasonHistory != nil {
 		tm.SeasonHistory = snap.SeasonHistory
 	}

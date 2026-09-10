@@ -68,6 +68,11 @@ type TournamentManager struct {
 	SuperCupChampionID    string
 	SuperCupStage         string
 	SuperCupByes          []*models.Club
+
+	// ReputationAppliedSeason records the completed campaign whose results have
+	// already been applied to club reputation. It is persisted so repeated
+	// window/finalization actions and save/load cannot double-apply a season.
+	ReputationAppliedSeason string
 }
 
 // NewTournamentManager initializes a complete TournamentManager instance.

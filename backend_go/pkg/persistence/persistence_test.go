@@ -189,6 +189,36 @@ func TestRestoreCareer(t *testing.T) {
 	}
 }
 
+func TestReputationAppliedSeasonSurvivesSaveRestore(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	tm.ReputationAppliedSeason = tm.SeasonName
+
+	snap := BuildSnapshot(tm, ge, te)
+	if snap.ReputationAppliedSeason != tm.SeasonName {
+		t.Fatalf("snapshot marker=%q want %q", snap.ReputationAppliedSeason, tm.SeasonName)
+	}
+
+	_, freshGE, freshTM, freshTE := setupTestWorld(t)
+	freshTM.ReputationAppliedSeason = "stale-marker"
+	if err := RestoreCareer(freshTM, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("RestoreCareer failed: %v", err)
+	}
+	if freshTM.ReputationAppliedSeason != tm.SeasonName {
+		t.Fatalf("restored marker=%q want %q", freshTM.ReputationAppliedSeason, tm.SeasonName)
+	}
+
+	// A legacy snapshot omits the additive marker; restore must clear any
+	// pre-existing in-memory value rather than treating the old save as current.
+	snap.ReputationAppliedSeason = ""
+	freshTM.ReputationAppliedSeason = "stale-marker"
+	if err := RestoreCareer(freshTM, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("legacy RestoreCareer failed: %v", err)
+	}
+	if freshTM.ReputationAppliedSeason != "" {
+		t.Fatalf("legacy snapshot retained marker=%q", freshTM.ReputationAppliedSeason)
+	}
+}
+
 func TestDeleteCareer(t *testing.T) {
 	tempDir := t.TempDir()
 	savePath := filepath.Join(tempDir, "delete_test.json")

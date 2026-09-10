@@ -4,10 +4,7 @@ import "testing"
 
 func TestFinalizeSeasonTransitionRejectsRepeatedFinalizationWithoutMutation(t *testing.T) {
 	tm, _ := loadTestUniverse(t)
-	if result := tm.SimulateMatchweek(1); result["status"] != "success" {
-		t.Fatalf("failed to prepare completed campaign state: %v", result)
-	}
-	tm.SeasonPhase = "transfer_window"
+	completeLeagueForReputationTest(tm)
 
 	firstPlayer := tm.ClubsList[0].Squad[0]
 	ageBefore := firstPlayer.Age
@@ -38,6 +35,33 @@ func TestFinalizeSeasonTransitionRejectsRepeatedFinalizationWithoutMutation(t *t
 	}
 	if len(tm.SeasonHistory) != historyAfterFirst || len(tm.Fixtures) != fixturesAfterFirst || len(tm.Inbox) != inboxAfterFirst {
 		t.Fatalf("repeated transition mutated world collections: history=%d/%d fixtures=%d/%d inbox=%d/%d", len(tm.SeasonHistory), historyAfterFirst, len(tm.Fixtures), fixturesAfterFirst, len(tm.Inbox), inboxAfterFirst)
+	}
+}
+
+func TestFinalizeSeasonTransitionLeavesIncompleteCupUntouched(t *testing.T) {
+	tm, _ := loadTestUniverse(t)
+	completeLeagueForReputationTest(tm)
+	home, away := tm.ClubsList[0], tm.ClubsList[1]
+	tm.UCLFixtures = []Fixture{{
+		FixtureID: "TRANSITION-UCL-FINAL", Competition: "ucl", Stage: "Final",
+		HomeID: home.ClubID, AwayID: away.ClubID, Status: "scheduled",
+	}}
+	season := tm.SeasonName
+	phase := tm.SeasonPhase
+	matchweek := tm.CurrentMatchweek
+	age := home.Squad[0].Age
+	reputation := home.Identity.Reputation
+	history := len(tm.SeasonHistory)
+
+	result := tm.FinalizeSeasonTransition()
+	if result["status"] != "error" {
+		t.Fatalf("incomplete cup should reject finalization: %v", result)
+	}
+	if tm.SeasonName != season || tm.SeasonPhase != phase || tm.CurrentMatchweek != matchweek {
+		t.Fatalf("rejected transition changed calendar: season=%q phase=%q matchweek=%d", tm.SeasonName, tm.SeasonPhase, tm.CurrentMatchweek)
+	}
+	if home.Squad[0].Age != age || home.Identity.Reputation != reputation || len(tm.SeasonHistory) != history {
+		t.Fatalf("rejected transition changed campaign state: age=%d/%d reputation=%d/%d history=%d/%d", home.Squad[0].Age, age, home.Identity.Reputation, reputation, len(tm.SeasonHistory), history)
 	}
 }
 

@@ -567,6 +567,7 @@ func (tm *TournamentManager) refreshRecentResultsUnlocked() {
 func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	if tm.CurrentMatchweek > tm.MaxMatchweeks {
 		tm.SeasonPhase = "transfer_window"
+		tm.applyCompletedSeasonReputationUnlocked()
 		return map[string]interface{}{"rolled": false, "is_finished": true, "champion": tm.championNameUnlocked()}
 	}
 	pending := false
@@ -588,6 +589,10 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	isFinished := tm.CurrentMatchweek > tm.MaxMatchweeks
 	if isFinished {
 		tm.SeasonPhase = "transfer_window"
+		// A same-week cup fixture can still be applied after the final league
+		// fixture. The helper is guarded and will wait for those results before
+		// marking this season's reputation update complete.
+		tm.applyCompletedSeasonReputationUnlocked()
 	}
 	champ := tm.championNameUnlocked()
 	if isFinished && champ != "" {
