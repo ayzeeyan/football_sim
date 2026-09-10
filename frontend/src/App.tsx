@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { Club, Fixture, SeasonAwards } from './types';
-import { fetchFavourite, fetchInbox, fetchSeasonAwards, setFavourite, simulateRemaining } from './services/api';
+import type { BatchSimResult, Club, Fixture, SeasonAwards } from './types';
+import { fetchCalendar, fetchFavourite, fetchInbox, fetchSeasonAwards, setFavourite, simulateMonth, simulateRemaining, simulateSeason, simulateWeek, type CalendarState } from './services/api';
 import { slugFromTab, tabFromSlug, type TabId } from './lib/constants';
 import { stripEmojis } from './lib/format';
 import { useClubs, useMatchEngine } from './hooks/useMatch';
@@ -19,6 +19,7 @@ import { ClubPickerModal } from './components/ClubPickerModal';
 import { NewCareerModal } from './components/NewCareerModal';
 import { InboxTab } from './components/InboxTab';
 import { PlayerSheetProvider } from './components/PlayerSheet';
+import { MatchweekDigestModal } from './components/MatchweekDigestModal';
 import { soundManager } from './audio/webAudio';
 import { matchWs } from './services/matchSocket';
 
@@ -40,6 +41,10 @@ export const App: React.FC = () => {
   const [newCareerOpen, setNewCareerOpen] = useState(false);
   const [careerKey, setCareerKey] = useState(0);
   const [inboxUnread, setInboxUnread] = useState(0);
+  const [calendar, setCalendar] = useState<CalendarState | null>(null);
+  const [digestData, setDigestData] = useState<BatchSimResult | null>(null);
+  const [digestOpen, setDigestOpen] = useState(false);
+  const [simulating, setSimulating] = useState(false);
 
   const handleSelectClub = useCallback(
     (selected: Club) => {
@@ -56,6 +61,40 @@ export const App: React.FC = () => {
       setAwardsOpen(true);
     });
   }, []);
+
+  const handleMacroSim = useCallback(async (mode: 'week' | 'month' | 'season') => {
+    if (simulating) return;
+    setSimulating(true);
+    soundManager.playClick();
+    showToast(`Simulating ${mode}…`);
+    try {
+      const action = mode === 'week' ? simulateWeek : mode === 'month' ? simulateMonth : simulateSeason;
+      const result = await action();
+      if (result.status !== 'success') {
+        showToast(result.message || 'Simulation failed.');
+        return;
+      }
+      setDigestData(result);
+      setCareerKey((k) => k + 1);
+      await Promise.all([
+        reloadClubs(),
+        fetchCalendar().then(setCalendar),
+        fetchInbox(1).then((feed) => setInboxUnread(feed.unread)),
+      ]);
+      if (mode === 'season' && result.awards_ready) {
+        setDigestOpen(false);
+        setCeremonyOpen(true);
+        showToast(result.champion ? `${result.champion} are champions. Awards ceremony.` : 'Season complete. Awards ceremony.');
+      } else {
+        setDigestOpen(true);
+        showToast(result.message || `Advanced ${result.weeks_advanced} week${result.weeks_advanced === 1 ? '' : 's'}.`);
+      }
+    } catch {
+      showToast('Simulation failed.');
+    } finally {
+      setSimulating(false);
+    }
+  }, [reloadClubs, showToast, simulating]);
 
   const watchClub = useCallback(
     (c: Club) => {
@@ -118,6 +157,10 @@ export const App: React.FC = () => {
     fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
   }, [careerKey]);
 
+  useEffect(() => {
+    fetchCalendar().then(setCalendar).catch(() => undefined);
+  }, [careerKey]);
+
   // Favourite watch club: first opened live match pins it when unset.
   // Server also pins home on set_clubs; this mirrors to localStorage-backed API.
   useEffect(() => {
@@ -152,6 +195,24 @@ export const App: React.FC = () => {
         setAwardsOpen(false);
         setCeremonyOpen(false);
         setNewCareerOpen(false);
+        setDigestOpen(false);
+        return;
+      }
+
+      if (e.repeat) return;
+      if (!e.shiftKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        void handleMacroSim('week');
+        return;
+      }
+      if (!e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        void handleMacroSim('month');
+        return;
+      }
+      if (e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void handleMacroSim('season');
         return;
       }
 
@@ -195,7 +256,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showToast, reloadClubs, setSpeed, activeTab, matchData?.state]);
+  }, [showToast, reloadClubs, setSpeed, activeTab, matchData?.state, handleMacroSim]);
 
   return (
     <PlayerSheetProvider>
@@ -230,6 +291,12 @@ export const App: React.FC = () => {
           soundManager.playClick();
           setNewCareerOpen(true);
         }}
+        onSimWeek={() => void handleMacroSim('week')}
+        onSimMonth={() => void handleMacroSim('month')}
+        onSimSeason={() => void handleMacroSim('season')}
+        simulating={simulating}
+        seasonName={calendar?.season_name}
+        calendarLabel={calendar ? `MW ${Math.min(calendar.current_matchweek, calendar.max_matchweeks)}/${calendar.max_matchweeks} · ${calendar.month}${calendar.year ? ` ${calendar.year}` : ''}` : undefined}
         inboxUnread={inboxUnread}
       />
 
@@ -282,7 +349,7 @@ export const App: React.FC = () => {
       <footer className="border-t border-line mt-auto">
         <div className="page-shell py-4 flex flex-wrap items-center justify-between gap-3 text-[13px] text-sage">
           <div className="flex items-center gap-3">
-            <p>European Super League, 2026–27</p>
+            <p>European Super League, {calendar?.season_name?.replace('-', '–') || '2026–27'}</p>
             <span className="text-line">•</span>
             <p>12 clubs · 44-week Super League</p>
           </div>
@@ -292,15 +359,19 @@ export const App: React.FC = () => {
             title="Global Spectator Shortcuts"
           >
             <span className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">Space</kbd> Sim
+              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">W</kbd> Week
+            </span>
+            <span className="text-line">•</span>
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">M</kbd> Month
+            </span>
+            <span className="text-line">•</span>
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">⇧S</kbd> Season
             </span>
             <span className="text-line">•</span>
             <span className="flex items-center gap-1.5">
               <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">Esc</kbd> Close
-            </span>
-            <span className="text-line">•</span>
-            <span className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">1-4</kbd> Speed
             </span>
           </div>
         </div>
@@ -324,6 +395,7 @@ export const App: React.FC = () => {
         }}
       />
       <AwardsCeremonyModal open={ceremonyOpen} onClose={() => setCeremonyOpen(false)} />
+      <MatchweekDigestModal open={digestOpen} data={digestData} onClose={() => setDigestOpen(false)} />
       <NewCareerModal
         open={newCareerOpen}
         onClose={() => setNewCareerOpen(false)}

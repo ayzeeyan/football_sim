@@ -11,13 +11,14 @@ import (
 	"strings"
 
 	"football_sim/pkg/growth"
+	"football_sim/pkg/managers"
 	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 	"football_sim/pkg/transfers"
 )
 
 const (
-	SaveVersion     = 2
+	SaveVersion     = 3
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -79,6 +80,9 @@ type CareerSnapshot struct {
 	DerbyHeat             map[string]int                       `json:"derby_heat"`
 	WonderkidMilestones   map[string]map[string]bool           `json:"wonderkid_milestones"`
 	ManagerConsecutiveHot map[string]int                       `json:"manager_consecutive_hot,omitempty"`
+	ManagerLastChange     map[string]int                       `json:"manager_last_change,omitempty"`
+	ManagerHistory        []tournament.ManagerHistoryEntry     `json:"manager_history,omitempty"`
+	Managers              map[string]*managers.ManagerProfile  `json:"managers,omitempty"`
 	Clubs                 map[string]*models.Club              `json:"clubs"`
 	Fixtures              []tournament.Fixture                 `json:"fixtures"`
 	UCLFixtures           []tournament.Fixture                 `json:"ucl_fixtures,omitempty"`
@@ -143,6 +147,9 @@ func BuildSnapshot(
 		DerbyHeat:             tm.DerbyHeat,
 		WonderkidMilestones:   tm.MilestonesFired,
 		ManagerConsecutiveHot: tm.ManagerConsecutiveHot,
+		ManagerLastChange:     tm.ManagerLastChange,
+		ManagerHistory:        tm.ManagerHistory,
+		Managers:              tm.Managers,
 		Clubs:                 make(map[string]*models.Club),
 		Fixtures:              tm.Fixtures,
 		UCLFixtures:           tm.UCLFixtures,
@@ -459,6 +466,24 @@ func RestoreCareer(
 	if snap.ManagerConsecutiveHot != nil {
 		tm.ManagerConsecutiveHot = snap.ManagerConsecutiveHot
 	}
+	if snap.ManagerLastChange != nil {
+		tm.ManagerLastChange = snap.ManagerLastChange
+	}
+	if snap.ManagerHistory != nil {
+		tm.ManagerHistory = snap.ManagerHistory
+	}
+	if snap.Managers != nil {
+		tm.Managers = snap.Managers
+		for cid, manager := range tm.Managers {
+			if manager == nil {
+				continue
+			}
+			manager.ClubID = cid
+			if manager.JobSecurity == "" {
+				manager.JobSecurity = "Safe"
+			}
+		}
+	}
 	if snap.UCLFixtures != nil {
 		tm.UCLFixtures = snap.UCLFixtures
 	}
@@ -688,6 +713,9 @@ func RestoreCareer(
 
 	// 7. Restore Transfer Engine
 	if te != nil {
+		if tm.Managers != nil {
+			te.Managers = tm.Managers
+		}
 		if snap.Transfers.CurrentDay > 0 {
 			te.CurrentDay = snap.Transfers.CurrentDay
 		}

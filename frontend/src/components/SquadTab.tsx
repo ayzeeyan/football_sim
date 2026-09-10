@@ -211,11 +211,34 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                 })()}
               </div>
               {selectedClub.manager && (
-                <div className="text-[13px] text-sage font-normal mt-1">
-                  Managed by <strong className="text-bone">{selectedClub.manager.name}</strong>
-                  {' · '}{selectedClub.manager.tactic}
-                  {' · '}{selectedClub.manager.focus}
-                  {' · '}<strong className="text-brass font-mono">{selectedClub.manager.formatted_budget}</strong> warchest
+                <div className="mt-2 space-y-1">
+                  <div className="text-[13px] text-sage font-normal">
+                    Managed by <strong className="text-bone">{selectedClub.manager.name}</strong>
+                    {' · '}{selectedClub.manager.tactic}
+                    {' · '}{selectedClub.manager.focus}
+                    {' · '}<strong className="text-brass font-mono">{selectedClub.manager.formatted_budget}</strong> warchest
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+                    <span className={cx(
+                      'px-2 py-0.5 border',
+                      selectedClub.manager.job_security === 'Hot Seat'
+                        ? 'border-ember/45 text-ember bg-ember/10'
+                        : selectedClub.manager.job_security === 'Under Pressure'
+                          ? 'border-brass/45 text-brass bg-brass/10'
+                          : 'border-pitchtone/35 text-pitchtone bg-pitchtone/10',
+                    )}>
+                      {selectedClub.manager.job_security || 'Safe'}
+                    </span>
+                    {selectedClub.manager.appointed_season && (
+                      <span className="text-sage">
+                        appointed {selectedClub.manager.appointed_season}
+                        {selectedClub.manager.appointed_matchweek ? ` · MW ${selectedClub.manager.appointed_matchweek}` : ''}
+                      </span>
+                    )}
+                    {(selectedClub.manager.history?.length ?? 0) > 0 && (
+                      <span className="text-sage">{selectedClub.manager.history!.length} previous manager spell{selectedClub.manager.history!.length === 1 ? '' : 's'} recorded</span>
+                    )}
+                  </div>
                 </div>
               )}
               <div className="flex flex-wrap gap-2 mt-2 font-mono text-[11px] text-sage">

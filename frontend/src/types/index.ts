@@ -48,6 +48,18 @@ export interface Player {
   mentor_ovr?: number | null;
 }
 
+export interface ManagerHistoryEntry {
+  club_id: string;
+  club_name: string;
+  manager_name: string;
+  style: string;
+  appointed_season: string;
+  appointed_matchweek: number;
+  departed_season?: string;
+  departed_matchweek?: number;
+  reason?: string;
+}
+
 export interface ManagerInfo {
   name: string;
   tactic: string;
@@ -61,6 +73,10 @@ export interface ManagerInfo {
   budget_eur: number;
   formatted_budget: string;
   adaptability?: number;
+  job_security?: 'Safe' | 'Under Pressure' | 'Hot Seat' | string;
+  appointed_season?: string;
+  appointed_matchweek?: number;
+  history?: ManagerHistoryEntry[];
 }
 
 export interface Club {
@@ -645,6 +661,141 @@ export interface TransferRecordsData {
   top_signings: TopSigningItem[];
   net_spend: Record<string, ClubNetSpendItem>;
   total_transfers_count: number;
+}
+
+
+
+export interface DigestScorer {
+  player_id?: string;
+  name: string;
+  minute: number;
+  side: string;
+  own_goal?: boolean;
+}
+
+export interface DigestMatch {
+  fixture_id: string;
+  competition: string;
+  stage?: string;
+  home_id: string;
+  away_id: string;
+  home_name: string;
+  away_name: string;
+  home_short: string;
+  away_short: string;
+  home_goals: number;
+  away_goals: number;
+  scorers: DigestScorer[];
+  motm?: string;
+  red_cards: string[];
+  is_upset: boolean;
+  upset_label?: string;
+  decided_by?: string;
+  penalty_score?: number[];
+}
+
+export interface TableMovement {
+  club_id: string;
+  club_name: string;
+  short_name: string;
+  before: number;
+  after: number;
+  delta: number;
+}
+
+export interface WonderkidHighlight {
+  player_id: string;
+  full_name: string;
+  club_id: string;
+  club_short: string;
+  age: number;
+  goals: number;
+  assists: number;
+  appearances: number;
+  ovr: number;
+  ovr_delta: number;
+  height_delta_cm: number;
+  weight_delta_kg: number;
+  note?: string;
+}
+
+export interface ManagerUniverseEvent {
+  season_name: string;
+  matchweek: number;
+  club_id: string;
+  club_name: string;
+  action: string;
+  old_manager?: string;
+  new_manager: string;
+  old_style?: string;
+  new_style: string;
+  reason: string;
+  job_security: string;
+}
+
+export interface MatchweekDigest {
+  season_name: string;
+  matchweek: number;
+  month: string;
+  year: number;
+  calendar_label: string;
+  results: DigestMatch[];
+  table_movement: TableMovement[];
+  wonderkid_highlights: WonderkidHighlight[];
+  manager_events: ManagerUniverseEvent[];
+  upset_of_the_week?: DigestMatch | null;
+  played: number;
+  skipped: number;
+  season_finished: boolean;
+  champion?: string;
+}
+
+export interface BatchSimResult {
+  status: string;
+  mode: 'week' | 'month' | 'season' | 'batch' | string;
+  season_name: string;
+  season_phase: 'season' | 'transfer_window' | string;
+  current_matchweek: number;
+  start_matchweek?: number;
+  end_matchweek?: number;
+  weeks_advanced: number;
+  weeks_simulated?: number;
+  offseason_weeks_advanced?: number;
+  played: number;
+  skipped: number;
+  digests: MatchweekDigest[];
+  season_finished: boolean;
+  awards_ready: boolean;
+  offseason_complete?: boolean;
+  new_season_started?: boolean;
+  champion?: string;
+  calendar_label?: string;
+  message?: string;
+}
+
+export interface ProdigyWatchRow {
+  rank: number;
+  player_id: string;
+  full_name: string;
+  club_id: string;
+  club_name?: string;
+  club_short?: string;
+  age: number;
+  position: string;
+  ovr: number;
+  potential?: number;
+  goals: number;
+  assists: number;
+  appearances: number;
+  career_goals: number;
+  career_assists: number;
+  career_apps: number;
+  golden_boy_score: number;
+  height_cm?: number;
+  weight_kg?: number;
+  height_gain_cm?: number;
+  weight_gain_kg?: number;
+  puberty_stage?: string;
 }
 
 export interface SeasonAwards {

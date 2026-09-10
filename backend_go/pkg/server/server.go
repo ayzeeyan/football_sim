@@ -173,6 +173,7 @@ func (s *Server) setupRoutes() {
 
 	// Wonderkids & Growth
 	s.mux.HandleFunc("GET /api/prodigies", s.handleGetProdigies)
+	s.mux.HandleFunc("GET /api/prodigies/watch", s.handleGetProdigyWatch)
 	s.mux.HandleFunc("GET /api/wonderkids", s.handleGetWonderkids)
 	s.mux.HandleFunc("POST /api/prodigies/{player_id}/train", s.handleTrainProdigy)
 	s.mux.HandleFunc("POST /api/prodigies/{player_id}/position-path", s.handleSetPositionPath)
@@ -192,6 +193,9 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("GET /api/fixtures/{fixture_id}", s.handleGetFixture)
 	s.mux.HandleFunc("POST /api/fixtures/{fixture_id}/simulate", s.handleSimulateFixture)
 	s.mux.HandleFunc("POST /api/fixtures/simulate-remaining", s.handleSimulateRemaining)
+	s.mux.HandleFunc("POST /api/sim/week", s.handleSimWeek)
+	s.mux.HandleFunc("POST /api/sim/month", s.handleSimMonth)
+	s.mux.HandleFunc("POST /api/sim/season", s.handleSimSeason)
 	s.mux.HandleFunc("GET /api/scoring-race", s.handleGetScoringRace)
 	s.mux.HandleFunc("GET /api/trophies", s.handleGetTrophies)
 	s.mux.HandleFunc("GET /api/records", s.handleGetRecords)
@@ -835,21 +839,25 @@ func (s *Server) serializeManager(m *managers.ManagerProfile) map[string]interfa
 
 	arch := m.ArchetypeInfo()
 	return map[string]interface{}{
-		"name":             m.Name,
-		"tactic":           m.Tactic(),
-		"style":            m.Style,
-		"canonical_style":  m.CanonicalStyle(),
-		"dogma_title":      m.DogmaTitle(),
-		"description":      arch.Description,
-		"line_height":      arch.LineHeight,
-		"press_intensity":  arch.PressIntensity,
-		"tempo":            arch.Tempo,
-		"focus":            m.FocusLabel(),
-		"budget_eur":       m.BudgetEur,
-		"formatted_budget": models.FormatCurrency(m.BudgetEur),
-		"adaptability":     m.Adaptability,
-		"archetype":        m.CanonicalStyle(),
-		"archetype_label":  m.DogmaTitle(),
+		"name":                m.Name,
+		"tactic":              m.Tactic(),
+		"style":               m.Style,
+		"canonical_style":     m.CanonicalStyle(),
+		"dogma_title":         m.DogmaTitle(),
+		"description":         arch.Description,
+		"line_height":         arch.LineHeight,
+		"press_intensity":     arch.PressIntensity,
+		"tempo":               arch.Tempo,
+		"focus":               m.FocusLabel(),
+		"budget_eur":          m.BudgetEur,
+		"formatted_budget":    models.FormatCurrency(m.BudgetEur),
+		"adaptability":        m.Adaptability,
+		"archetype":           m.CanonicalStyle(),
+		"archetype_label":     m.DogmaTitle(),
+		"job_security":        m.JobSecurity,
+		"appointed_season":    m.AppointedSeason,
+		"appointed_matchweek": m.AppointedMatchweek,
+		"history":             m.History,
 	}
 }
 
@@ -1455,6 +1463,17 @@ func (s *Server) handleGetProdigies(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, list)
 }
 
+func (s *Server) handleGetProdigyWatch(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	payload := map[string]interface{}{
+		"season_name": s.TournamentManager.SeasonName,
+		"matchweek":   s.TournamentManager.CurrentMatchweek,
+		"rankings":    s.TournamentManager.GetProdigyWatch(),
+	}
+	s.worldMu.RUnlock()
+	writeJSON(w, payload)
+}
+
 func (s *Server) handleGetWonderkids(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()
 	wks := s.DataManager.Wonderkids
@@ -1994,6 +2013,106 @@ func (s *Server) serializeFinal(v interface{}) interface{} {
 		"decided_by": m["decided_by"],
 		"penalties":  m["penalties"],
 	}
+}
+
+func (s *Server) runMacroSimulationLocked(mode string) tournament.BatchSimResult {
+	tm := s.TournamentManager
+	out := tournament.BatchSimResult{
+		Status: "success", Mode: mode, SeasonName: tm.SeasonName,
+		SeasonPhase: tm.SeasonPhase, CurrentMatchweek: tm.CurrentMatchweek,
+		Digests: []tournament.MatchweekDigest{},
+	}
+	if tm.SeasonPhase == "season" {
+		count := 1
+		switch mode {
+		case "month":
+			count = 4
+		case "season":
+			count = tm.MaxMatchweeks - tm.CurrentMatchweek + 1
+			if count < 1 {
+				count = 1
+			}
+		}
+		out = tm.SimulateBatchWeeks(count)
+		out.Mode = mode
+		if out.AwardsReady {
+			out.Message = "Season complete. The awards ceremony is ready."
+		}
+		return out
+	}
+
+	if s.TransferEngine == nil {
+		out.Status = "error"
+		out.Message = "Transfer window state is unavailable."
+		return out
+	}
+	if s.TransferEngine.CurrentWeek < 1 {
+		s.TransferEngine.CurrentWeek = 1
+	}
+	advance := 1
+	switch mode {
+	case "month":
+		advance = 4
+	case "season":
+		advance = 13 - s.TransferEngine.CurrentWeek
+	}
+	if remaining := 13 - s.TransferEngine.CurrentWeek; advance > remaining {
+		advance = remaining
+	}
+	if advance < 0 {
+		advance = 0
+	}
+	for i := 0; i < advance && s.TransferEngine.CurrentWeek <= 12; i++ {
+		before := len(s.TransferEngine.CompletedTransfers)
+		s.TransferEngine.AdvanceOpenWindow()
+		out.WeeksAdvanced++
+		if before < len(s.TransferEngine.CompletedTransfers) {
+			for _, tr := range s.TransferEngine.CompletedTransfers[before:] {
+				tm.NoteMentorDeparture(tr.PlayerID, tr.PlayerName, tr.SellerID, tr.BuyerName, tm.CurrentMatchweek)
+			}
+			tournament.PairSeniorMentors(tm.ClubsList, s.GrowthEngine)
+		}
+	}
+	if s.TransferEngine.CurrentWeek > 12 {
+		tm.ResetNewSeason()
+		out.NewSeasonStarted = true
+		out.SeasonName = tm.SeasonName
+		out.SeasonPhase = tm.SeasonPhase
+		out.CurrentMatchweek = tm.CurrentMatchweek
+		out.Message = "Off-season complete. A new season has started."
+		return out
+	}
+	out.SeasonName = tm.SeasonName
+	out.SeasonPhase = tm.SeasonPhase
+	out.CurrentMatchweek = tm.CurrentMatchweek
+	out.Message = fmt.Sprintf("Transfer window advanced to week %d of 12.", s.TransferEngine.CurrentWeek)
+	return out
+}
+
+func (s *Server) handleMacroSimulation(w http.ResponseWriter, mode string) {
+	s.worldMu.Lock()
+	s.clearLiveFixtureSelection()
+	s.lastCommittedLiveInstance = -1
+	out := s.runMacroSimulationLocked(mode)
+	snap, gen := s.takeCareerSnapshotLocked()
+	s.worldMu.Unlock()
+	s.commitCareerSnapshot(snap, gen)
+	if out.Status == "error" {
+		w.WriteHeader(http.StatusConflict)
+	}
+	writeJSON(w, out)
+}
+
+func (s *Server) handleSimWeek(w http.ResponseWriter, r *http.Request) {
+	s.handleMacroSimulation(w, "week")
+}
+
+func (s *Server) handleSimMonth(w http.ResponseWriter, r *http.Request) {
+	s.handleMacroSimulation(w, "month")
+}
+
+func (s *Server) handleSimSeason(w http.ResponseWriter, r *http.Request) {
+	s.handleMacroSimulation(w, "season")
 }
 
 func (s *Server) handleGetScoringRace(w http.ResponseWriter, r *http.Request) {

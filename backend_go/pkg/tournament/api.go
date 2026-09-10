@@ -33,6 +33,7 @@ func (tm *TournamentManager) GetCalendar() map[string]interface{} {
 			"matchweek": mw,
 			"phase":     LeaguePhase(mw),
 			"month":     MonthLabel(mw),
+			"year":      CalendarYear(tm.SeasonName, mw),
 			"chapter":   WeekChapter(mw),
 			"league":    leagueN,
 			"ucl":       uclN,
@@ -86,8 +87,10 @@ func (tm *TournamentManager) GetCalendar() map[string]interface{} {
 	return map[string]interface{}{
 		"current_matchweek": tm.CurrentMatchweek,
 		"max_matchweeks":    tm.MaxMatchweeks,
+		"season_name":       tm.SeasonName,
 		"phase":             LeaguePhase(view),
 		"month":             MonthLabel(view),
+		"year":              CalendarYear(tm.SeasonName, view),
 		"chapter":           WeekChapter(view),
 		"this_week":         view,
 		"next_cup_night":    nextCupVal,

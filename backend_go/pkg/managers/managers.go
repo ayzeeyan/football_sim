@@ -161,14 +161,31 @@ var ClubArchetypeMap = map[string][2]string{
 	"EPL-TOT": {"high_press", "youth"},
 }
 
+// ManagerHistoryEntry records one completed or current managerial spell.
+type ManagerHistoryEntry struct {
+	ClubID             string `json:"club_id"`
+	ClubName           string `json:"club_name"`
+	ManagerName        string `json:"manager_name"`
+	Style              string `json:"style"`
+	AppointedSeason    string `json:"appointed_season"`
+	AppointedMatchweek int    `json:"appointed_matchweek"`
+	DepartedSeason     string `json:"departed_season,omitempty"`
+	DepartedMatchweek  int    `json:"departed_matchweek,omitempty"`
+	Reason             string `json:"reason,omitempty"`
+}
+
 // ManagerProfile represents a club's AI head coach.
 type ManagerProfile struct {
-	ClubID       string `json:"club_id"`
-	Name         string `json:"name"`
-	Style        string `json:"style"`
-	Focus        string `json:"focus"`
-	BudgetEur    int64  `json:"budget_eur"`
-	Adaptability int    `json:"adaptability"`
+	ClubID             string                `json:"club_id"`
+	Name               string                `json:"name"`
+	Style              string                `json:"style"`
+	Focus              string                `json:"focus"`
+	BudgetEur          int64                 `json:"budget_eur"`
+	Adaptability       int                   `json:"adaptability"`
+	JobSecurity        string                `json:"job_security,omitempty"`
+	AppointedSeason    string                `json:"appointed_season,omitempty"`
+	AppointedMatchweek int                   `json:"appointed_matchweek,omitempty"`
+	History            []ManagerHistoryEntry `json:"history,omitempty"`
 }
 
 func (m *ManagerProfile) CanonicalStyle() string {
@@ -289,6 +306,7 @@ func BuildManagers(clubs []*models.Club) map[string]*ManagerProfile {
 			Focus:        defaultFocus,
 			BudgetEur:    budget,
 			Adaptability: adaptability,
+			JobSecurity:  "Safe",
 		}
 	}
 	return managers
@@ -358,6 +376,7 @@ func AppointManager(managers map[string]*ManagerProfile, club *models.Club, rng 
 		Focus:        focuses[rng.Intn(len(focuses))],
 		BudgetEur:    old.BudgetEur,
 		Adaptability: 75 + rng.Intn(18),
+		JobSecurity:  "Safe",
 	}
 	managers[club.ClubID] = newMgr
 	return old, newMgr

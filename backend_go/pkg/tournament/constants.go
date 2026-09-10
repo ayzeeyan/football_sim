@@ -1,5 +1,11 @@
 package tournament
 
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
 const (
 	LeagueRounds = 44
 	UCLFinalWeek = 44
@@ -41,6 +47,31 @@ func MonthLabel(matchweek int) string {
 		}
 	}
 	return "Season"
+}
+
+// CalendarYear resolves a matchweek to the real calendar year represented by
+// SeasonName (for example 2026-27: August-December 2026, January-May 2027).
+func CalendarYear(seasonName string, matchweek int) int {
+	start := 2026
+	if parts := strings.Split(seasonName, "-"); len(parts) > 0 {
+		if y, err := strconv.Atoi(parts[0]); err == nil && y > 1900 {
+			start = y
+		}
+	}
+	if matchweek >= 21 {
+		return start + 1
+	}
+	return start
+}
+
+func CalendarLabel(seasonName string, matchweek int) string {
+	if matchweek < 1 {
+		matchweek = 1
+	}
+	if matchweek > LeagueRounds {
+		matchweek = LeagueRounds
+	}
+	return fmt.Sprintf("MW %d/%d · %s %d", matchweek, LeagueRounds, MonthLabel(matchweek), CalendarYear(seasonName, matchweek))
 }
 
 func WeekChapter(matchweek int) string {
@@ -103,11 +134,11 @@ func toLowerFirst(s string) string {
 }
 
 var (
-	UCLGroupWeeks   = []int{3, 8, 13, 19, 24}
-	UCLQFWeeks      = []int{35, 36}
-	UCLSFWeeks      = []int{39, 40}
-	SuperCupWeeks   = map[string]int{"play_in": 5, "qf": 12, "sf": 20, "final": 26}
-	WeatherOptions  = []string{"clear", "clear", "clear", "overcast", "rain", "rain", "wind", "snow"}
+	UCLGroupWeeks  = []int{3, 8, 13, 19, 24}
+	UCLQFWeeks     = []int{35, 36}
+	UCLSFWeeks     = []int{39, 40}
+	SuperCupWeeks  = map[string]int{"play_in": 5, "qf": 12, "sf": 20, "final": 26}
+	WeatherOptions = []string{"clear", "clear", "clear", "overcast", "rain", "rain", "wind", "snow"}
 )
 
 var DerbyNames = map[string]string{

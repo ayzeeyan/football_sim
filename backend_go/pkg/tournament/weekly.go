@@ -60,6 +60,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 
 	tm.pickPlayerOfTheWeek(completedMW)
 	tm.maybeCrownMonth(completedMW)
+	tm.evaluateManagerTenure(completedMW)
 	tm.decayDerbyHeat(completedMW)
 	tm.maybeExamWeekInbox(completedMW)
 	for _, n := range tm.schoolTrackLetters(completedMW) {

@@ -21,6 +21,8 @@ import type {
   HeadToHeadData,
   ClubHistoryResponse,
   TransferRecordsData,
+  BatchSimResult,
+  ProdigyWatchRow,
 } from '../types';
 
 const API_BASE = '/api';
@@ -82,6 +84,14 @@ export function fetchHeadToHead(clubA: string, clubB: string): Promise<HeadToHea
 
 export function fetchProdigies(): Promise<ProdigyData[]> {
   return apiFetch<ProdigyData[]>('/prodigies', undefined, []);
+}
+
+export function fetchProdigyWatch(): Promise<{ season_name: string; matchweek: number; rankings: ProdigyWatchRow[] }> {
+  return apiFetch<{ season_name: string; matchweek: number; rankings: ProdigyWatchRow[] }>(
+    '/prodigies/watch',
+    undefined,
+    { season_name: '2026-27', matchweek: 1, rankings: [] },
+  );
 }
 
 export function fetchProdigyTimeline(playerId: string): Promise<ProdigyTimelineResponse> {
@@ -252,6 +262,33 @@ export function simulateRemaining(excludeFixtureId?: string): Promise<{ status: 
     },
     { status: 'error', played: 0, is_finished: false },
   );
+}
+
+const macroFallback = (mode: 'week' | 'month' | 'season'): BatchSimResult => ({
+  status: 'error',
+  mode,
+  season_name: '2026-27',
+  season_phase: 'season',
+  current_matchweek: 1,
+  digests: [],
+  weeks_advanced: 0,
+  played: 0,
+  skipped: 0,
+  season_finished: false,
+  awards_ready: false,
+  message: 'Macro simulation failed.',
+});
+
+export function simulateWeek(): Promise<BatchSimResult> {
+  return apiFetch<BatchSimResult>('/sim/week', { method: 'POST' }, macroFallback('week'));
+}
+
+export function simulateMonth(): Promise<BatchSimResult> {
+  return apiFetch<BatchSimResult>('/sim/month', { method: 'POST' }, macroFallback('month'));
+}
+
+export function simulateSeason(): Promise<BatchSimResult> {
+  return apiFetch<BatchSimResult>('/sim/season', { method: 'POST' }, macroFallback('season'));
 }
 
 export interface WeekWatch {
@@ -638,6 +675,7 @@ export interface CalendarWeek {
   matchweek: number;
   phase: string;
   month: string;
+  year?: number;
   chapter?: string;
   league: number;
   ucl: number;
@@ -648,8 +686,10 @@ export interface CalendarWeek {
 export interface CalendarState {
   current_matchweek: number;
   max_matchweeks: number;
+  season_name?: string;
   phase: string;
   month: string;
+  year?: number;
   chapter?: string;
   this_week?: number;
   next_cup_night?: number | null;
