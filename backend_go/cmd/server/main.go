@@ -119,8 +119,14 @@ func main() {
 		log.Printf("[Server] Or run the Vite client: cd frontend && bun run dev (proxies /api and /ws to this port)")
 	}
 
-	// 2. Initialize simulation systems
-	ge := growth.NewGrowthEngine(time.Now().UnixNano())
+	// 2. Initialize simulation systems from one persistent universe seed. Each
+	// major subsystem gets an independently-derived deterministic stream.
+	universeSeed, err := persistence.LoadOrCreateUniverseSeed(savePath)
+	if err != nil {
+		log.Fatalf("[Server] FATAL: Could not establish universe seed: %v", err)
+	}
+	rng := tournament.NewSubsystemRNG(universeSeed)
+	ge := growth.NewGrowthEngine(rng.SeedFor("development"))
 	dm := datamanager.NewDataManager(datasetPath, ge)
 	if len(dm.Clubs) == 0 {
 		log.Fatalf("[Server] FATAL: Failed to load clubs from dataset at %s", datasetPath)
@@ -131,8 +137,8 @@ func main() {
 		log.Fatalf("[Server] FATAL: Expected 12 elite clubs, found %d", len(eliteClubs))
 	}
 
-	tm := tournament.NewTournamentManager(eliteClubs, ge, time.Now().UnixNano())
-	te := transfers.NewTransferEngine(eliteClubs, tm.Managers, time.Now().UnixNano())
+	tm := tournament.NewTournamentManager(eliteClubs, ge, rng.SeedFor("matches"))
+	te := transfers.NewTransferEngine(eliteClubs, tm.Managers, rng.SeedFor("transfers"))
 	tm.TransferEngine = te
 
 	// 3. Attempt restoring previous career snapshot. Existing saves are never
@@ -167,9 +173,14 @@ func main() {
 		log.Fatalf("[Server] FATAL: Universe failed startup validation: %v", err)
 	}
 
-	// 4. Configure HTTP & WebSocket Server
+	// 4. Configure HTTP & WebSocket Server. NewServer constructs the live
+	// engine before clients can connect; replace its temporary RNG immediately
+	// with the universe-owned live-match stream.
 	port := getFreePort(*hostFlag, *portFlag)
 	srv := server.NewServer(dm, ge, tm, te, savePath, staticDir)
+	if srv.LiveMatchEngine != nil {
+		srv.LiveMatchEngine.RNG = rng.New("live_match")
+	}
 
 	httpServer := &http.Server{
 		Addr:              net.JoinHostPort(*hostFlag, fmt.Sprintf("%d", port)),
@@ -198,7 +209,8 @@ func main() {
 
 	srv.Stop()
 
-	// Persist state on shutdown
+	// Persist state on shutdown. The universe seed remains in its sidecar for
+	// this career and is restored before any simulation system is initialized.
 	if saved, err := persistence.SaveCareer(tm, ge, te, savePath); err == nil {
 		log.Printf("[Server] Saved latest career snapshot to %s", saved)
 	}
