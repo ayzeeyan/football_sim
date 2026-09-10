@@ -192,7 +192,7 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 		return fmt.Errorf("world validation: club %q played=%d but W+D+L=%d", club.ClubID, club.Played, club.Won+club.Drawn+club.Lost)
 	}
 	if club.GoalDifference != club.GoalsFor-club.GoalsAgainst {
-		return fmt.Errorf("world validation: club %q goal difference=%d but GF-GA=%d", club.ClubID, club.GoalsFor-club.GoalsAgainst)
+		return fmt.Errorf("world validation: club %q goal difference=%d but GF-GA=%d", club.ClubID, club.GoalDifference, club.GoalsFor-club.GoalsAgainst)
 	}
 	if club.OverallTeamRating < 0 || club.OverallTeamRating > 100 {
 		return fmt.Errorf("world validation: club %q team rating %d outside 0..100", club.ClubID, club.OverallTeamRating)
