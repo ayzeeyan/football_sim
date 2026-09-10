@@ -20,6 +20,7 @@ func TestRestartCurrentSeasonResetsTransferStateAndPreservesCareerData(t *testin
 	seedPlayer.BestSeason = "2025-26"
 
 	beforeSquads := make(map[string][]string, len(tm.ClubsList))
+	beforeFinances := make(map[string]int64, len(tm.ClubsList))
 	type playerState struct {
 		Age           int
 		CareerGoals   int
@@ -35,6 +36,7 @@ func TestRestartCurrentSeasonResetsTransferStateAndPreservesCareerData(t *testin
 	var growthXP float64
 	for _, club := range tm.ClubsList {
 		ids := make([]string, 0, len(club.Squad))
+		beforeFinances[club.ClubID] = club.Finances.TransferBudget
 		for _, player := range club.Squad {
 			ids = append(ids, player.PlayerID)
 			beforePlayers[player.PlayerID] = playerState{
@@ -83,13 +85,11 @@ func TestRestartCurrentSeasonResetsTransferStateAndPreservesCareerData(t *testin
 		t.Fatalf("all-time transfer history changed: %+v", te.AllTimeTransfers)
 	}
 	for _, club := range tm.ClubsList {
-		rating := club.OverallTeamRating - 78
-		if rating < 0 {
-			rating = 0
+		if got, want := club.Finances.TransferBudget, beforeFinances[club.ClubID]; got != want {
+			t.Fatalf("%s club-owned transfer budget changed on season restart: got=%d want=%d", club.ClubID, got, want)
 		}
-		wantBudget := int64(60_000_000 + rating*12_000_000)
-		if got := te.Managers[club.ClubID].BudgetEur; got != wantBudget {
-			t.Fatalf("%s budget=%d, want %d", club.ClubID, got, wantBudget)
+		if got, want := te.Managers[club.ClubID].BudgetEur, club.Finances.TransferBudget; got != want {
+			t.Fatalf("%s manager compatibility budget=%d, want club budget %d", club.ClubID, got, want)
 		}
 		ids := make([]string, 0, len(club.Squad))
 		for _, player := range club.Squad {
