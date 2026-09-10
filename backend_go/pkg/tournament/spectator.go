@@ -424,6 +424,14 @@ func (tm *TournamentManager) SimulateBatchWeeks(count int) BatchSimResult {
 		CurrentMatchweek: tm.CurrentMatchweek, StartMatchweek: start, EndMatchweek: tm.CurrentMatchweek,
 		Digests: []MatchweekDigest{},
 	}
+
+	// Defensive phase validation guard
+	if tm.SeasonPhase != "season" && tm.SeasonPhase != "transfer_window" {
+		result.Status = "error"
+		result.Message = fmt.Sprintf("Unknown or unhandled season phase: %s", tm.SeasonPhase)
+		return result
+	}
+
 	if tm.SeasonPhase != "season" || tm.CurrentMatchweek > tm.MaxMatchweeks {
 		result.SeasonFinished = tm.SeasonPhase == "transfer_window"
 		result.AwardsReady = result.SeasonFinished
@@ -434,13 +442,28 @@ func (tm *TournamentManager) SimulateBatchWeeks(count int) BatchSimResult {
 		}
 		return result
 	}
+
+	maxIterations := count + 5
+	iterations := 0
 	for i := 0; i < count && tm.SeasonPhase == "season" && tm.CurrentMatchweek <= tm.MaxMatchweeks; i++ {
+		iterations++
+		if iterations > maxIterations {
+			result.Status = "error"
+			result.Message = "Macro simulation iteration limit exceeded without progress"
+			return result
+		}
+		mwBefore := tm.CurrentMatchweek
 		d := tm.simulateWeekWithDigestUnlocked()
 		result.Digests = append(result.Digests, d)
 		result.WeeksSimulated++
 		result.WeeksAdvanced++
 		result.Played += d.Played
 		result.Skipped += d.Skipped
+		if tm.SeasonPhase == "season" && tm.CurrentMatchweek == mwBefore && d.Played == 0 && d.Skipped == 0 {
+			result.Status = "error"
+			result.Message = "Macro simulation stalled without progressing matchweek"
+			return result
+		}
 	}
 	result.EndMatchweek = tm.CurrentMatchweek
 	result.CurrentMatchweek = tm.CurrentMatchweek

@@ -200,17 +200,17 @@ export const App: React.FC = () => {
       }
 
       if (e.repeat) return;
-      if (!e.shiftKey && e.key.toLowerCase() === 'w') {
+      if (!simulating && !e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         void handleMacroSim('week');
         return;
       }
-      if (!e.shiftKey && e.key.toLowerCase() === 'm') {
+      if (!simulating && !e.shiftKey && e.key.toLowerCase() === 'm') {
         e.preventDefault();
         void handleMacroSim('month');
         return;
       }
-      if (e.shiftKey && e.key.toLowerCase() === 's') {
+      if (!simulating && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         void handleMacroSim('season');
         return;
