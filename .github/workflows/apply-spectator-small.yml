@@ -1,0 +1,33 @@
+name: Apply staged spectator payload
+
+on:
+  push:
+    branches: [feature/autonomous-spectator-universe]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore: apply staged spectator payload'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/autonomous-spectator-universe
+          fetch-depth: 0
+      - name: Verify and apply spectator implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .spectator_payload/part* | base64 -d > /tmp/spectator_patch.tgz
+          echo '13a44c7dc405f3eba5330aa4f7ab1ecc1d11dfea875d3fb817a1c035e33cea9f  /tmp/spectator_patch.tgz' | sha256sum -c -
+          tar -xzf /tmp/spectator_patch.tgz -C .
+          rm -rf .spectator_payload
+          rm -f .github/workflows/temp-export.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'feat: autonomous spectator universe simulator'
+          git push origin HEAD:feature/autonomous-spectator-universe
