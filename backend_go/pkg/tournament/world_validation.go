@@ -96,12 +96,18 @@ func (tm *TournamentManager) ValidateWorldState() error {
 		if te.CurrentDay < 0 || te.CurrentMatchweek < 0 {
 			return fmt.Errorf("world validation: transfer counters cannot be negative (day=%d matchweek=%d)", te.CurrentDay, te.CurrentMatchweek)
 		}
-		for playerID, moved := range te.TransferredThisWindow {
-			if !moved {
-				continue
-			}
-			if _, ok := playerClub[playerID]; !ok {
-				return fmt.Errorf("world validation: transferred-this-window player %q is not in an active squad", playerID)
+		// While the window is active, every transfer lock must identify a player
+		// that is still part of the active universe. After the window closes we
+		// intentionally retain those locks until the next BeginOffSeasonWindow;
+		// a player may retire during the season transition in the meantime.
+		if te.IsOffSeason {
+			for playerID, moved := range te.TransferredThisWindow {
+				if !moved {
+					continue
+				}
+				if _, ok := playerClub[playerID]; !ok {
+					return fmt.Errorf("world validation: active-window transfer marker player %q is not in an active squad", playerID)
+				}
 			}
 		}
 		seenCompleted := map[string]bool{}
