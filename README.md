@@ -17,7 +17,7 @@ The UI tabs are Match, League, Wonderkids, Squads, Transfers, Inbox, and History
 
 ## Requirements
 
-- Go 1.22 or newer
+- Go toolchain matching `backend_go/go.mod` (currently Go 1.27.1)
 - Bun (for the React client)
 - Windows, macOS, or Linux
 
