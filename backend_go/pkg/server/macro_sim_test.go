@@ -44,7 +44,7 @@ type macroLogicalState struct {
 	TransferWeek          int
 	CompletedFixtures     int
 	LiveFixtureID         string
-	LastCommittedInstance int64
+	LastCommittedInstance int
 	ManagerHistoryLen     int
 	SeasonHistoryLen      int
 	Standings             []clubTableState
