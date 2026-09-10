@@ -2,7 +2,7 @@
 
 ## Overview
 A career football simulator featuring:
-- **Super League**: 12 elite clubs in a 33-week triple round-robin format (opening series, return series, and final stretch).
+- **Super League**: 12 elite clubs in a 44-week quadruple round-robin format (four cycles, two home and two away meetings per opponent).
 - **Tournaments**: Champions Cup (2 groups of 6, two-legged knockouts, one-off final) and Super Cup (bracket play-in for seeds 5–12, top 4 byes).
 - **Wonderkids**: 12 canonical U-14 prodigies with biometric progression, puberty curves, academic exams, mentors, and XP.
 - **Matchday**: Live 60 FPS WebSocket pitch simulation engine with ball physics and tactical controls, plus instant simulation for the remainder of the slate.

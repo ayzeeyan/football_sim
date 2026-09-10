@@ -371,7 +371,7 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 }
 
 // AdoptLongSeason migrates legacy short/long calendar saves onto the current
-// mathematically correct double round-robin schedule without wiping results
+// mathematically correct quadruple round-robin schedule without wiping results
 // that still map to a canonical fixture.
 func (tm *TournamentManager) AdoptLongSeason() bool {
 	tm.mu.Lock()

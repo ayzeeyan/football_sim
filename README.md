@@ -1,12 +1,12 @@
 # Super League
 
-A career football sim: twelve elite clubs, a 33-week triple round-robin, Champions Cup, Super Cup, and twelve named U-14 prodigies. You watch one match live on a 60 FPS pitch; the rest of the slate can be simmed instantly. Results stand.
+A career football sim: twelve elite clubs, a 44-week quadruple round-robin, Champions Cup, Super Cup, and twelve named U-14 prodigies. You watch one match live on a 60 FPS pitch; the rest of the slate can be simmed instantly. Results stand.
 
 Go is the server. React is the match centre. There is no Python runtime.
 
 ## What you play
 
-- **Super League** — 12 clubs, 33 matchweeks, 33 games each. Opening series, return series, then a home stretch that is not a copy of weeks 1–11.
+- **Super League** — 12 clubs, 44 matchweeks, 44 games each. Every opponent is met four times: twice at home and twice away.
 - **Champions Cup** — two groups of six, two-legged quarters and semis, one-off final.
 - **Super Cup** — play-in for seeds 5–12, byes for the top four, one-night ties.
 - **Wonderkids** — twelve canonical kids (age 14, middle school, potential 93–96). Puberty, exams, mentors, personalities, and match XP.
