@@ -1,6 +1,9 @@
 package server
 
-import "football_sim/pkg/persistence"
+import (
+	"football_sim/pkg/persistence"
+	"football_sim/pkg/tournament"
+)
 
 // DiagnosticsSnapshot is a compact developer-facing view of the mutable
 // universe. It intentionally excludes host, filesystem, and other system data.
@@ -45,7 +48,7 @@ func (s *Server) Diagnostics() DiagnosticsSnapshot {
 			for i := range fixtures {
 				if fixtures[i].Status == "finished" {
 					out.CompletedFixtureCount++
-			} else {
+				} else {
 					out.FixturesRemaining++
 				}
 			}
