@@ -9,6 +9,7 @@ import { ovrTone, positionTone } from '../lib/constants';
 import { Card, ClubCrest, EmptyState, LoadingState, PanelHeader } from './ui/ui';
 import { cx, formatMillions, loyaltyLabel } from '../lib/format';
 import { usePlayerSheet } from './PlayerSheet';
+import { FormationPitch } from './FormationPitch';
 
 function formatWageBill(squad: Player[]): string {
   const annual = squad.reduce((sum, p) => sum + (p.wage_eur || 0) * 52, 0);
@@ -31,7 +32,6 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
   const [sortCol, setSortCol] = useState<keyof Player>('ovr');
   const [sortAsc, setSortAsc] = useState(false);
   const [loading, setLoading] = useState(false);
-
 
   const clubsInLeague = useMemo(
     () => (selectedLeague === 'All twelve' ? clubs : clubs.filter((c) => c.league === selectedLeague)),
@@ -266,22 +266,19 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
 
       {xi.length > 0 && (
         <Card>
-          <p className="eyebrow mb-3">Likely starting XI · 4-3-3</p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {xi.map((p) => (
-              <button
-                key={p.player_id}
-                type="button"
-                onClick={() => {
-                  openPlayer(p.player_id);
-                }}
-                className="shrink-0 w-[92px] p-2 rounded-xl border border-line bg-ink/40 text-center hover:border-sage/50"
-              >
-                <span className={cx('text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded', positionTone(p.category))}>{p.position}</span>
-                <p className="text-[12px] font-semibold text-bone truncate mt-1.5">{p.full_name.split(' ').slice(-1)[0]}</p>
-                <p className={cx('font-mono text-[13px] font-bold mt-0.5', ovrTone(p.ovr))}>{p.ovr}</p>
-              </button>
-            ))}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="eyebrow">Likely starting XI</p>
+              <p className="mt-1 text-[12px] text-sage">
+                Stored tactical positions drive the pitch. Generic central roles are separated without changing player data.
+              </p>
+            </div>
+            <span className="rounded-md border border-pitchtone/35 bg-pitchtone/10 px-2 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-pitchtone">
+              Formation-aware
+            </span>
+          </div>
+          <div className="mt-4">
+            <FormationPitch players={xi} onPlayerClick={(player) => openPlayer(player.player_id)} />
           </div>
         </Card>
       )}
@@ -420,7 +417,6 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
           </div>
         )}
       </div>
-
     </div>
   );
 };
