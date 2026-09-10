@@ -203,6 +203,8 @@ func (tm *TournamentManager) processRetirementsUnlocked() {
 }
 
 // ResetNewSeason archives the campaign, ages the squad, and rebuilds the calendar.
+// Current squad membership is authoritative; OriginalClubID is historical metadata
+// and is never used to reconstruct rosters.
 func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -212,28 +214,6 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 	finalIDs := make([]string, 0, len(finalOrder))
 	for _, c := range finalOrder {
 		finalIDs = append(finalIDs, c.ClubID)
-	}
-
-	// Homecoming: canonical wonderkids return to their original clubs at season reset
-	for _, club := range tm.ClubsList {
-		for _, p := range append([]*models.Player(nil), club.Squad...) {
-			if !p.UniverseWonderkid && !strings.HasPrefix(p.PlayerID, "WK_") {
-				continue
-			}
-			homeID := p.OriginalClubID
-			if homeID == "" {
-				homeID = p.ClubID
-			}
-			home := tm.Clubs[homeID]
-			if home == nil || home == club {
-				continue
-			}
-			removeFromSquad(club, p)
-			p.ClubID = home.ClubID
-			if !inSquad(home, p) {
-				home.Squad = append(home.Squad, p)
-			}
-		}
 	}
 
 	posMap := map[string]int{}
@@ -362,7 +342,7 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 	tm.ManagerConsecutiveHot = map[string]int{}
 	tm.ManagerLastChange = map[string]int{}
 	tm.MatchweekWeather = map[int]string{}
-	for mw := 1; mw <= 44; mw++ {
+	for mw := 1; mw <= LeagueRounds; mw++ {
 		tm.MatchweekWeather[mw] = tm.weatherUnlocked(mw)
 	}
 
@@ -384,14 +364,15 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 
 	return map[string]interface{}{
 		"status":            "success",
-		"message":           "New European Super League season initialized. Every player is back at his Super League home.",
+		"message":           "New European Super League season initialized. Permanent transfers and current squads were preserved.",
 		"current_matchweek": 1,
 		"max_matchweeks":    tm.MaxMatchweeks,
 	}
 }
 
-// AdoptLongSeason stretches a short saved campaign to 44 weeks and Super Cup
-// without wiping results already in the book. Old 22-week and 33-week saves land here.
+// AdoptLongSeason migrates legacy short/long calendar saves onto the current
+// mathematically correct double round-robin schedule without wiping results
+// that still map to a canonical fixture.
 func (tm *TournamentManager) AdoptLongSeason() bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -400,31 +381,32 @@ func (tm *TournamentManager) AdoptLongSeason() bool {
 
 func (tm *TournamentManager) adoptLongSeasonUnlocked() bool {
 	target := (len(tm.ClubsList) * LeagueRounds) / 2
-	already := tm.MaxMatchweeks >= LeagueRounds && len(tm.Fixtures) >= target
+	already := tm.MaxMatchweeks == LeagueRounds && len(tm.Fixtures) == target
 	if already && len(tm.SuperCupFixtures) > 0 {
 		return false
 	}
 	changed := false
-	if len(tm.Fixtures) < target || tm.MaxMatchweeks < LeagueRounds {
+	if len(tm.Fixtures) != target || tm.MaxMatchweeks != LeagueRounds {
 		generated := GenerateLeagueFixtures(tm.ClubsList, tm.RNG)
 		existing := make(map[string]Fixture, len(tm.Fixtures))
 		for _, f := range tm.Fixtures {
-			existing[f.FixtureID] = f
+			if f.Status == "finished" {
+				existing[f.FixtureID] = f
+			}
 		}
 		merged := make([]Fixture, 0, len(generated))
 		for _, f := range generated {
-			altID := fmt.Sprintf("MW%d-%s-%s", f.Matchweek, f.AwayID, f.HomeID)
 			if old, ok := existing[f.FixtureID]; ok {
-				merged = append(merged, old)
-			} else if old, ok := existing[altID]; ok {
 				merged = append(merged, old)
 			} else {
 				merged = append(merged, f)
-				changed = true
 			}
 		}
 		tm.Fixtures = merged
 		tm.MaxMatchweeks = LeagueRounds
+		if tm.CurrentMatchweek > LeagueRounds+1 {
+			tm.CurrentMatchweek = LeagueRounds + 1
+		}
 		changed = true
 	}
 	if len(tm.SuperCupFixtures) == 0 {
@@ -455,8 +437,6 @@ func (tm *TournamentManager) adoptLongSeasonUnlocked() bool {
 }
 
 // RestartCurrentSeason rewinds this campaign without aging anyone.
-// Career totals, ages, and growth stay. Python snaps wonderkids back to
-// U-14 here; that is not copied — a 2027-28 restart must not un-age the kids.
 func (tm *TournamentManager) RestartCurrentSeason() map[string]interface{} {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -505,7 +485,7 @@ func (tm *TournamentManager) RestartCurrentSeason() map[string]interface{} {
 	tm.ManagerConsecutiveHot = map[string]int{}
 	tm.ManagerLastChange = map[string]int{}
 	tm.MatchweekWeather = map[int]string{}
-	for mw := 1; mw <= 44; mw++ {
+	for mw := 1; mw <= LeagueRounds; mw++ {
 		tm.MatchweekWeather[mw] = tm.weatherUnlocked(mw)
 	}
 	if tm.GrowthEngine != nil {

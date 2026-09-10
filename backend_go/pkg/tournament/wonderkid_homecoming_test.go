@@ -7,118 +7,60 @@ import (
 	"football_sim/pkg/transfers"
 )
 
-func TestWonderkidHomecomingOnResetNewSeason(t *testing.T) {
+func TestWonderkidPermanentTransferSurvivesResetNewSeason(t *testing.T) {
 	tm, ge := loadTestUniverse(t)
 	te := transfers.NewTransferEngine(tm.ClubsList, tm.Managers, 99)
 	tm.TransferEngine = te
 	tm.GrowthEngine = ge
 
-	// Locate a canonical wonderkid and a regular player
 	var wk *models.Player
-	var parentClub, loanClub *models.Club
+	var originalClub, destination *models.Club
 	for _, club := range tm.ClubsList {
 		for _, p := range club.Squad {
-			if p.UniverseWonderkid && wk == nil {
+			if transfers.IsCanonicalWonderkid(p) {
 				wk = p
-				parentClub = club
+				originalClub = club
 				break
 			}
 		}
+		if wk != nil { break }
 	}
-	if wk == nil || parentClub == nil {
-		t.Fatal("no canonical wonderkid found in test universe")
-	}
-
+	if wk == nil || originalClub == nil { t.Fatal("no canonical wonderkid found in test universe") }
 	for _, club := range tm.ClubsList {
-		if club.ClubID != parentClub.ClubID {
-			loanClub = club
+		if club.ClubID != originalClub.ClubID {
+			destination = club
 			break
 		}
 	}
+	if destination == nil { t.Fatal("no destination club found") }
 
-	// Move wonderkid from parentClub to loanClub
-	te.TriggerSpecificBid(loanClub.ClubID, parentClub.ClubID, wk.PlayerID)
-	// Execute the transfer directly
-	var newParentSquad []*models.Player
-	for _, p := range parentClub.Squad {
-		if p.PlayerID != wk.PlayerID {
-			newParentSquad = append(newParentSquad, p)
-		}
+	originalID := wk.OriginalClubID
+	if originalID == "" { originalID = originalClub.ClubID; wk.OriginalClubID = originalID }
+	var remaining []*models.Player
+	for _, p := range originalClub.Squad {
+		if p.PlayerID != wk.PlayerID { remaining = append(remaining, p) }
 	}
-	parentClub.Squad = newParentSquad
-	wk.ClubID = loanClub.ClubID
-	loanClub.Squad = append(loanClub.Squad, wk)
+	originalClub.Squad = remaining
+	wk.ClubID = destination.ClubID
+	destination.Squad = append(destination.Squad, wk)
+	te.TransferredThisWindow[wk.PlayerID] = true
 
-	// Also perform a permanent transfer for a non-wonderkid player
-	var permPlayer *models.Player
-	for _, p := range loanClub.Squad {
-		if !p.UniverseWonderkid && permPlayer == nil {
-			permPlayer = p
-			break
-		}
-	}
-	if permPlayer != nil {
-		permPlayer.OriginalClubID = parentClub.ClubID
-		permPlayer.ClubID = parentClub.ClubID
-		parentClub.Squad = append(parentClub.Squad, permPlayer)
-		// Remove from loanClub
-		var newLoanSquad []*models.Player
-		for _, p := range loanClub.Squad {
-			if p.PlayerID != permPlayer.PlayerID {
-				newLoanSquad = append(newLoanSquad, p)
+	res := tm.ResetNewSeason()
+	if res["status"] != "success" { t.Fatalf("reset response: %v", res) }
+	if wk.ClubID != destination.ClubID { t.Fatalf("wonderkid club reverted from %s to %s", destination.ClubID, wk.ClubID) }
+	if wk.OriginalClubID != originalID { t.Fatalf("historical OriginalClubID changed from %s to %s", originalID, wk.OriginalClubID) }
+
+	foundDestination, foundOriginal := false, false
+	seen := map[string]string{}
+	for _, club := range tm.ClubsList {
+		for _, p := range club.Squad {
+			if prev, ok := seen[p.PlayerID]; ok { t.Fatalf("duplicate player %s in %s and %s", p.PlayerID, prev, club.ClubID) }
+			seen[p.PlayerID] = club.ClubID
+			if p.PlayerID == wk.PlayerID {
+				if club.ClubID == destination.ClubID { foundDestination = true }
+				if club.ClubID == originalClub.ClubID { foundOriginal = true }
 			}
 		}
-		loanClub.Squad = newLoanSquad
 	}
-
-	// Fast-forward or trigger ResetNewSeason
-	tm.ResetNewSeason()
-
-	// Verify wonderkid returned to parentClub
-	foundInParent := false
-	for _, p := range parentClub.Squad {
-		if p.PlayerID == wk.PlayerID {
-			foundInParent = true
-			break
-		}
-	}
-	if !foundInParent {
-		t.Errorf("Wonderkid %s did not return to parent club %s after ResetNewSeason", wk.FullName, parentClub.ClubID)
-	}
-
-	foundInLoan := false
-	for _, p := range loanClub.Squad {
-		if p.PlayerID == wk.PlayerID {
-			foundInLoan = true
-			break
-		}
-	}
-	if foundInLoan {
-		t.Errorf("Wonderkid %s is still in loan club %s after ResetNewSeason", wk.FullName, loanClub.ClubID)
-	}
-
-	// Verify permanent player did NOT return
-	if permPlayer != nil {
-		foundPermInParent := false
-		for _, p := range parentClub.Squad {
-			if p.PlayerID == permPlayer.PlayerID {
-				foundPermInParent = true
-				break
-			}
-		}
-		if !foundPermInParent {
-			t.Errorf("Permanent transfer %s should remain at %s, but was not found", permPlayer.FullName, parentClub.ClubID)
-		}
-	}
-
-	// Verify zero duplicates across all squads
-	seen := make(map[string]string)
-	for _, c := range tm.ClubsList {
-		for _, p := range c.Squad {
-			if prevClub, ok := seen[p.PlayerID]; ok {
-				t.Fatalf("Duplicate player %s found in %s and %s", p.FullName, prevClub, c.ClubID)
-			}
-			seen[p.PlayerID] = c.ClubID
-		}
-	}
+	if !foundDestination || foundOriginal { t.Fatalf("permanent wonderkid transfer did not survive rollover: destination=%v original=%v", foundDestination, foundOriginal) }
 }

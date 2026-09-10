@@ -35,44 +35,40 @@ type Fixture struct {
 	Penalties       []int                    `json:"penalties,omitempty"`
 }
 
-// GenerateLeagueFixtures creates a 44-round quadruple round-robin calendar for 12 clubs.
-// 4 cycles of 11 rounds:
-// Cycle 1: Rounds 1 to 11 (H -> A)
-// Cycle 2: Rounds 12 to 22 (A -> H, reversed)
-// Cycle 3: Rounds 23 to 33 (H -> A)
-// Cycle 4: Rounds 34 to 44 (A -> H, reversed)
-// Perfectly balanced: exactly 22 home and 22 away games per club, 6 fixtures per week (264 total).
+// GenerateLeagueFixtures creates four balanced round-robin cycles.
+//
+// In the canonical 12-club Super League, every club plays every opponent four
+// times: twice home and twice away. That yields 44 league matches per club,
+// 44 matchweeks, 6 fixtures per matchweek, and 264 league fixtures overall.
+// The same circle method also supports odd-sized test leagues via a virtual bye.
+// Pairings are deterministic and do not consume the supplied RNG.
 func GenerateLeagueFixtures(clubs []*models.Club, rng *rand.Rand) []Fixture {
-	n := len(clubs)
-	if n < 2 {
+	_ = rng
+	if len(clubs) < 2 {
 		return nil
 	}
 
-	// Berger tables / polygon round-robin algorithm
-	rounds := n - 1 // 11 rounds per full cycle
-	var singleCycle [][]Fixture
+	rotation := append([]*models.Club(nil), clubs...)
+	if len(rotation)%2 != 0 {
+		rotation = append(rotation, nil)
+	}
 
-	clubList := make([]*models.Club, n)
-	copy(clubList, clubs)
+	slots := len(rotation)
+	roundsPerCycle := slots - 1
+	baseRounds := make([][]Fixture, 0, roundsPerCycle)
 
-	for round := 0; round < rounds; round++ {
-		var roundFixtures []Fixture
-		for i := 0; i < n/2; i++ {
-			homeIdx := (round + i) % (n - 1)
-			awayIdx := (n - 1 - i + round) % (n - 1)
-			if i == 0 {
-				awayIdx = n - 1
+	for round := 0; round < roundsPerCycle; round++ {
+		roundFixtures := make([]Fixture, 0, len(clubs)/2)
+		for i := 0; i < slots/2; i++ {
+			a := rotation[i]
+			b := rotation[slots-1-i]
+			if a == nil || b == nil {
+				continue
 			}
-
-			home := clubList[homeIdx]
-			away := clubList[awayIdx]
-
-			// Alternate home/away based on round
-			if (round+i)%2 == 1 {
+			home, away := a, b
+			if (round+i)%2 != 0 {
 				home, away = away, home
 			}
-
-			derbyName := GetDerbyName(home.ClubID, away.ClubID)
 			roundFixtures = append(roundFixtures, Fixture{
 				Competition: "super-league",
 				Stage:       "league",
@@ -81,51 +77,51 @@ func GenerateLeagueFixtures(clubs []*models.Club, rng *rand.Rand) []Fixture {
 				Home:        home,
 				Away:        away,
 				Status:      "scheduled",
-				DerbyName:   derbyName,
+				DerbyName:   GetDerbyName(home.ClubID, away.ClubID),
 				DerbyHeat:   50,
 			})
 		}
-		singleCycle = append(singleCycle, roundFixtures)
+		baseRounds = append(baseRounds, roundFixtures)
+
+		last := rotation[slots-1]
+		copy(rotation[2:], rotation[1:slots-1])
+		rotation[1] = last
 	}
 
-	var allFixtures []Fixture
-	mw := 1
-
-	// 4 cycles of 11 rounds = 44 matchweeks
-	for cycle := 1; cycle <= 4; cycle++ {
-		reverseVenues := (cycle%2 == 0)
-		for _, round := range singleCycle {
-			for _, f := range round {
-				homeID := f.HomeID
-				awayID := f.AwayID
-				home := f.Home
-				away := f.Away
+	fixturesPerCycle := len(clubs) * (len(clubs) - 1) / 2
+	allFixtures := make([]Fixture, 0, fixturesPerCycle*4)
+	matchweek := 1
+	for cycle := 0; cycle < 4; cycle++ {
+		reverseVenues := cycle%2 == 1
+		for _, round := range baseRounds {
+			for _, base := range round {
+				home, away := base.Home, base.Away
+				homeID, awayID := base.HomeID, base.AwayID
 				if reverseVenues {
-					homeID, awayID = f.AwayID, f.HomeID
-					home, away = f.Away, f.Home
+					home, away = base.Away, base.Home
+					homeID, awayID = base.AwayID, base.HomeID
 				}
 				allFixtures = append(allFixtures, Fixture{
-					FixtureID:   fmt.Sprintf("MW%d-%s-%s", mw, homeID, awayID),
-					Matchweek:   mw,
+					FixtureID:   fmt.Sprintf("MW%d-%s-%s", matchweek, homeID, awayID),
+					Matchweek:   matchweek,
 					Competition: "super-league",
-					Stage:       LeaguePhase(mw),
+					Stage:       LeaguePhase(matchweek),
 					HomeID:      homeID,
 					AwayID:      awayID,
 					Home:        home,
 					Away:        away,
 					Status:      "scheduled",
-					Weather:     WeatherOptions[mw%len(WeatherOptions)],
+					Weather:     WeatherOptions[(matchweek-1)%len(WeatherOptions)],
 					DerbyName:   GetDerbyName(homeID, awayID),
 					DerbyHeat:   50,
 				})
 			}
-			mw++
+			matchweek++
 		}
 	}
 
 	return allFixtures
 }
-
 
 type fixtureAlias Fixture
 

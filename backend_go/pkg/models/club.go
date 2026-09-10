@@ -10,19 +10,21 @@ import (
 
 // Club represents a football club, its roster, financial/stadium info, and domestic standings.
 type Club struct {
-	ClubID            string   `json:"club_id"`
-	ClubName          string   `json:"club_name"`
-	ShortName         string   `json:"short_name"`
-	League            string   `json:"league"`
-	Country           string   `json:"country"`
-	HomeStadium       string   `json:"home_stadium"`
-	StadiumCapacity   int      `json:"stadium_capacity"`
-	OverallTeamRating int      `json:"overall_team_rating"`
-	SquadSize         int      `json:"squad_size"`
-	SquadAvgOVR       float64  `json:"squad_avg_ovr"`
-	PrimaryColor      [3]uint8 `json:"primary_color"`
-	SecondaryColor    [3]uint8 `json:"secondary_color"`
-	Morale            int      `json:"morale"`
+	ClubID            string       `json:"club_id"`
+	ClubName          string       `json:"club_name"`
+	ShortName         string       `json:"short_name"`
+	League            string       `json:"league"`
+	Country           string       `json:"country"`
+	HomeStadium       string       `json:"home_stadium"`
+	StadiumCapacity   int          `json:"stadium_capacity"`
+	OverallTeamRating int          `json:"overall_team_rating"`
+	SquadSize         int          `json:"squad_size"`
+	SquadAvgOVR       float64      `json:"squad_avg_ovr"`
+	PrimaryColor      [3]uint8     `json:"primary_color"`
+	SecondaryColor    [3]uint8     `json:"secondary_color"`
+	Morale            int          `json:"morale"`
+	Identity          ClubIdentity `json:"identity"`
+	Finances          ClubFinances `json:"finances"`
 
 	// Standings & Form
 	Played         int      `json:"p"`
@@ -41,7 +43,8 @@ type Club struct {
 
 type clubAlias Club
 
-// UnmarshalJSON implements custom JSON decoding with kit colors, morale, and squad defaults.
+// UnmarshalJSON implements custom JSON decoding with kit colors, morale, squad,
+// identity and old-save defaults.
 func (c *Club) UnmarshalJSON(data []byte) error {
 	var raw clubAlias
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -58,6 +61,27 @@ func (c *Club) UnmarshalJSON(data []byte) error {
 		c.Morale = 100
 	}
 
+	// A zero identity means the block was absent in a legacy/static-data payload.
+	// Capture that fact before clamping so a legitimate persisted zero-valued
+	// individual trait remains zero rather than being treated as missing.
+	identityMissing := c.Identity.IsZero()
+	if identityMissing {
+		c.Identity = DefaultClubIdentity(c.ClubID, c.OverallTeamRating)
+	} else {
+		c.Identity = c.Identity.Clamp()
+	}
+	if identityMissing && c.Finances == (ClubFinances{}) {
+		c.Finances = InitialClubFinances(c.Identity)
+	}
+	// Corrupt finance values are made safe without refilling a legitimately
+	// depleted warchest.
+	if c.Finances.TransferBudget < 0 {
+		c.Finances.TransferBudget = 0
+	}
+	if c.Finances.Balance < 0 {
+		c.Finances.Balance = 0
+	}
+
 	// Kit colors fallback
 	if c.PrimaryColor == [3]uint8{0, 0, 0} && c.SecondaryColor == [3]uint8{0, 0, 0} {
 		c.PrimaryColor, c.SecondaryColor = KitColorsForClub(c.ShortName)
@@ -67,7 +91,8 @@ func (c *Club) UnmarshalJSON(data []byte) error {
 		c.Form = []string{}
 	}
 
-	// Link squad players
+	// Link squad players. Current ClubID is authoritative once present;
+	// OriginalClubID is historical metadata and never overwrites membership.
 	for _, p := range c.Squad {
 		if p.ClubID == "" {
 			p.ClubID = c.ClubID

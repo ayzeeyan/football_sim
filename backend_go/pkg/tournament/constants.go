@@ -7,6 +7,9 @@ import (
 )
 
 const (
+	// Twelve elite clubs play four balanced league meetings per opponent:
+	// two at home and two away. That is 4 * (12 - 1) = 44 league matches
+	// per club, leaving cup finalists in the high-50s for total appearances.
 	LeagueRounds = 44
 	UCLFinalWeek = 44
 )
@@ -104,8 +107,6 @@ func WeekChapter(matchweek int) string {
 		return month + ": Super Cup night"
 	case matchweek <= 4:
 		return month + ": opening series"
-	case matchweek >= 21 && matchweek <= 24:
-		return month + ": winter window"
 	case matchweek >= 39:
 		return month + ": home stretch"
 	default:
@@ -134,6 +135,9 @@ func toLowerFirst(s string) string {
 }
 
 var (
+	// Cup rounds are interleaved through the 44-week league calendar. A club
+	// reaching every final can play 44 league + 10 Champions Cup + 4 Super Cup
+	// matches = 58 competitive fixtures in one season.
 	UCLGroupWeeks  = []int{3, 8, 13, 19, 24}
 	UCLQFWeeks     = []int{35, 36}
 	UCLSFWeeks     = []int{39, 40}

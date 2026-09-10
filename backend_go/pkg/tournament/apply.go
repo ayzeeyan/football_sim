@@ -287,7 +287,10 @@ func AttributeProdigyPerformance(club *models.Club, report *matchreport.MatchRep
 	}
 	events := ge.ApplyMatchXP(prodigy.PlayerID, prodigy.FullName, prodigy.Category, baseRating, goals, assists, opts)
 
-	prodigy.OVR = ge.CalculateOVR(prodigy.PlayerID, prodigy.Category)
+	// Match XP shares the same annual ceiling as autonomous and season-end
+	// development. Clamp the underlying technical matrix here so repeated cup
+	// and league appearances cannot hide growth beyond the displayed rating.
+	prodigy.OVR = ge.EnforceSeasonOVRCap(prodigy.PlayerID, prodigy.Category)
 	if attrs, ok := ge.Attributes[prodigy.PlayerID]; ok && attrs != nil {
 		prodigy.Composure = attrs.Composure
 	}

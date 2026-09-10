@@ -103,7 +103,7 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 			return out, http.StatusInternalServerError
 		}
 		if out.AwardsReady {
-			out.Message = "Season complete. The awards ceremony is ready."
+			out.Message = "Season complete. The awards ceremony is ready. Transfer Week 1 must be processed before the next season."
 		}
 		s.clearLiveFixtureSelection()
 		s.lastCommittedLiveInstance = -1
@@ -120,6 +120,14 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 		out.Status = "error"
 		out.Message = "Transfer window state is unavailable."
 		return out, http.StatusInternalServerError
+	}
+
+	// The tournament changing phase is the authority for opening the offseason.
+	// Initialize the transfer domain exactly once on the first transfer-phase
+	// action: Week 1, fresh eligibility markers, and club-owned window budgets.
+	// Subsequent Sim Week/Month calls must never reset that state.
+	if !s.TransferEngine.IsOffSeason {
+		s.TransferEngine.BeginOffSeasonWindow()
 	}
 	if s.TransferEngine.CurrentWeek < 1 {
 		s.TransferEngine.CurrentWeek = 1
@@ -171,7 +179,7 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 		out.SeasonName = tm.SeasonName
 		out.SeasonPhase = tm.SeasonPhase
 		out.CurrentMatchweek = tm.CurrentMatchweek
-		out.Message = "Off-season complete. A new season has started."
+		out.Message = "All 12 transfer weeks were processed. A new season has started."
 		s.clearLiveFixtureSelection()
 		s.lastCommittedLiveInstance = -1
 		return out, http.StatusOK
