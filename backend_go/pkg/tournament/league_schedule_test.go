@@ -14,8 +14,8 @@ func TestLeagueScheduleRealUniverseIntegrity(t *testing.T) {
 	if clubs != 12 {
 		t.Fatalf("test universe has %d clubs; want 12", clubs)
 	}
-	wantFixtures := clubs * (clubs - 1)
-	wantRounds := 2 * (clubs - 1)
+	wantFixtures := 2 * clubs * (clubs - 1)
+	wantRounds := 4 * (clubs - 1)
 	wantPerRound := clubs / 2
 	if len(tm.Fixtures) != wantFixtures {
 		t.Fatalf("fixtures=%d want %d", len(tm.Fixtures), wantFixtures)
@@ -27,6 +27,8 @@ func TestLeagueScheduleRealUniverseIntegrity(t *testing.T) {
 	perWeek := map[int][]Fixture{}
 	orderedPair := map[string]int{}
 	clubGames := map[string]int{}
+	homeGames := map[string]int{}
+	awayGames := map[string]int{}
 	for _, f := range tm.Fixtures {
 		if f.HomeID == f.AwayID {
 			t.Fatalf("self fixture %s", f.FixtureID)
@@ -35,6 +37,8 @@ func TestLeagueScheduleRealUniverseIntegrity(t *testing.T) {
 		orderedPair[fmt.Sprintf("%s>%s", f.HomeID, f.AwayID)]++
 		clubGames[f.HomeID]++
 		clubGames[f.AwayID]++
+		homeGames[f.HomeID]++
+		awayGames[f.AwayID]++
 	}
 	if len(perWeek) != wantRounds {
 		t.Fatalf("rounds=%d want %d", len(perWeek), wantRounds)
@@ -56,15 +60,18 @@ func TestLeagueScheduleRealUniverseIntegrity(t *testing.T) {
 		}
 	}
 	for _, c := range tm.ClubsList {
-		if clubGames[c.ClubID] != 2*(clubs-1) {
-			t.Errorf("%s games=%d want %d", c.ShortName, clubGames[c.ClubID], 2*(clubs-1))
+		if clubGames[c.ClubID] != 4*(clubs-1) {
+			t.Errorf("%s games=%d want %d", c.ShortName, clubGames[c.ClubID], 4*(clubs-1))
+		}
+		if homeGames[c.ClubID] != 2*(clubs-1) || awayGames[c.ClubID] != 2*(clubs-1) {
+			t.Errorf("%s home/away=%d/%d want %d/%d", c.ShortName, homeGames[c.ClubID], awayGames[c.ClubID], 2*(clubs-1), 2*(clubs-1))
 		}
 	}
 	for i := range tm.ClubsList {
 		for j := i + 1; j < len(tm.ClubsList); j++ {
 			a, b := tm.ClubsList[i].ClubID, tm.ClubsList[j].ClubID
-			if orderedPair[a+">"+b] != 1 || orderedPair[b+">"+a] != 1 {
-				t.Fatalf("pair %s/%s is not exactly one home + one away: %d/%d", a, b, orderedPair[a+">"+b], orderedPair[b+">"+a])
+			if orderedPair[a+">"+b] != 2 || orderedPair[b+">"+a] != 2 {
+				t.Fatalf("pair %s/%s is not exactly two home + two away: %d/%d", a, b, orderedPair[a+">"+b], orderedPair[b+">"+a])
 			}
 		}
 	}
@@ -76,17 +83,17 @@ func TestLeagueScheduleOddClubCountHasExactlyOneByePerRound(t *testing.T) {
 		clubs[i] = &models.Club{ClubID: fmt.Sprintf("C%d", i), ClubName: fmt.Sprintf("Club %d", i)}
 	}
 	fixtures := GenerateLeagueFixtures(clubs, rand.New(rand.NewSource(1)))
-	if len(fixtures) != 5*4 {
-		t.Fatalf("fixtures=%d want 20", len(fixtures))
+	if len(fixtures) != 40 {
+		t.Fatalf("fixtures=%d want 40", len(fixtures))
 	}
 	perWeek := map[int][]Fixture{}
 	for _, f := range fixtures {
 		perWeek[f.Matchweek] = append(perWeek[f.Matchweek], f)
 	}
-	if len(perWeek) != 10 {
-		t.Fatalf("rounds=%d want 10", len(perWeek))
+	if len(perWeek) != 20 {
+		t.Fatalf("rounds=%d want 20", len(perWeek))
 	}
-	for mw := 1; mw <= 10; mw++ {
+	for mw := 1; mw <= 20; mw++ {
 		seen := map[string]bool{}
 		for _, f := range perWeek[mw] {
 			seen[f.HomeID], seen[f.AwayID] = true, true
@@ -98,13 +105,13 @@ func TestLeagueScheduleOddClubCountHasExactlyOneByePerRound(t *testing.T) {
 }
 
 func TestLeagueScheduleDeterministicWithoutConsumingRNG(t *testing.T) {
-	clubs := []*models.Club{{ClubID:"A"},{ClubID:"B"},{ClubID:"C"},{ClubID:"D"}}
+	clubs := []*models.Club{{ClubID: "A"}, {ClubID: "B"}, {ClubID: "C"}, {ClubID: "D"}}
 	r1 := rand.New(rand.NewSource(99))
 	r2 := rand.New(rand.NewSource(99))
 	got := GenerateLeagueFixtures(clubs, r1)
 	_ = GenerateLeagueFixtures(clubs, r2)
-	if len(got) != 12 {
-		t.Fatalf("fixtures=%d want 12", len(got))
+	if len(got) != 24 {
+		t.Fatalf("fixtures=%d want 24", len(got))
 	}
 	if r1.Int63() != r2.Int63() {
 		t.Fatal("fixture generation unexpectedly consumed universe RNG")
