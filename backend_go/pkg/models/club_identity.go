@@ -19,6 +19,11 @@ type ClubIdentity struct {
 	YouthPreference        int `json:"youth_preference"`
 	TransferAggressiveness int `json:"transfer_aggressiveness"`
 	SellingTendency        int `json:"selling_tendency"`
+
+	// present distinguishes an explicitly persisted all-zero identity from a
+	// missing identity block in legacy/static-data payloads. It is intentionally
+	// excluded from JSON and carried through value copies.
+	present bool
 }
 
 // ClubFinances separates structural financial strength from spendable cash.
@@ -60,7 +65,7 @@ func ClampClubRating(v int) int {
 }
 
 func (i ClubIdentity) IsZero() bool {
-	return i == (ClubIdentity{})
+	return !i.present && i == (ClubIdentity{})
 }
 
 // Clamp returns a copy with every identity field constrained to 0-100.

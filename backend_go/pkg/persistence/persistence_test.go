@@ -7,6 +7,7 @@ import (
 
 	"football_sim/pkg/datamanager"
 	"football_sim/pkg/growth"
+	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 	"football_sim/pkg/transfers"
 )
@@ -186,6 +187,83 @@ func TestRestoreCareer(t *testing.T) {
 	// Verify completed transfer restored
 	if len(freshTE.CompletedTransfers) != 1 {
 		t.Errorf("expected 1 restored completed transfer, got %d", len(freshTE.CompletedTransfers))
+	}
+}
+
+func TestRestoreCareerPersistsClubIdentityAcrossReloads(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	want := map[string]models.ClubIdentity{
+		"LAL-RMA": {
+			Reputation: 1, HistoricalPrestige: 2, FinancialPower: 3,
+			BoardPatience: 4, AcademyQuality: 5, RecruitmentAmbition: 6,
+			YouthPreference: 7, TransferAggressiveness: 8, SellingTendency: 9,
+		},
+		"LAL-BAR": {},
+		"BUN-BAY": {
+			Reputation: 100, HistoricalPrestige: 0, FinancialPower: 100,
+			BoardPatience: 0, AcademyQuality: 100, RecruitmentAmbition: 0,
+			YouthPreference: 100, TransferAggressiveness: 0, SellingTendency: 100,
+		},
+	}
+	for clubID, identity := range want {
+		tm.Clubs[clubID].Identity = identity
+	}
+
+	path := filepath.Join(t.TempDir(), "identity.json")
+	if _, err := SaveCareer(tm, ge, te, path); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+	loaded, err := LoadCareer(path)
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	_, freshGE, freshTM, freshTE := setupTestWorld(t)
+	if err := RestoreCareer(freshTM, freshGE, freshTE, loaded); err != nil {
+		t.Fatalf("restore failed: %v", err)
+	}
+	assertClubIdentities(t, freshTM, want)
+
+	secondPath := filepath.Join(t.TempDir(), "identity-second.json")
+	if _, err := SaveCareer(freshTM, freshGE, freshTE, secondPath); err != nil {
+		t.Fatalf("second save failed: %v", err)
+	}
+	second, err := LoadCareer(secondPath)
+	if err != nil {
+		t.Fatalf("second load failed: %v", err)
+	}
+	_, repeatedGE, repeatedTM, repeatedTE := setupTestWorld(t)
+	if err := RestoreCareer(repeatedTM, repeatedGE, repeatedTE, second); err != nil {
+		t.Fatalf("repeated restore failed: %v", err)
+	}
+	assertClubIdentities(t, repeatedTM, want)
+}
+
+func TestRestoreCareerPreservesFreshIdentityForProgrammaticLegacySnapshot(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	clubID := "LAL-RMA"
+	want := models.DefaultClubIdentity(clubID, tm.Clubs[clubID].OverallTeamRating)
+	snap := &CareerSnapshot{Clubs: map[string]*models.Club{
+		clubID: {ClubID: clubID},
+	}}
+
+	if err := RestoreCareer(tm, ge, te, snap); err != nil {
+		t.Fatalf("restore failed: %v", err)
+	}
+	assertClubIdentities(t, tm, map[string]models.ClubIdentity{clubID: want})
+}
+
+func assertClubIdentities(t *testing.T, tm *tournament.TournamentManager, want map[string]models.ClubIdentity) {
+	t.Helper()
+	for clubID, expected := range want {
+		got := tm.Clubs[clubID].Identity
+		if got.Reputation != expected.Reputation || got.HistoricalPrestige != expected.HistoricalPrestige ||
+			got.FinancialPower != expected.FinancialPower || got.BoardPatience != expected.BoardPatience ||
+			got.AcademyQuality != expected.AcademyQuality || got.RecruitmentAmbition != expected.RecruitmentAmbition ||
+			got.YouthPreference != expected.YouthPreference || got.TransferAggressiveness != expected.TransferAggressiveness ||
+			got.SellingTendency != expected.SellingTendency {
+			t.Errorf("club %s identity got %+v, want %+v", clubID, got, expected)
+		}
 	}
 }
 

@@ -552,6 +552,13 @@ func RestoreCareer(
 			continue
 		}
 
+		// Identity is part of the persisted club state. A presence-aware zero
+		// means an older/in-memory snapshot omitted identity, so retain the live
+		// club's preset; explicit persisted zero values still restore as zero.
+		if !savedClub.Identity.IsZero() {
+			club.Identity = savedClub.Identity.Clamp()
+		}
+
 		// Standings & Form
 		club.Played = savedClub.Played
 		club.Won = savedClub.Won

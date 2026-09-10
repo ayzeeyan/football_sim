@@ -51,6 +51,12 @@ func (c *Club) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*c = Club(raw)
+	var identityEnvelope struct {
+		Identity *ClubIdentity `json:"identity"`
+	}
+	if err := json.Unmarshal(data, &identityEnvelope); err != nil {
+		return err
+	}
 
 	if c.Morale == 0 {
 		c.Morale = 70
@@ -61,13 +67,13 @@ func (c *Club) UnmarshalJSON(data []byte) error {
 		c.Morale = 100
 	}
 
-	// A zero identity means the block was absent in a legacy/static-data payload.
-	// Capture that fact before clamping so a legitimate persisted zero-valued
-	// individual trait remains zero rather than being treated as missing.
-	identityMissing := c.Identity.IsZero()
+	// A missing or null identity block means legacy/static-data input. A present
+	// object remains authoritative even when all nine traits are zero.
+	identityMissing := identityEnvelope.Identity == nil
 	if identityMissing {
 		c.Identity = DefaultClubIdentity(c.ClubID, c.OverallTeamRating)
 	} else {
+		c.Identity.present = true
 		c.Identity = c.Identity.Clamp()
 	}
 	if identityMissing && c.Finances == (ClubFinances{}) {
