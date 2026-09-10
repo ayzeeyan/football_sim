@@ -58,7 +58,7 @@ func (tm *TournamentManager) evaluateManagerTenureWithPatience(completedMW int) 
 		}
 
 		oldStyle := mgr.CanonicalStyle()
-		old, next := managers.AppointManager(tm.Managers, club, tm.RNG)
+		old, next := appointManagerDeterministic(tm.Managers, club, tm.RNG)
 		if old == nil || next == nil {
 			continue
 		}
