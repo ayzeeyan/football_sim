@@ -135,21 +135,36 @@ func main() {
 	te := transfers.NewTransferEngine(eliteClubs, tm.Managers, time.Now().UnixNano())
 	tm.TransferEngine = te
 
-	// 3. Attempt restoring previous career snapshot
+	// 3. Attempt restoring previous career snapshot. Existing saves are never
+	// silently discarded: malformed/corrupt state is a startup error so the
+	// user can diagnose or recover the save instead of unknowingly replacing it.
 	if _, err := os.Stat(savePath); err == nil {
 		log.Printf("[Server] Found existing career save at %s. Restoring...", savePath)
-		if snap, err := persistence.LoadCareer(savePath); err == nil {
-			if err := persistence.RestoreCareer(tm, ge, te, snap); err != nil {
-				log.Printf("[Server] WARNING: Could not overlay saved career: %v. Running fresh universe.", err)
-			} else {
-				if len(snap.ProdigyHomes) > 0 {
-					dm.ProdigyHomes = snap.ProdigyHomes
-				}
-				log.Printf("[Server] Successfully restored career: Season %s, Matchweek %d", tm.SeasonName, tm.CurrentMatchweek)
-			}
+		snap, err := persistence.LoadCareer(savePath)
+		if err != nil {
+			log.Fatalf("[Server] FATAL: Could not load existing career save: %v", err)
 		}
+		if err := persistence.ValidateCareerSnapshot(snap); err != nil {
+			log.Fatalf("[Server] FATAL: Existing career save failed validation: %v", err)
+		}
+		if err := persistence.RestoreCareer(tm, ge, te, snap); err != nil {
+			log.Fatalf("[Server] FATAL: Could not restore existing career save: %v", err)
+		}
+		if err := tm.ValidateWorldState(); err != nil {
+			log.Fatalf("[Server] FATAL: Restored career failed world validation: %v", err)
+		}
+		if len(snap.ProdigyHomes) > 0 {
+			dm.ProdigyHomes = snap.ProdigyHomes
+		}
+		log.Printf("[Server] Successfully restored career: Season %s, Matchweek %d", tm.SeasonName, tm.CurrentMatchweek)
+	} else if !os.IsNotExist(err) {
+		log.Fatalf("[Server] FATAL: Could not inspect career save path %s: %v", savePath, err)
 	} else {
 		log.Printf("[Server] No prior career save found. Initialized fresh Super League universe.")
+	}
+
+	if err := tm.ValidateWorldState(); err != nil {
+		log.Fatalf("[Server] FATAL: Universe failed startup validation: %v", err)
 	}
 
 	// 4. Configure HTTP & WebSocket Server
