@@ -24,7 +24,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 			mName, mOVR, pers := prodigy.MentorName, prodigy.MentorOVR, prodigy.Personality
 			growthEvents = append(growthEvents, tm.GrowthEngine.ApplyMentorshipTick(prodigy.PlayerID, prodigy.FullName, growth.MentorshipOptions{MentorName: &mName, MentorOVR: &mOVR, Personality: &pers})...)
 		}
-		if tm.RNG != nil && tm.RNG.Float64() <= 0.22 {
+		if tm.GrowthEngine.RollAutonomousTraining(0.22) {
 			res, err := tm.GrowthEngine.RunTrainingCycle(prodigy.PlayerID, focus, false)
 			if err == nil && res["status"] != "error" { growthEvents = append(growthEvents, fmt.Sprintf("%s staff ran %s training for %s.", club.ShortName, focus, prodigy.FullName)) }
 		}
@@ -116,7 +116,7 @@ func (tm *TournamentManager) maybeCrownMonth(endMW int) {
 	bestAvg := -1.0
 	for _, s := range tally {
 		avg := 0.0; for _, r := range s.ratings { avg += r }; avg /= float64(len(s.ratings))
-		if best == nil || avg > bestAvg || (avg == bestAvg && len(s.ratings) > len(best.ratings)) { best, bestAvg = s, avg }
+		if best == nil || avg > bestAvg || (avg == bestAvg && len(s.ratings) > len(best.ratings)) || (avg == bestAvg && len(s.ratings) == len(best.ratings) && s.playerID < best.playerID) { best, bestAvg = s, avg }
 	}
 	if best == nil { return }
 	avg := float64(int(bestAvg*100+0.5)) / 100
