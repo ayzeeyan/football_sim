@@ -23,6 +23,8 @@ type Club struct {
 	PrimaryColor      [3]uint8 `json:"primary_color"`
 	SecondaryColor    [3]uint8 `json:"secondary_color"`
 	Morale            int      `json:"morale"`
+	Identity          ClubIdentity `json:"identity"`
+	Finances          ClubFinances `json:"finances"`
 
 	// Standings & Form
 	Played         int      `json:"p"`
@@ -41,7 +43,8 @@ type Club struct {
 
 type clubAlias Club
 
-// UnmarshalJSON implements custom JSON decoding with kit colors, morale, and squad defaults.
+// UnmarshalJSON implements custom JSON decoding with kit colors, morale, squad,
+// identity and old-save defaults.
 func (c *Club) UnmarshalJSON(data []byte) error {
 	var raw clubAlias
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -58,6 +61,27 @@ func (c *Club) UnmarshalJSON(data []byte) error {
 		c.Morale = 100
 	}
 
+	// A zero identity means the block was absent in a legacy/static-data payload.
+	// Capture that fact before clamping so a legitimate persisted zero-valued
+	// individual trait remains zero rather than being treated as missing.
+	identityMissing := c.Identity.IsZero()
+	if identityMissing {
+		c.Identity = DefaultClubIdentity(c.ClubID, c.OverallTeamRating)
+	} else {
+		c.Identity = c.Identity.Clamp()
+	}
+	if identityMissing && c.Finances == (ClubFinances{}) {
+		c.Finances = InitialClubFinances(c.Identity)
+	}
+	// Corrupt finance values are made safe without refilling a legitimately
+	// depleted warchest.
+	if c.Finances.TransferBudget < 0 {
+		c.Finances.TransferBudget = 0
+	}
+	if c.Finances.Balance < 0 {
+		c.Finances.Balance = 0
+	}
+
 	// Kit colors fallback
 	if c.PrimaryColor == [3]uint8{0, 0, 0} && c.SecondaryColor == [3]uint8{0, 0, 0} {
 		c.PrimaryColor, c.SecondaryColor = KitColorsForClub(c.ShortName)
@@ -67,7 +91,8 @@ func (c *Club) UnmarshalJSON(data []byte) error {
 		c.Form = []string{}
 	}
 
-	// Link squad players
+	// Link squad players. Current ClubID is authoritative once present;
+	// OriginalClubID is historical metadata and never overwrites membership.
 	for _, p := range c.Squad {
 		if p.ClubID == "" {
 			p.ClubID = c.ClubID
@@ -100,7 +125,7 @@ func (c *Club) UpdateMorale(result string) {
 		if c.Morale < 30 {
 			c.Morale = 30
 		}
-	case "L":
+n	case "L":
 		streakPenalty := 0
 		if len(c.Form) >= 3 {
 			last3 := c.Form[len(c.Form)-3:]
