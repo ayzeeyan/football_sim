@@ -27,6 +27,7 @@ type TournamentManager struct {
 	MaxMatchweeks         int
 	SeasonName            string
 	SeasonPhase           string // season, transfer_window
+	Seed                  int64
 	Fixtures              []Fixture
 	UCLFixtures           []Fixture
 	SuperCupFixtures      []Fixture
@@ -106,6 +107,7 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 		MaxMatchweeks:         LeagueRounds,
 		SeasonName:            "2026-27",
 		SeasonPhase:           "season",
+		Seed:                  seed,
 		Fixtures:              fixtures,
 		Inbox:                 make([]InboxItem, 0),
 		DerbyHeat:             heat,

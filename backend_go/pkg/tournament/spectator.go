@@ -443,6 +443,12 @@ func (tm *TournamentManager) SimulateBatchWeeks(count int) BatchSimResult {
 		return result
 	}
 
+	type progressSig struct {
+		SeasonName  string
+		SeasonPhase string
+		Matchweek   int
+	}
+
 	maxIterations := count + 5
 	iterations := 0
 	for i := 0; i < count && tm.SeasonPhase == "season" && tm.CurrentMatchweek <= tm.MaxMatchweeks; i++ {
@@ -452,16 +458,29 @@ func (tm *TournamentManager) SimulateBatchWeeks(count int) BatchSimResult {
 			result.Message = "Macro simulation iteration limit exceeded without progress"
 			return result
 		}
-		mwBefore := tm.CurrentMatchweek
+
+		beforeSig := progressSig{
+			SeasonName:  tm.SeasonName,
+			SeasonPhase: tm.SeasonPhase,
+			Matchweek:   tm.CurrentMatchweek,
+		}
+
 		d := tm.simulateWeekWithDigestUnlocked()
 		result.Digests = append(result.Digests, d)
 		result.WeeksSimulated++
 		result.WeeksAdvanced++
 		result.Played += d.Played
 		result.Skipped += d.Skipped
-		if tm.SeasonPhase == "season" && tm.CurrentMatchweek == mwBefore && d.Played == 0 && d.Skipped == 0 {
+
+		afterSig := progressSig{
+			SeasonName:  tm.SeasonName,
+			SeasonPhase: tm.SeasonPhase,
+			Matchweek:   tm.CurrentMatchweek,
+		}
+
+		if beforeSig == afterSig {
 			result.Status = "error"
-			result.Message = "Macro simulation stalled without progressing matchweek"
+			result.Message = "Macro simulation stalled: world state failed to make progress"
 			return result
 		}
 	}

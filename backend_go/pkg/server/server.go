@@ -162,6 +162,7 @@ func (s *Server) setupRoutes() {
 	// Health & System
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("GET /api/stats", s.handleStats)
+	s.mux.HandleFunc("GET /api/diagnostics", s.handleDiagnostics)
 
 	// Clubs & Rosters
 	s.mux.HandleFunc("GET /api/clubs", s.handleGetClubs)

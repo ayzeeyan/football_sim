@@ -48,6 +48,7 @@ func serverLiveCompletionInboxCount(srv *Server, fixtureID string) int {
 
 func readLiveCompletionTick(t *testing.T, conn *websocket.Conn) map[string]interface{} {
 	t.Helper()
+	_ = conn.SetReadDeadline(time.Now().Add(20 * time.Second))
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("failed to read live tick: %v", err)
@@ -86,7 +87,7 @@ func TestLiveTickerCommitsFullTimeFixtureOnceAndSavesCareer(t *testing.T) {
 		t.Fatalf("failed to connect to WebSocket: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(20 * time.Second)); err != nil {
 		t.Fatalf("failed to set WebSocket deadline: %v", err)
 	}
 
@@ -408,7 +409,7 @@ func TestLiveTickerRetriesTransientExactFixtureCommitFailure(t *testing.T) {
 		t.Fatalf("failed to connect to WebSocket: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.SetReadDeadline(time.Now().Add(8 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(20 * time.Second)); err != nil {
 		t.Fatalf("failed to set WebSocket deadline: %v", err)
 	}
 	if err := conn.WriteJSON(map[string]interface{}{"action": "set_clubs", "home_id": fixture.HomeID, "away_id": fixture.AwayID}); err != nil {

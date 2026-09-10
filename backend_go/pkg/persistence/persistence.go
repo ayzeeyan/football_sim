@@ -67,6 +67,7 @@ type TransfersSnapshot struct {
 // CareerSnapshot contains the full serialized state of the football universe across seasons.
 type CareerSnapshot struct {
 	Version               int                                  `json:"version"`
+	Seed                  int64                                `json:"seed,omitempty"`
 	SeasonName            string                               `json:"season_name"`
 	CurrentMatchweek      int                                  `json:"current_matchweek"`
 	MaxMatchweeks         int                                  `json:"max_matchweeks"`
@@ -138,6 +139,7 @@ func BuildSnapshot(
 ) *CareerSnapshot {
 	snap := &CareerSnapshot{
 		Version:               SaveVersion,
+		Seed:                  tm.Seed,
 		SeasonName:            tm.SeasonName,
 		CurrentMatchweek:      tm.CurrentMatchweek,
 		MaxMatchweeks:         tm.MaxMatchweeks,
@@ -439,6 +441,9 @@ func RestoreCareer(
 	}
 
 	// 1. Restore Tournament Metadata & Narratives
+	if snap.Seed != 0 {
+		tm.Seed = snap.Seed
+	}
 	if snap.SeasonName != "" {
 		tm.SeasonName = snap.SeasonName
 	}

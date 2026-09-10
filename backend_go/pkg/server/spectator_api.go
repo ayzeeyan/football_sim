@@ -98,6 +98,12 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 		advance = 0
 	}
 
+	type offSeasonSig struct {
+		SeasonName   string
+		TransferWeek int
+		Day          int
+	}
+
 	maxIterations := advance + 5
 	iterations := 0
 	for i := 0; i < advance && s.TransferEngine.CurrentWeek <= 12; i++ {
@@ -107,6 +113,13 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 			out.Message = "Macro simulation iteration limit exceeded without progress"
 			return out, http.StatusInternalServerError
 		}
+
+		beforeSig := offSeasonSig{
+			SeasonName:   tm.SeasonName,
+			TransferWeek: s.TransferEngine.CurrentWeek,
+			Day:          s.TransferEngine.CurrentDay,
+		}
+
 		before := len(s.TransferEngine.CompletedTransfers)
 		s.TransferEngine.AdvanceOpenWindow()
 		out.WeeksAdvanced++
@@ -115,6 +128,18 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 				tm.NoteMentorDeparture(tr.PlayerID, tr.PlayerName, tr.SellerID, tr.BuyerName, tm.CurrentMatchweek)
 			}
 			tournament.PairSeniorMentors(tm.ClubsList, s.GrowthEngine)
+		}
+
+		afterSig := offSeasonSig{
+			SeasonName:   tm.SeasonName,
+			TransferWeek: s.TransferEngine.CurrentWeek,
+			Day:          s.TransferEngine.CurrentDay,
+		}
+
+		if beforeSig == afterSig {
+			out.Status = "error"
+			out.Message = "Transfer window macro simulation stalled without progress"
+			return out, http.StatusInternalServerError
 		}
 	}
 	if s.TransferEngine.CurrentWeek > 12 {

@@ -342,3 +342,37 @@ func TestCommitLiveFixtureByIDUsesCompetitionIdentityForSamePair(t *testing.T) {
 		t.Fatalf("cup live result changed league standings: home=%d/%d away=%d/%d", home.Played, homePlayedBefore, away.Played, awayPlayedBefore)
 	}
 }
+
+func TestResetNewSeasonDoesNotDuplicateHistory(t *testing.T) {
+	tm, _ := loadTestUniverse(t)
+	// Fast forward matchweeks to transfer_window phase
+	tm.SeasonPhase = "transfer_window"
+	tm.CurrentMatchweek = tm.MaxMatchweeks + 1
+
+	// Simulate at least one played match so history gets archived
+	f := &tm.Fixtures[0]
+	g1, g0 := 2, 1
+	f.Status = "finished"
+	f.HomeGoals = &g1
+	f.AwayGoals = &g0
+	tm.Clubs[f.HomeID].Played = 1
+	tm.Clubs[f.HomeID].Points = 3
+
+	res1 := tm.ResetNewSeason()
+	if res1["status"] != "success" {
+		t.Fatalf("ResetNewSeason failed: %v", res1)
+	}
+	historyLen1 := len(tm.SeasonHistory)
+	if historyLen1 == 0 {
+		t.Fatalf("expected season history to be archived")
+	}
+
+	// Immediate second call when 0 games played in new season
+	res2 := tm.ResetNewSeason()
+	if res2["status"] != "success" {
+		t.Fatalf("ResetNewSeason failed: %v", res2)
+	}
+	if len(tm.SeasonHistory) != historyLen1 {
+		t.Fatalf("season history duplicated on unplayed season reset: got %d, want %d", len(tm.SeasonHistory), historyLen1)
+	}
+}
