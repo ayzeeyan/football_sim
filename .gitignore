@@ -13,6 +13,7 @@ backend_go/coverage.txt
 
 # Runtime career state (never commit user saves)
 saves/career.json
+saves/career.json.seed
 saves/clubs/
 saves/*.bak
 saves/*.tmp

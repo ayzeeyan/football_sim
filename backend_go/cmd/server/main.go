@@ -119,8 +119,14 @@ func main() {
 		log.Printf("[Server] Or run the Vite client: cd frontend && bun run dev (proxies /api and /ws to this port)")
 	}
 
-	// 2. Initialize simulation systems
-	ge := growth.NewGrowthEngine(time.Now().UnixNano())
+	// 2. Initialize simulation systems from one persistent universe seed. Each
+	// major subsystem gets an independently-derived deterministic stream.
+	universeSeed, err := persistence.LoadOrCreateUniverseSeed(savePath)
+	if err != nil {
+		log.Fatalf("[Server] FATAL: Could not establish universe seed: %v", err)
+	}
+	rng := tournament.NewSubsystemRNG(universeSeed)
+	ge := growth.NewGrowthEngine(rng.SeedFor("development"))
 	dm := datamanager.NewDataManager(datasetPath, ge)
 	if len(dm.Clubs) == 0 {
 		log.Fatalf("[Server] FATAL: Failed to load clubs from dataset at %s", datasetPath)
@@ -131,30 +137,50 @@ func main() {
 		log.Fatalf("[Server] FATAL: Expected 12 elite clubs, found %d", len(eliteClubs))
 	}
 
-	tm := tournament.NewTournamentManager(eliteClubs, ge, time.Now().UnixNano())
-	te := transfers.NewTransferEngine(eliteClubs, tm.Managers, time.Now().UnixNano())
+	tm := tournament.NewTournamentManager(eliteClubs, ge, rng.SeedFor("matches"))
+	te := transfers.NewTransferEngine(eliteClubs, tm.Managers, rng.SeedFor("transfers"))
 	tm.TransferEngine = te
 
-	// 3. Attempt restoring previous career snapshot
+	// 3. Attempt restoring previous career snapshot. Existing saves are never
+	// silently discarded: malformed/corrupt state is a startup error so the
+	// user can diagnose or recover the save instead of unknowingly replacing it.
 	if _, err := os.Stat(savePath); err == nil {
 		log.Printf("[Server] Found existing career save at %s. Restoring...", savePath)
-		if snap, err := persistence.LoadCareer(savePath); err == nil {
-			if err := persistence.RestoreCareer(tm, ge, te, snap); err != nil {
-				log.Printf("[Server] WARNING: Could not overlay saved career: %v. Running fresh universe.", err)
-			} else {
-				if len(snap.ProdigyHomes) > 0 {
-					dm.ProdigyHomes = snap.ProdigyHomes
-				}
-				log.Printf("[Server] Successfully restored career: Season %s, Matchweek %d", tm.SeasonName, tm.CurrentMatchweek)
-			}
+		snap, err := persistence.LoadCareer(savePath)
+		if err != nil {
+			log.Fatalf("[Server] FATAL: Could not load existing career save: %v", err)
 		}
+		if err := persistence.ValidateCareerSnapshot(snap); err != nil {
+			log.Fatalf("[Server] FATAL: Existing career save failed validation: %v", err)
+		}
+		if err := persistence.RestoreCareer(tm, ge, te, snap); err != nil {
+			log.Fatalf("[Server] FATAL: Could not restore existing career save: %v", err)
+		}
+		if err := tm.ValidateWorldState(); err != nil {
+			log.Fatalf("[Server] FATAL: Restored career failed world validation: %v", err)
+		}
+		if len(snap.ProdigyHomes) > 0 {
+			dm.ProdigyHomes = snap.ProdigyHomes
+		}
+		log.Printf("[Server] Successfully restored career: Season %s, Matchweek %d", tm.SeasonName, tm.CurrentMatchweek)
+	} else if !os.IsNotExist(err) {
+		log.Fatalf("[Server] FATAL: Could not inspect career save path %s: %v", savePath, err)
 	} else {
 		log.Printf("[Server] No prior career save found. Initialized fresh Super League universe.")
 	}
 
-	// 4. Configure HTTP & WebSocket Server
+	if err := tm.ValidateWorldState(); err != nil {
+		log.Fatalf("[Server] FATAL: Universe failed startup validation: %v", err)
+	}
+
+	// 4. Configure HTTP & WebSocket Server. NewServer constructs the live
+	// engine before clients can connect; replace its temporary RNG immediately
+	// with the universe-owned live-match stream.
 	port := getFreePort(*hostFlag, *portFlag)
 	srv := server.NewServer(dm, ge, tm, te, savePath, staticDir)
+	if srv.LiveMatchEngine != nil {
+		srv.LiveMatchEngine.RNG = rng.New("live_match")
+	}
 
 	httpServer := &http.Server{
 		Addr:              net.JoinHostPort(*hostFlag, fmt.Sprintf("%d", port)),
@@ -183,7 +209,8 @@ func main() {
 
 	srv.Stop()
 
-	// Persist state on shutdown
+	// Persist state on shutdown. The universe seed remains in its sidecar for
+	// this career and is restored before any simulation system is initialized.
 	if saved, err := persistence.SaveCareer(tm, ge, te, savePath); err == nil {
 		log.Printf("[Server] Saved latest career snapshot to %s", saved)
 	}

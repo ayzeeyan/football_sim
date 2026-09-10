@@ -3,10 +3,24 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"football_sim/pkg/tournament"
 )
+
+const liveFixtureConflictMessage = "Finish the currently selected live fixture before simulating the universe."
+
+// progressSignature captures the minimum logical state required to prove that
+// a macro-simulation iteration actually advanced the universe.
+type progressSignature struct {
+	Season       string
+	Phase        string
+	Matchweek    int
+	TransferWeek int
+	Completed    int
+}
 
 // validateMacroSimAllowed checks backend invariants before macro simulation advances state.
 // Returns an error message and whether a conflict (HTTP 409) or server error occurred.
@@ -17,17 +31,36 @@ func (s *Server) validateMacroSimAllowedLocked() (string, int) {
 		return "", 0
 	}
 
-	// Active live engine (non-terminal) with a selected fixture
+	// Active live engine (non-terminal) with a selected fixture.
 	if s.liveFixtureID != "" && e.State != "NOT_STARTED" && e.State != "FULL_TIME" {
-		return "Finish the currently selected live fixture before simulating the universe.", http.StatusConflict
+		return liveFixtureConflictMessage, http.StatusConflict
 	}
 
-	// FULL_TIME reached but engine instance not yet committed to tournament state
+	// FULL_TIME reached but engine instance not yet committed to tournament state.
 	if s.liveFixtureID != "" && e.State == "FULL_TIME" && e.InstanceID != s.lastCommittedLiveInstance {
-		return "Finish the currently selected live fixture before simulating the universe.", http.StatusConflict
+		return liveFixtureConflictMessage, http.StatusConflict
 	}
 
 	return "", 0
+}
+
+func (s *Server) macroProgressSignatureLocked() progressSignature {
+	completed := 0
+	if s.TransferEngine != nil {
+		completed = len(s.TransferEngine.CompletedTransfers)
+	}
+	return progressSignature{
+		Season:       s.TournamentManager.SeasonName,
+		Phase:        s.TournamentManager.SeasonPhase,
+		Matchweek:    s.TournamentManager.CurrentMatchweek,
+		TransferWeek: func() int {
+			if s.TransferEngine == nil {
+				return 0
+			}
+			return s.TransferEngine.CurrentWeek
+		}(),
+		Completed: completed,
+	}
 }
 
 func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResult, int) {
@@ -57,9 +90,16 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 				count = 1
 			}
 		}
+		before := s.macroProgressSignatureLocked()
 		out = tm.SimulateBatchWeeks(count)
 		out.Mode = mode
 		if out.Status == "error" {
+			return out, http.StatusInternalServerError
+		}
+		after := s.macroProgressSignatureLocked()
+		if !out.SeasonFinished && before == after {
+			out.Status = "error"
+			out.Message = "Macro simulation made no progress"
 			return out, http.StatusInternalServerError
 		}
 		if out.AwardsReady {
@@ -98,27 +138,35 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 		advance = 0
 	}
 
-	maxIterations := advance + 5
-	iterations := 0
 	for i := 0; i < advance && s.TransferEngine.CurrentWeek <= 12; i++ {
-		iterations++
-		if iterations > maxIterations {
+		beforeSig := s.macroProgressSignatureLocked()
+		beforeTransfers := len(s.TransferEngine.CompletedTransfers)
+		s.TransferEngine.AdvanceOpenWindow()
+		afterSig := s.macroProgressSignatureLocked()
+		if beforeSig == afterSig {
 			out.Status = "error"
-			out.Message = "Macro simulation iteration limit exceeded without progress"
+			out.Message = "Macro simulation made no progress during transfer-window advancement"
 			return out, http.StatusInternalServerError
 		}
-		before := len(s.TransferEngine.CompletedTransfers)
-		s.TransferEngine.AdvanceOpenWindow()
 		out.WeeksAdvanced++
-		if before < len(s.TransferEngine.CompletedTransfers) {
-			for _, tr := range s.TransferEngine.CompletedTransfers[before:] {
+		if beforeTransfers < len(s.TransferEngine.CompletedTransfers) {
+			for _, tr := range s.TransferEngine.CompletedTransfers[beforeTransfers:] {
 				tm.NoteMentorDeparture(tr.PlayerID, tr.PlayerName, tr.SellerID, tr.BuyerName, tm.CurrentMatchweek)
 			}
 			tournament.PairSeniorMentors(tm.ClubsList, s.GrowthEngine)
 		}
 	}
 	if s.TransferEngine.CurrentWeek > 12 {
-		tm.ResetNewSeason()
+		transition := tm.FinalizeSeasonTransition()
+		if transition["status"] != "success" {
+			out.Status = "error"
+			if msg, ok := transition["message"].(string); ok && msg != "" {
+				out.Message = msg
+			} else {
+				out.Message = "Season transition failed."
+			}
+			return out, http.StatusInternalServerError
+		}
 		out.NewSeasonStarted = true
 		out.SeasonName = tm.SeasonName
 		out.SeasonPhase = tm.SeasonPhase
@@ -138,6 +186,9 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 }
 
 func (s *Server) handleMacroSimulation(w http.ResponseWriter, mode string) {
+	started := time.Now()
+	defer func() { recordMacroSimulationDuration(s, time.Since(started)) }()
+
 	s.worldMu.Lock()
 	out, statusCode := s.runMacroSimulationLocked(mode)
 	if statusCode == http.StatusOK {
@@ -149,14 +200,12 @@ func (s *Server) handleMacroSimulation(w http.ResponseWriter, mode string) {
 	}
 
 	if statusCode != http.StatusOK {
+		if statusCode >= http.StatusInternalServerError {
+			log.Printf("[MacroSim] mode=%s internal failure: %s", mode, out.Message)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  out.Status,
-			"mode":    out.Mode,
-			"message": out.Message,
-			"detail":  out.Message,
-		})
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": out.Message})
 		return
 	}
 	writeJSON(w, out)

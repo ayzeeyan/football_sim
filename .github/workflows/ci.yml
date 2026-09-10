@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   backend:
-    name: Go tests and vet
+    name: Go tests, vet, and race detector
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,9 +27,11 @@ jobs:
         run: go test ./...
       - name: Vet
         run: go vet ./...
+      - name: Race detector
+        run: go test -race -p=1 ./...
 
   frontend:
-    name: React typecheck and build
+    name: React tests, typecheck, and build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,5 +45,7 @@ jobs:
           bun-version: latest
       - name: Install dependencies
         run: bun install
+      - name: Test
+        run: bun test
       - name: Build
         run: bun run build

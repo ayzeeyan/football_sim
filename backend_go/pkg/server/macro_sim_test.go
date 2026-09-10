@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 
 	"football_sim/pkg/tournament"
@@ -23,6 +24,88 @@ func postMacro(t *testing.T, baseURL, path string) tournament.BatchSimResult {
 		t.Fatalf("decode %s: %v", path, err)
 	}
 	return out
+}
+
+type clubTableState struct {
+	ClubID       string
+	Played       int
+	Won          int
+	Drawn        int
+	Lost         int
+	GoalsFor     int
+	GoalsAgainst int
+	Points       int
+}
+
+type macroLogicalState struct {
+	SeasonName            string
+	SeasonPhase           string
+	CurrentMatchweek      int
+	TransferWeek          int
+	CompletedFixtures     int
+	LiveFixtureID         string
+	LastCommittedInstance int
+	ManagerHistoryLen     int
+	SeasonHistoryLen      int
+	Standings             []clubTableState
+}
+
+func captureMacroLogicalState(srv *Server) macroLogicalState {
+	completed := 0
+	for _, fixture := range srv.TournamentManager.Fixtures {
+		if fixture.Status == "finished" {
+			completed++
+		}
+	}
+	transferWeek := 0
+	if srv.TransferEngine != nil {
+		transferWeek = srv.TransferEngine.CurrentWeek
+	}
+	standings := make([]clubTableState, 0, len(srv.TournamentManager.ClubsList))
+	for _, club := range srv.TournamentManager.ClubsList {
+		if club == nil {
+			continue
+		}
+		standings = append(standings, clubTableState{
+			ClubID: club.ClubID, Played: club.Played, Won: club.Won, Drawn: club.Drawn,
+			Lost: club.Lost, GoalsFor: club.GoalsFor, GoalsAgainst: club.GoalsAgainst, Points: club.Points,
+		})
+	}
+	return macroLogicalState{
+		SeasonName:            srv.TournamentManager.SeasonName,
+		SeasonPhase:           srv.TournamentManager.SeasonPhase,
+		CurrentMatchweek:      srv.TournamentManager.CurrentMatchweek,
+		TransferWeek:          transferWeek,
+		CompletedFixtures:     completed,
+		LiveFixtureID:         srv.liveFixtureID,
+		LastCommittedInstance: srv.lastCommittedLiveInstance,
+		ManagerHistoryLen:     len(srv.TournamentManager.ManagerHistory),
+		SeasonHistoryLen:      len(srv.TournamentManager.SeasonHistory),
+		Standings:             standings,
+	}
+}
+
+func postMacroExpectConflict(t *testing.T, baseURL, path string) string {
+	t.Helper()
+	resp, err := http.Post(baseURL+path, "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST %s failed: %v", path, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected HTTP 409 Conflict for %s, got %d", path, resp.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode conflict response for %s: %v", path, err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected consistent single-field error response for %s, got %#v", path, body)
+	}
+	if body["message"] != liveFixtureConflictMessage {
+		t.Fatalf("unexpected conflict message for %s: %q", path, body["message"])
+	}
+	return body["message"]
 }
 
 func TestMacroSimWeekEndpoint(t *testing.T) {
@@ -67,58 +150,63 @@ func TestMacroOffSeasonWeekRollsIntoNewSeason(t *testing.T) {
 	}
 }
 
-func TestMacroSimRejectedWhenLiveFixtureActiveOrUncommitted(t *testing.T) {
-	srv, ts := setupTestServer(t)
-	defer srv.Stop()
-	defer ts.Close()
-
-	// Select a live fixture and set engine to active state PLAYING
-	home := srv.TournamentManager.ClubsList[0]
-	away := srv.TournamentManager.ClubsList[1]
-	srv.LiveMatchEngine.SetClubs(home, away, srv.TournamentManager.Managers[home.ClubID], srv.TournamentManager.Managers[away.ClubID])
-	srv.liveFixtureID = srv.TournamentManager.Fixtures[0].FixtureID
-	srv.LiveMatchEngine.State = "PLAYING"
-
+func TestMacroSimRejectedWithoutMutationForEveryEndpoint(t *testing.T) {
 	endpoints := []string{"/api/sim/week", "/api/sim/month", "/api/sim/season"}
+	for _, endpoint := range endpoints {
+		endpoint := endpoint
+		t.Run(endpoint+"_active", func(t *testing.T) {
+			srv, ts := setupTestServer(t)
+			defer srv.Stop()
+			defer ts.Close()
 
-	// 1. Sim Week / Month / Season rejected with 409 while PLAYING
-	for _, ep := range endpoints {
-		resp, err := http.Post(ts.URL+ep, "application/json", nil)
-		if err != nil {
-			t.Fatalf("POST %s failed: %v", ep, err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusConflict {
-			t.Fatalf("expected HTTP 409 Conflict for %s while PLAYING, got %d", ep, resp.StatusCode)
-		}
-	}
+			home := srv.TournamentManager.ClubsList[0]
+			away := srv.TournamentManager.ClubsList[1]
+			srv.LiveMatchEngine.SetClubs(home, away, srv.TournamentManager.Managers[home.ClubID], srv.TournamentManager.Managers[away.ClubID])
+			srv.liveFixtureID = srv.TournamentManager.Fixtures[0].FixtureID
+			srv.LiveMatchEngine.State = "PLAYING"
 
-	// Verify state remained unchanged (CurrentMatchweek still 1)
-	if srv.TournamentManager.CurrentMatchweek != 1 {
-		t.Fatalf("CurrentMatchweek changed during rejection: got %d, want 1", srv.TournamentManager.CurrentMatchweek)
-	}
+			before := captureMacroLogicalState(srv)
+			postMacroExpectConflict(t, ts.URL, endpoint)
+			after := captureMacroLogicalState(srv)
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("state mutated on rejected active-live request\nbefore=%+v\nafter=%+v", before, after)
+			}
 
-	// 2. Sim Week rejected with 409 at FULL_TIME when uncommitted
-	srv.LiveMatchEngine.State = "FULL_TIME"
-	srv.LiveMatchEngine.InstanceID = 99
-	srv.lastCommittedLiveInstance = 0 // instance 99 not committed yet
+			srv.LiveMatchEngine.State = "NOT_STARTED"
+			srv.clearLiveFixtureSelection()
+			out := postMacro(t, ts.URL, endpoint)
+			if out.Status != "success" {
+				t.Fatalf("expected %s to succeed after clearing live fixture, got %+v", endpoint, out)
+			}
+		})
 
-	resp, err := http.Post(ts.URL+"/api/sim/week", "application/json", nil)
-	if err != nil {
-		t.Fatalf("POST /api/sim/week failed: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("expected HTTP 409 Conflict at FULL_TIME uncommitted, got %d", resp.StatusCode)
-	}
+		t.Run(endpoint+"_full_time_uncommitted", func(t *testing.T) {
+			srv, ts := setupTestServer(t)
+			defer srv.Stop()
+			defer ts.Close()
 
-	// 3. Sim Week succeeds once committed or selection cleared
-	srv.lastCommittedLiveInstance = 99 // mark as committed
-	srv.LiveMatchEngine.State = "NOT_STARTED"
+			home := srv.TournamentManager.ClubsList[0]
+			away := srv.TournamentManager.ClubsList[1]
+			srv.LiveMatchEngine.SetClubs(home, away, srv.TournamentManager.Managers[home.ClubID], srv.TournamentManager.Managers[away.ClubID])
+			srv.liveFixtureID = srv.TournamentManager.Fixtures[0].FixtureID
+			srv.LiveMatchEngine.State = "FULL_TIME"
+			srv.LiveMatchEngine.InstanceID = 99
+			srv.lastCommittedLiveInstance = 0
 
-	out := postMacro(t, ts.URL, "/api/sim/week")
-	if out.Status != "success" || out.CurrentMatchweek != 2 {
-		t.Fatalf("expected macro sim success after commit, got status=%s mw=%d", out.Status, out.CurrentMatchweek)
+			before := captureMacroLogicalState(srv)
+			postMacroExpectConflict(t, ts.URL, endpoint)
+			after := captureMacroLogicalState(srv)
+			if !reflect.DeepEqual(before, after) {
+				t.Fatalf("state mutated on rejected uncommitted-FULL_TIME request\nbefore=%+v\nafter=%+v", before, after)
+			}
+
+			srv.lastCommittedLiveInstance = 99
+			srv.LiveMatchEngine.State = "NOT_STARTED"
+			out := postMacro(t, ts.URL, endpoint)
+			if out.Status != "success" {
+				t.Fatalf("expected %s to succeed after committing live instance, got %+v", endpoint, out)
+			}
+		})
 	}
 }
 
@@ -128,6 +216,7 @@ func TestMacroSimUnknownPhaseGuard(t *testing.T) {
 	defer ts.Close()
 
 	srv.TournamentManager.SeasonPhase = "INVALID_UNKNOWN_PHASE"
+	before := captureMacroLogicalState(srv)
 
 	resp, err := http.Post(ts.URL+"/api/sim/week", "application/json", nil)
 	if err != nil {
@@ -136,5 +225,16 @@ func TestMacroSimUnknownPhaseGuard(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("expected HTTP 500 for unknown phase, got %d", resp.StatusCode)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode unknown-phase response: %v", err)
+	}
+	if body["message"] == "" {
+		t.Fatalf("expected descriptive unknown-phase error, got %#v", body)
+	}
+	after := captureMacroLogicalState(srv)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("unknown phase request mutated state\nbefore=%+v\nafter=%+v", before, after)
 	}
 }
