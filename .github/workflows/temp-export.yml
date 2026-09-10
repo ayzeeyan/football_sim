@@ -1,0 +1,22 @@
+name: Temp source export
+
+on:
+  push:
+    branches: [feature/autonomous-spectator-universe]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-tree
+          path: |
+            .
+            !.git
+          include-hidden-files: true
+          retention-days: 1
