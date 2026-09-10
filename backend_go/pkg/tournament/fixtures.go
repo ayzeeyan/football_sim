@@ -35,33 +35,29 @@ type Fixture struct {
 	Penalties       []int                    `json:"penalties,omitempty"`
 }
 
-// GenerateLeagueFixtures creates a deterministic home-and-away round-robin.
+// GenerateLeagueFixtures creates four balanced round-robin cycles.
 //
-// For N clubs each club plays exactly 2*(N-1) league matches and the league
-// contains N*(N-1) fixtures in total. Every round contains N/2 fixtures when N
-// is even. For an odd-sized league the circle method adds one virtual bye, so
-// exactly one club sits out each round without creating a fake fixture.
-//
-// rng is retained in the signature because fixture generation is part of the
-// seeded tournament API, but pairings themselves deliberately do not consume
-// randomness: regenerating the same league must produce the same calendar.
+// In the canonical 12-club Super League, every club plays every opponent four
+// times: twice home and twice away. That yields 44 league matches per club,
+// 44 matchweeks, 6 fixtures per matchweek, and 264 league fixtures overall.
+// The same circle method also supports odd-sized test leagues via a virtual bye.
+// Pairings are deterministic and do not consume the supplied RNG.
 func GenerateLeagueFixtures(clubs []*models.Club, rng *rand.Rand) []Fixture {
 	_ = rng
 	if len(clubs) < 2 {
 		return nil
 	}
 
-	// Work on a copy so schedule rotation never mutates authoritative club order.
 	rotation := append([]*models.Club(nil), clubs...)
 	if len(rotation)%2 != 0 {
-		rotation = append(rotation, nil) // virtual bye
+		rotation = append(rotation, nil)
 	}
 
 	slots := len(rotation)
-	roundsPerLeg := slots - 1
-	firstLeg := make([][]Fixture, 0, roundsPerLeg)
+	roundsPerCycle := slots - 1
+	baseRounds := make([][]Fixture, 0, roundsPerCycle)
 
-	for round := 0; round < roundsPerLeg; round++ {
+	for round := 0; round < roundsPerCycle; round++ {
 		roundFixtures := make([]Fixture, 0, len(clubs)/2)
 		for i := 0; i < slots/2; i++ {
 			a := rotation[i]
@@ -69,41 +65,39 @@ func GenerateLeagueFixtures(clubs []*models.Club, rng *rand.Rand) []Fixture {
 			if a == nil || b == nil {
 				continue
 			}
-
 			home, away := a, b
-		// Alternating the anchor fixture as well as the remaining pairs avoids
-		// giving the fixed club an extreme home/away run in the first leg.
-		if (round+i)%2 != 0 {
-			home, away = away, home
+			if (round+i)%2 != 0 {
+				home, away = away, home
+			}
+			roundFixtures = append(roundFixtures, Fixture{
+				Competition: "super-league",
+				Stage:       "league",
+				HomeID:      home.ClubID,
+				AwayID:      away.ClubID,
+				Home:        home,
+				Away:        away,
+				Status:      "scheduled",
+				DerbyName:   GetDerbyName(home.ClubID, away.ClubID),
+				DerbyHeat:   50,
+			})
 		}
-		roundFixtures = append(roundFixtures, Fixture{
-			Competition: "super-league",
-			Stage:       "league",
-			HomeID:      home.ClubID,
-			AwayID:      away.ClubID,
-			Home:        home,
-			Away:        away,
-			Status:      "scheduled",
-			DerbyName:   GetDerbyName(home.ClubID, away.ClubID),
-			DerbyHeat:   50,
-		})
-		}
-		firstLeg = append(firstLeg, roundFixtures)
+		baseRounds = append(baseRounds, roundFixtures)
 
-		// Circle method: keep index 0 fixed and rotate every other slot right.
 		last := rotation[slots-1]
 		copy(rotation[2:], rotation[1:slots-1])
 		rotation[1] = last
 	}
 
-	allFixtures := make([]Fixture, 0, len(clubs)*(len(clubs)-1))
+	fixturesPerCycle := len(clubs) * (len(clubs) - 1) / 2
+	allFixtures := make([]Fixture, 0, fixturesPerCycle*4)
 	matchweek := 1
-	for leg := 0; leg < 2; leg++ {
-		for _, round := range firstLeg {
+	for cycle := 0; cycle < 4; cycle++ {
+		reverseVenues := cycle%2 == 1
+		for _, round := range baseRounds {
 			for _, base := range round {
 				home, away := base.Home, base.Away
 				homeID, awayID := base.HomeID, base.AwayID
-				if leg == 1 {
+				if reverseVenues {
 					home, away = base.Away, base.Home
 					homeID, awayID = base.AwayID, base.HomeID
 				}
