@@ -31,7 +31,7 @@ From the repo root:
 
 That installs frontend deps if needed, builds the client, and starts the Go server. Open the URL it prints — default **http://localhost:8000**.
 
-If port 8000 is taken, the server walks to the next free port and logs it.
+If port 8000 is taken, the server walks to the next free port and logs it. The server binds to loopback by default; use `-host 0.0.0.0` only when you intentionally want LAN access.
 
 Equivalent by hand:
 
@@ -76,12 +76,13 @@ that only starts Vite; you still need the Go server in another terminal.
 
 | Flag | Default | Meaning |
 |---|---|---|
+| `-host` | `127.0.0.1` | Bind address. Use `0.0.0.0` explicitly for LAN access |
 | `-port` | `8000` | HTTP and WebSocket port (falls forward if busy) |
 | `-dataset` | walks up for `dataset.json` | Club and player universe |
 | `-save` | `saves/career.json` (or `FOOTBALL_SIM_SAVE`) | Career snapshot |
 | `-static` | walks up for `frontend/dist` | Built React app |
 
-If `frontend/dist` is missing, the API still runs. Build the client, or use Vite as above.
+If `frontend/dist` is missing, the API still runs. Build the client, or use Vite as above. Generated frontend output is intentionally not committed.
 
 ## Tests
 
@@ -91,11 +92,21 @@ go test ./...
 go vet ./...
 ```
 
+For the frontend:
+
+```powershell
+cd frontend
+bun install
+bun run build
+```
+
+Pull requests run both backend and frontend checks automatically through GitHub Actions.
+
 ## Career save
 
 The live save is `saves/career.json`. Full time, slate sims, transfers, and a clean shutdown all write it. Starting a new career from the UI replaces that file.
 
-Copy the JSON aside if you want a backup before a reset.
+Runtime saves and their `saves/clubs/` sidecars are intentionally ignored by Git so playing the game does not dirty the repository. Copy the save directory elsewhere if you want a manual backup before a reset.
 
 ## Layout
 
@@ -111,7 +122,7 @@ backend_go/          Go module — server, engine, tests
 frontend/            React + Vite + Tailwind
   src/services/      api.ts and matchSocket.ts (the contract)
 dataset.json         96 clubs, 2,401 players; 12 elite + 12 prodigies used in career
-saves/career.json    Active career
+saves/career.json    Runtime career manifest (generated, not committed)
 scripts/run.ps1      One-command play / -Dev
 ```
 
