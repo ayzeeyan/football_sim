@@ -155,7 +155,16 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 		}
 	}
 	if s.TransferEngine.CurrentWeek > 12 {
-		tm.ResetNewSeason()
+		transition := tm.FinalizeSeasonTransition()
+		if transition["status"] != "success" {
+			out.Status = "error"
+			if msg, ok := transition["message"].(string); ok && msg != "" {
+				out.Message = msg
+			} else {
+				out.Message = "Season transition failed."
+			}
+			return out, http.StatusInternalServerError
+		}
 		out.NewSeasonStarted = true
 		out.SeasonName = tm.SeasonName
 		out.SeasonPhase = tm.SeasonPhase
