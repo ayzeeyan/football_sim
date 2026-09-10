@@ -80,12 +80,17 @@ func PairSeniorMentors(clubs []*models.Club, ge *growth.GrowthEngine) {
 				candidates = sameCategory
 			}
 
-			// Sort by OVR desc, then Age desc
+			// Sort by OVR desc, then age desc, then stable player ID. The final
+			// tie-break prevents equivalent veterans from inheriting whatever
+			// incidental order a prior roster mutation happened to leave behind.
 			sort.Slice(candidates, func(i, j int) bool {
-				if candidates[i].OVR == candidates[j].OVR {
+				if candidates[i].OVR != candidates[j].OVR {
+					return candidates[i].OVR > candidates[j].OVR
+				}
+				if candidates[i].Age != candidates[j].Age {
 					return candidates[i].Age > candidates[j].Age
 				}
-				return candidates[i].OVR > candidates[j].OVR
+				return candidates[i].PlayerID < candidates[j].PlayerID
 			})
 
 			bestMentor := candidates[0]
