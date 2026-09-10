@@ -62,7 +62,8 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
       if (!res.is_window_open && res.window_name.includes('opens')) {
         onShowToast(res.window_name);
       } else {
-        onShowToast(`Window day ${res.window_day}. Negotiations and wire updated.`);
+        const week = res.window_week ?? res.window_day;
+        onShowToast(`Transfer week ${week} of ${res.max_window_weeks ?? 12}. Negotiations and wire updated.`);
       }
       reload();
     } catch {
@@ -90,6 +91,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
 
   const totalSpend = data.completed_transfers.reduce((acc, c) => acc + c.fee_eur, 0);
   const windowOpen = data.is_window_open;
+  const windowWeek = data.window_week ?? data.window_day;
 
   return (
     <div className="space-y-4">
@@ -97,14 +99,14 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
         <PanelHeader
           kicker={
             windowOpen
-              ? `Window open · week ${data.window_week || data.window_day} of ${data.max_window_weeks || 12}`
+              ? `Window open · week ${windowWeek} of ${data.max_window_weeks || 12}`
               : 'Window closed'
           }
           title={`Transfers · ${data.window_name}`}
           subtitle={
             windowOpen
-              ? `${data.active_negotiations.length} active negotiations · ${data.completed_transfers.length} completed · ${formatMillions(totalSpend)} spent. Loyal players can still turn moves down.`
-              : 'Business is done behind closed doors until the season ends. Loyal players stay; restless ones agitate.'
+              ? `${data.active_negotiations.length} active negotiations · ${data.completed_transfers.length} completed · ${formatMillions(totalSpend)} spent. Permanent deals update club-owned warchests immediately.`
+              : 'Business is done behind closed doors until the season ends. Completed permanent transfers remain part of the live world state.'
           }
           right={
             windowOpen ? (
@@ -125,7 +127,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
         />
         {confirmEnd && (
           <ConfirmBar
-            message="End the window and start the next season? Squads return home and a new table is drawn."
+            message="End the completed 12-week window and start the next season? Current squads and all permanent transfers will be preserved."
             confirmLabel="Start New Season"
             busyLabel="Starting…"
             busy={endingWindow}
@@ -172,13 +174,14 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
         <Card>
           <div className="flex items-center justify-between pb-3 border-b border-line mb-4">
             <h3 className="font-display text-[17px] font-semibold text-bone flex items-center gap-2">
-              <Landmark size={16} className="text-brass" /> Warchests · what each manager can spend
+              <Landmark size={16} className="text-brass" /> Club transfer warchests
             </h3>
-            <Badge tone="gold">Day {data.window_day}</Badge>
+            <Badge tone="gold">Week {windowWeek}/{data.max_window_weeks ?? 12}</Badge>
           </div>
+          <p className="text-[12px] text-sage mb-3">Current club-owned spending limits. Purchases reduce them and sales replenish them according to the backend finance rules.</p>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
             {data.warchests.map((w) => (
-              <div key={w.club_short} className="p-2.5 bg-ink/40 rounded-xl border border-line" title={`${w.manager_name} · ${w.tactic}`}>
+              <div key={w.club_short} className="p-2.5 bg-ink/40 rounded-xl border border-line" title={`${w.club_name} · managed by ${w.manager_name}`}>
                 <p className="font-mono font-bold text-[12px] text-bone">{w.club_short}</p>
                 <p className="font-mono font-bold text-[13px] text-brass mt-0.5">{w.formatted_budget}</p>
                 <p className="text-[10.5px] text-sage truncate mt-0.5">{w.manager_name}</p>
@@ -199,7 +202,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
             </div>
             <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
               {data.active_negotiations.length === 0 && (
-                <EmptyState message={windowOpen ? 'No active negotiations. Advance a day and the phones will ring.' : 'No active negotiations while the window is shut.'} />
+                <EmptyState message={windowOpen ? 'No active negotiations. Advance a week and the phones will ring.' : 'No active negotiations while the window is shut.'} />
               )}
               {data.active_negotiations.map((neg) => (
                 <NegotiationCard key={neg.negotiation_id} neg={neg} />
@@ -215,7 +218,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
               <Badge tone="slate">{data.completed_transfers.length} signings</Badge>
             </div>
             <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-              {data.completed_transfers.length === 0 && <EmptyState message="No completed transfers yet this season." className="py-6" />}
+              {data.completed_transfers.length === 0 && <EmptyState message="No completed permanent transfers yet this window." className="py-6" />}
               {data.completed_transfers.map((t, idx) => (
                 <div key={`${t.player_name}-${idx}`} className="p-3 bg-ink/40 rounded-xl border border-line flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -229,7 +232,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
                         {t.player_name} <span className="text-sage font-mono font-normal">({t.player_pos}, {t.player_ovr})</span>
                       </div>
                       <div className="text-[12px] text-sage">
-                        {t.seller_name} <span aria-hidden>→</span> <strong className="text-bone/85">{t.buyer_name}</strong> · MW {t.matchweek}
+                        {t.seller_name} <span aria-hidden>→</span> <strong className="text-bone/85">{t.buyer_name}</strong> · Week {t.matchweek}
                       </div>
                     </div>
                   </div>
