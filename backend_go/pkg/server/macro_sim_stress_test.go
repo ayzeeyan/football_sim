@@ -68,8 +68,16 @@ func TestTenSeasonMacroSoakValidatesEveryBoundary(t *testing.T) {
 		if len(categories) < 5 { srv.worldMu.RUnlock(); t.Fatalf("season %d produced incomplete award ceremony", season) }
 		for _, cat := range categories {
 			winnerID, _ := cat["winner_id"].(string)
-			if winnerID == "" { srv.worldMu.RUnlock(); t.Fatalf("season %d award %v has no explicit winner", season, cat["key"]) }
 			noms, _ := cat["nominees"].([]map[string]interface{})
+			if len(noms) == 0 {
+				// Age-limited awards such as Golden Boy legitimately become empty
+				// in a long no-regen soak once the original cohort ages out.
+				if winnerID != "" || cat["winner"] != nil {
+					srv.worldMu.RUnlock(); t.Fatalf("season %d award %v has winner without eligible nominees", season, cat["key"])
+				}
+				continue
+			}
+			if winnerID == "" { srv.worldMu.RUnlock(); t.Fatalf("season %d award %v has nominees but no explicit winner", season, cat["key"]) }
 			found := false
 			for _, n := range noms { if n["player_id"] == winnerID { found = true; break } }
 			if !found { srv.worldMu.RUnlock(); t.Fatalf("season %d award %v winner is not a finalist", season, cat["key"]) }
