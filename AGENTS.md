@@ -8,7 +8,7 @@ A career football simulator featuring:
 - **Matchday**: Live 60 FPS WebSocket pitch simulation engine with ball physics and tactical controls, plus instant simulation for the remainder of the slate.
 - **Transfers**: Transfer window, AI bidding, wage budgets, and contract negotiations.
 - **Persistence**: Real-time snapshot saving to `saves/career.json`.
-- **Tech Stack**: High-performance Go 1.22+ backend (`backend_go`) and React 18 / TypeScript / Vite / Tailwind CSS frontend (`frontend`).
+- **Tech Stack**: Go backend (`backend_go`, version declared by `go.mod`) and React 18 / TypeScript / Vite / Tailwind CSS frontend (`frontend`).
 
 ---
 
@@ -16,8 +16,8 @@ A career football simulator featuring:
 
 ```
 football_sim/
-├── backend_go/            # Go 1.22+ server, engine, domain models, tests
-│   ├── cmd/server/        # Entrypoint (CLI flags: -port, -dataset, -save, -static)
+├── backend_go/            # Go server, engine, domain models, tests
+│   ├── cmd/server/        # Entrypoint (CLI flags: -host, -port, -dataset, -save, -static)
 │   ├── pkg/models/        # Core entities (Player, Club, Standings, Valuations, Personality)
 │   ├── pkg/growth/        # Biometrics, puberty curves, progression, training, aging decline
 │   ├── pkg/datamanager/   # Ingestion of dataset.json, squad deduplication, wonderkid setup
@@ -32,8 +32,8 @@ football_sim/
 │   ├── src/components/    # Matchday, League, Wonderkids, Squads, Transfers, Inbox, History tabs
 │   ├── src/services/      # api.ts and matchSocket.ts client contracts
 │   └── package.json       # React 18, Vite, TypeScript, Tailwind CSS
-├── dataset.json           # Database of 96 clubs and 2,294+ players
-├── saves/career.json      # Active career save state
+├── dataset.json           # Database of 96 clubs and 2,401 players
+├── saves/                 # Generated runtime career state; not committed
 └── scripts/run.ps1        # Helper script for running dev & production servers
 ```
 
@@ -42,8 +42,8 @@ football_sim/
 ## Strict Domain Invariants & Rules
 
 1. **Language & Runtime**:
-   - The backend is written in pure Go 1.22+. There is **no Python runtime**.
-   - The frontend is React 18 with TypeScript and Tailwind CSS, managed via Bun or Vite.
+   - The backend is written in pure Go using the toolchain version declared in `backend_go/go.mod`. There is **no Python runtime**.
+   - The frontend is React 18 with TypeScript and Tailwind CSS and is managed with Bun. Do not add npm/yarn lockfiles to the repository.
 2. **Wonderkids**:
    - Exactly 12 canonical wonderkids start at age 14, in middle school, with category `FWD` and IDs prefixed with `WK_`.
    - Wonderkid potentials must stay strictly within the `[93, 96]` range (never 99).
@@ -52,6 +52,9 @@ football_sim/
 3. **Data Integrity & Economics**:
    - Exactly 0 duplicate players across and within club squads at all times.
    - Player valuations adhere strictly to valuation clamping (€300k minimum floor, €500M maximum ceiling; dynamic corridor [0.35 * anchor, 3.0 * anchor]).
+   - Career save files and sharded club save files are runtime state and must never be committed.
 4. **Development & Verification**:
    - Run backend tests with: `cd backend_go && go test ./...`
-   - All tests must pass with 0 compiler warnings and 0 runtime panics.
+   - Run backend static checks with: `cd backend_go && go vet ./...`
+   - Run frontend verification with: `cd frontend && bun install && bun run build`
+   - Pull requests must pass `.github/workflows/ci.yml` before merge.
