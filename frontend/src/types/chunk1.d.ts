@@ -26,6 +26,10 @@ declare module './index' {
     formatted_transfer_warchest?: string;
   }
 
+  interface AwardsNominee {
+    player_id?: string;
+  }
+
   interface AwardsCategory {
     winner_id?: string;
   }
