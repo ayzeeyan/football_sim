@@ -10,19 +10,19 @@ import (
 
 // Club represents a football club, its roster, financial/stadium info, and domestic standings.
 type Club struct {
-	ClubID            string   `json:"club_id"`
-	ClubName          string   `json:"club_name"`
-	ShortName         string   `json:"short_name"`
-	League            string   `json:"league"`
-	Country           string   `json:"country"`
-	HomeStadium       string   `json:"home_stadium"`
-	StadiumCapacity   int      `json:"stadium_capacity"`
-	OverallTeamRating int      `json:"overall_team_rating"`
-	SquadSize         int      `json:"squad_size"`
-	SquadAvgOVR       float64  `json:"squad_avg_ovr"`
-	PrimaryColor      [3]uint8 `json:"primary_color"`
-	SecondaryColor    [3]uint8 `json:"secondary_color"`
-	Morale            int      `json:"morale"`
+	ClubID            string       `json:"club_id"`
+	ClubName          string       `json:"club_name"`
+	ShortName         string       `json:"short_name"`
+	League            string       `json:"league"`
+	Country           string       `json:"country"`
+	HomeStadium       string       `json:"home_stadium"`
+	StadiumCapacity   int          `json:"stadium_capacity"`
+	OverallTeamRating int          `json:"overall_team_rating"`
+	SquadSize         int          `json:"squad_size"`
+	SquadAvgOVR       float64      `json:"squad_avg_ovr"`
+	PrimaryColor      [3]uint8     `json:"primary_color"`
+	SecondaryColor    [3]uint8     `json:"secondary_color"`
+	Morale            int          `json:"morale"`
 	Identity          ClubIdentity `json:"identity"`
 	Finances          ClubFinances `json:"finances"`
 
@@ -125,7 +125,7 @@ func (c *Club) UpdateMorale(result string) {
 		if c.Morale < 30 {
 			c.Morale = 30
 		}
-n	case "L":
+	case "L":
 		streakPenalty := 0
 		if len(c.Form) >= 3 {
 			last3 := c.Form[len(c.Form)-3:]
