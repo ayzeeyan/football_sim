@@ -28,7 +28,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 			res, err := tm.GrowthEngine.RunTrainingCycle(prodigy.PlayerID, focus, false)
 			if err == nil && res["status"] != "error" { growthEvents = append(growthEvents, fmt.Sprintf("%s staff ran %s training for %s.", club.ShortName, focus, prodigy.FullName)) }
 		}
-		prodigy.OVR = tm.GrowthEngine.CalculateOVR(prodigy.PlayerID, prodigy.Category)
+		prodigy.OVR = tm.GrowthEngine.EnforceSeasonOVRCap(prodigy.PlayerID, prodigy.Category)
 		if attrs, ok := tm.GrowthEngine.Attributes[prodigy.PlayerID]; ok && attrs != nil { prodigy.Composure = attrs.Composure }
 	}
 	if len(growthEvents) > 0 {
