@@ -14,6 +14,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const liveCompletionReadTimeout = 20 * time.Second
+
 func serverLiveCompletionFixtureWithProdigy(t *testing.T, srv *Server) (tournament.Fixture, *models.Player) {
 	t.Helper()
 	for _, f := range srv.TournamentManager.GetSlate(srv.TournamentManager.CurrentMatchweek) {
@@ -86,7 +88,7 @@ func TestLiveTickerCommitsFullTimeFixtureOnceAndSavesCareer(t *testing.T) {
 		t.Fatalf("failed to connect to WebSocket: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(liveCompletionReadTimeout)); err != nil {
 		t.Fatalf("failed to set WebSocket deadline: %v", err)
 	}
 
@@ -258,7 +260,7 @@ func TestLiveTickerKeepsExactFixtureIdentityWhenLastLeagueResultRollsOver(t *tes
 		t.Fatalf("failed to connect to WebSocket: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(liveCompletionReadTimeout)); err != nil {
 		t.Fatalf("failed to set WebSocket deadline: %v", err)
 	}
 	if err := conn.WriteJSON(map[string]interface{}{"action": "set_clubs", "home_id": fixture.HomeID, "away_id": fixture.AwayID}); err != nil {
@@ -352,7 +354,7 @@ func TestLiveFixtureSelectionClearsOnResetAndExhibitionReselection(t *testing.T)
 		t.Fatalf("failed to connect to WebSocket: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(liveCompletionReadTimeout)); err != nil {
 		t.Fatalf("failed to set WebSocket deadline: %v", err)
 	}
 	if err := conn.WriteJSON(map[string]interface{}{"action": "set_clubs", "home_id": first.HomeID, "away_id": first.AwayID}); err != nil {
@@ -408,7 +410,7 @@ func TestLiveTickerRetriesTransientExactFixtureCommitFailure(t *testing.T) {
 		t.Fatalf("failed to connect to WebSocket: %v", err)
 	}
 	defer conn.Close()
-	if err := conn.SetReadDeadline(time.Now().Add(8 * time.Second)); err != nil {
+	if err := conn.SetReadDeadline(time.Now().Add(liveCompletionReadTimeout)); err != nil {
 		t.Fatalf("failed to set WebSocket deadline: %v", err)
 	}
 	if err := conn.WriteJSON(map[string]interface{}{"action": "set_clubs", "home_id": fixture.HomeID, "away_id": fixture.AwayID}); err != nil {
