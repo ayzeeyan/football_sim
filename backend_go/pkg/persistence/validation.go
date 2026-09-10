@@ -1,6 +1,10 @@
 package persistence
 
-import "fmt"
+import (
+	"fmt"
+
+	"football_sim/pkg/tournament"
+)
 
 // ValidateCareerSnapshot rejects malformed critical save state before it is
 // overlaid onto a live universe. Zero-valued additive fields are deliberately
