@@ -30,11 +30,23 @@ const API_BASE = '/api';
 async function apiFetch<T>(path: string, init?: RequestInit, fallback?: T): Promise<T> {
   try {
     const res = await fetch(`${API_BASE}${path}`, init);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${path}`);
+    if (!res.ok) {
+      let errMsg = `HTTP ${res.status} for ${path}`;
+      try {
+        const body = await res.json();
+        if (body.detail) errMsg = body.detail;
+        else if (body.message) errMsg = body.message;
+      } catch {
+        // ignore json parse error
+      }
+      throw new Error(errMsg);
+    }
     return (await res.json()) as T;
   } catch (err) {
     console.warn(`[API] ${path} failed`, err);
-    if (fallback !== undefined) return fallback;
+    if (fallback !== undefined && (!(err instanceof Error) || !err.message || err.message.startsWith('HTTP'))) {
+      return fallback;
+    }
     throw err;
   }
 }
@@ -279,16 +291,31 @@ const macroFallback = (mode: 'week' | 'month' | 'season'): BatchSimResult => ({
   message: 'Macro simulation failed.',
 });
 
-export function simulateWeek(): Promise<BatchSimResult> {
-  return apiFetch<BatchSimResult>('/sim/week', { method: 'POST' }, macroFallback('week'));
+export async function simulateWeek(): Promise<BatchSimResult> {
+  try {
+    return await apiFetch<BatchSimResult>('/sim/week', { method: 'POST' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Macro simulation failed.';
+    return { ...macroFallback('week'), message: msg };
+  }
 }
 
-export function simulateMonth(): Promise<BatchSimResult> {
-  return apiFetch<BatchSimResult>('/sim/month', { method: 'POST' }, macroFallback('month'));
+export async function simulateMonth(): Promise<BatchSimResult> {
+  try {
+    return await apiFetch<BatchSimResult>('/sim/month', { method: 'POST' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Macro simulation failed.';
+    return { ...macroFallback('month'), message: msg };
+  }
 }
 
-export function simulateSeason(): Promise<BatchSimResult> {
-  return apiFetch<BatchSimResult>('/sim/season', { method: 'POST' }, macroFallback('season'));
+export async function simulateSeason(): Promise<BatchSimResult> {
+  try {
+    return await apiFetch<BatchSimResult>('/sim/season', { method: 'POST' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Macro simulation failed.';
+    return { ...macroFallback('season'), message: msg };
+  }
 }
 
 export interface WeekWatch {

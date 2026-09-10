@@ -66,3 +66,75 @@ func TestMacroOffSeasonWeekRollsIntoNewSeason(t *testing.T) {
 		t.Fatalf("transfer engine not reset: week=%d offseason=%v", srv.TransferEngine.CurrentWeek, srv.TransferEngine.IsOffSeason)
 	}
 }
+
+func TestMacroSimRejectedWhenLiveFixtureActiveOrUncommitted(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer srv.Stop()
+	defer ts.Close()
+
+	// Select a live fixture and set engine to active state PLAYING
+	home := srv.TournamentManager.ClubsList[0]
+	away := srv.TournamentManager.ClubsList[1]
+	srv.LiveMatchEngine.SetClubs(home, away, srv.TournamentManager.Managers[home.ClubID], srv.TournamentManager.Managers[away.ClubID])
+	srv.liveFixtureID = srv.TournamentManager.Fixtures[0].FixtureID
+	srv.LiveMatchEngine.State = "PLAYING"
+
+	endpoints := []string{"/api/sim/week", "/api/sim/month", "/api/sim/season"}
+
+	// 1. Sim Week / Month / Season rejected with 409 while PLAYING
+	for _, ep := range endpoints {
+		resp, err := http.Post(ts.URL+ep, "application/json", nil)
+		if err != nil {
+			t.Fatalf("POST %s failed: %v", ep, err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusConflict {
+			t.Fatalf("expected HTTP 409 Conflict for %s while PLAYING, got %d", ep, resp.StatusCode)
+		}
+	}
+
+	// Verify state remained unchanged (CurrentMatchweek still 1)
+	if srv.TournamentManager.CurrentMatchweek != 1 {
+		t.Fatalf("CurrentMatchweek changed during rejection: got %d, want 1", srv.TournamentManager.CurrentMatchweek)
+	}
+
+	// 2. Sim Week rejected with 409 at FULL_TIME when uncommitted
+	srv.LiveMatchEngine.State = "FULL_TIME"
+	srv.LiveMatchEngine.InstanceID = 99
+	srv.lastCommittedLiveInstance = 0 // instance 99 not committed yet
+
+	resp, err := http.Post(ts.URL+"/api/sim/week", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/sim/week failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("expected HTTP 409 Conflict at FULL_TIME uncommitted, got %d", resp.StatusCode)
+	}
+
+	// 3. Sim Week succeeds once committed or selection cleared
+	srv.lastCommittedLiveInstance = 99 // mark as committed
+	srv.LiveMatchEngine.State = "NOT_STARTED"
+
+	out := postMacro(t, ts.URL, "/api/sim/week")
+	if out.Status != "success" || out.CurrentMatchweek != 2 {
+		t.Fatalf("expected macro sim success after commit, got status=%s mw=%d", out.Status, out.CurrentMatchweek)
+	}
+}
+
+func TestMacroSimUnknownPhaseGuard(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer srv.Stop()
+	defer ts.Close()
+
+	srv.TournamentManager.SeasonPhase = "INVALID_UNKNOWN_PHASE"
+
+	resp, err := http.Post(ts.URL+"/api/sim/week", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/sim/week failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected HTTP 500 for unknown phase, got %d", resp.StatusCode)
+	}
+}
