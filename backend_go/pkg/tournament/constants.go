@@ -7,8 +7,10 @@ import (
 )
 
 const (
-	LeagueRounds = 44
-	UCLFinalWeek = 44
+	// The 12-club Super League is a normal home-and-away competition:
+	// 2 * (12 - 1) = 22 league matchweeks.
+	LeagueRounds = 22
+	UCLFinalWeek = 22
 )
 
 var MonthBands = []struct {
@@ -20,24 +22,14 @@ var MonthBands = []struct {
 	{9, 12, "October"},
 	{13, 16, "November"},
 	{17, 20, "December"},
-	{21, 24, "January"},
-	{25, 28, "February"},
-	{29, 33, "March"},
-	{34, 38, "April"},
-	{39, 44, "May"},
+	{21, 22, "January"},
 }
 
 func LeaguePhase(matchweek int) string {
 	if matchweek <= 11 {
-		return "Opening series"
+		return "Opening leg"
 	}
-	if matchweek <= 22 {
-		return "Return series"
-	}
-	if matchweek <= 33 {
-		return "Third series"
-	}
-	return "Final stretch"
+	return "Return leg"
 }
 
 func MonthLabel(matchweek int) string {
@@ -50,7 +42,7 @@ func MonthLabel(matchweek int) string {
 }
 
 // CalendarYear resolves a matchweek to the real calendar year represented by
-// SeasonName (for example 2026-27: August-December 2026, January-May 2027).
+// SeasonName (for example 2026-27: August-December 2026, January 2027).
 func CalendarYear(seasonName string, matchweek int) int {
 	start := 2026
 	if parts := strings.Split(seasonName, "-"); len(parts) > 0 {
@@ -103,10 +95,8 @@ func WeekChapter(matchweek int) string {
 	case sc:
 		return month + ": Super Cup night"
 	case matchweek <= 4:
-		return month + ": opening series"
-	case matchweek >= 21 && matchweek <= 24:
-		return month + ": winter window"
-	case matchweek >= 39:
+		return month + ": opening leg"
+	case matchweek >= 19:
 		return month + ": home stretch"
 	default:
 		return month + ": " + toLowerFirst(LeaguePhase(matchweek))
@@ -134,10 +124,12 @@ func toLowerFirst(s string) string {
 }
 
 var (
-	UCLGroupWeeks  = []int{3, 8, 13, 19, 24}
-	UCLQFWeeks     = []int{35, 36}
-	UCLSFWeeks     = []int{39, 40}
-	SuperCupWeeks  = map[string]int{"play_in": 5, "qf": 12, "sf": 20, "final": 26}
+	// Cup dates are interleaved with the 22 league matchweeks. A deep cup run
+	// therefore adds competitive appearances without inflating league fixtures.
+	UCLGroupWeeks = []int{3, 6, 9, 12, 15}
+	UCLQFWeeks    = []int{17, 18}
+	UCLSFWeeks    = []int{19, 20}
+	SuperCupWeeks = map[string]int{"play_in": 2, "qf": 7, "sf": 13, "final": 21}
 	WeatherOptions = []string{"clear", "clear", "clear", "overcast", "rain", "rain", "wind", "snow"}
 )
 
