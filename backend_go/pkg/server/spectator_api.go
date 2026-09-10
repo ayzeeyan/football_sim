@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"football_sim/pkg/tournament"
 )
@@ -184,6 +186,9 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 }
 
 func (s *Server) handleMacroSimulation(w http.ResponseWriter, mode string) {
+	started := time.Now()
+	defer func() { recordMacroSimulationDuration(s, time.Since(started)) }()
+
 	s.worldMu.Lock()
 	out, statusCode := s.runMacroSimulationLocked(mode)
 	if statusCode == http.StatusOK {
@@ -195,6 +200,9 @@ func (s *Server) handleMacroSimulation(w http.ResponseWriter, mode string) {
 	}
 
 	if statusCode != http.StatusOK {
+		if statusCode >= http.StatusInternalServerError {
+			log.Printf("[MacroSim] mode=%s internal failure: %s", mode, out.Message)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(statusCode)
 		_ = json.NewEncoder(w).Encode(map[string]string{"message": out.Message})
