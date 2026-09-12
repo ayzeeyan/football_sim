@@ -35,6 +35,13 @@ func (ge *GrowthEngine) ApplyMatchXP(
 	if bio == nil || attrs == nil {
 		return nil
 	}
+	if posCat == "" {
+		posCat = bio.PositionCategory
+	}
+	if posCat == "" {
+		posCat = "FWD"
+	}
+	ge.enforceSeasonOVRCapUnlocked(playerID, posCat)
 
 	effMentorOVR := bio.MentorOVR
 	effMentorName := bio.MentorName
@@ -107,33 +114,39 @@ func (ge *GrowthEngine) ApplyMatchXP(
 		}
 
 		chosenAttr := pool[ge.rng.Intn(len(pool))]
-		setAttr(attrs, chosenAttr, minInt(99, getAttr(attrs, chosenAttr)+1))
+		chosenApplied := ge.tryIncrementAttributeUnlocked(playerID, posCat, chosenAttr)
 
 		// Senior mentor composure transfer on level-up
+		composureApplied := false
 		if effMentorName != "" && effMentorOVR > 0 {
 			compChance := 0.35
 			if effPersonality == "big_game_performer" {
 				compChance = 0.50
 			}
 			if ge.rng.Float64() < compChance && attrs.Composure < minInt(99, effMentorOVR) {
-				attrs.Composure = minInt(99, attrs.Composure+1)
-				compMsg := fmt.Sprintf("Mentorship poise: Under %s's guidance, %s's composure increased to %d.",
-					effMentorName, playerName, attrs.Composure)
-				events = append(events, compMsg)
-				milestone := GrowthMilestone{
-					Timestamp:   "Mentorship Wisdom",
-					PlayerName:  playerName,
-					EventType:   "ATTRIBUTE",
-					Description: compMsg,
-					BadgeColor:  "gold",
+				composureApplied = ge.tryIncrementAttributeUnlocked(playerID, posCat, "composure")
+				if composureApplied {
+					compMsg := fmt.Sprintf("Mentorship poise: Under %s's guidance, %s's composure increased to %d.",
+						effMentorName, playerName, attrs.Composure)
+					events = append(events, compMsg)
+					milestone := GrowthMilestone{
+						Timestamp:   "Mentorship Wisdom",
+						PlayerName:  playerName,
+						EventType:   "ATTRIBUTE",
+						Description: compMsg,
+						BadgeColor:  "gold",
+					}
+					ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
 				}
-				ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
 			}
 		}
 
 		newOVR := ge.internalCalculateOVR(playerID, posCat)
 		if newOVR >= cap {
 			events = append(events, fmt.Sprintf("%s is at his ceiling (%d OVR).", playerName, cap))
+			break
+		}
+		if !chosenApplied && !composureApplied {
 			break
 		}
 
@@ -165,6 +178,11 @@ func (ge *GrowthEngine) ApplyMentorshipTick(
 	if bio == nil || attrs == nil {
 		return nil
 	}
+	posCat := bio.PositionCategory
+	if posCat == "" {
+		posCat = "FWD"
+	}
+	ge.enforceSeasonOVRCapUnlocked(playerID, posCat)
 
 	mName := bio.MentorName
 	mOVR := bio.MentorOVR
@@ -200,48 +218,60 @@ func (ge *GrowthEngine) ApplyMentorshipTick(
 
 	// 1. Composure transfer
 	if attrs.Composure < minInt(95, mOVR) {
-		attrs.Composure = minInt(99, attrs.Composure+1)
-		msg := fmt.Sprintf("Mentorship clinic: %s (%d OVR) coached %s in pressure management and match composure (Composure: %d).",
-			mName, mOVR, playerName, attrs.Composure)
-		events = append(events, msg)
-		milestone := GrowthMilestone{
-			Timestamp:   "Senior Mentorship",
-			PlayerName:  playerName,
-			EventType:   "ATTRIBUTE",
-			Description: msg,
-			BadgeColor:  "purple",
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "composure") {
+			msg := fmt.Sprintf("Mentorship clinic: %s (%d OVR) coached %s in pressure management and match composure (Composure: %d).",
+				mName, mOVR, playerName, attrs.Composure)
+			events = append(events, msg)
+			milestone := GrowthMilestone{
+				Timestamp:   "Senior Mentorship",
+				PlayerName:  playerName,
+				EventType:   "ATTRIBUTE",
+				Description: msg,
+				BadgeColor:  "purple",
+			}
+			ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
 		}
-		ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
 	}
 
 	// 2. Synergistic attribute drill based on archetype (30% chance)
 	if ge.rng.Float64() < 0.30 {
 		var skillLabel string
+		var applied bool
 		switch pers {
 		case "academic_dual":
-			attrs.PressResistance = minInt(99, attrs.PressResistance+1)
-			skillLabel = fmt.Sprintf("Press resistance +1 (%d)", attrs.PressResistance)
+			applied = ge.tryIncrementAttributeUnlocked(playerID, posCat, "press_resistance")
+			if applied {
+				skillLabel = fmt.Sprintf("Press resistance +1 (%d)", attrs.PressResistance)
+			}
 		case "big_game_performer":
-			attrs.Shooting = minInt(99, attrs.Shooting+1)
-			skillLabel = fmt.Sprintf("Shooting +1 (%d)", attrs.Shooting)
+			applied = ge.tryIncrementAttributeUnlocked(playerID, posCat, "shooting")
+			if applied {
+				skillLabel = fmt.Sprintf("Shooting +1 (%d)", attrs.Shooting)
+			}
 		case "flamboyant_star":
-			attrs.Dribbling = minInt(99, attrs.Dribbling+1)
-			skillLabel = fmt.Sprintf("Dribbling +1 (%d)", attrs.Dribbling)
+			applied = ge.tryIncrementAttributeUnlocked(playerID, posCat, "dribbling")
+			if applied {
+				skillLabel = fmt.Sprintf("Dribbling +1 (%d)", attrs.Dribbling)
+			}
 		default:
-			attrs.Shielding = minInt(99, attrs.Shielding+1)
-			skillLabel = fmt.Sprintf("Shielding +1 (%d)", attrs.Shielding)
+			applied = ge.tryIncrementAttributeUnlocked(playerID, posCat, "shielding")
+			if applied {
+				skillLabel = fmt.Sprintf("Shielding +1 (%d)", attrs.Shielding)
+			}
 		}
 
-		drillMsg := fmt.Sprintf("%s ran advanced 1-on-1 drills with %s (%s).", mName, playerName, skillLabel)
-		events = append(events, drillMsg)
-		milestone := GrowthMilestone{
-			Timestamp:   "Mentorship Drills",
-			PlayerName:  playerName,
-			EventType:   "ATTRIBUTE",
-			Description: drillMsg,
-			BadgeColor:  "green",
+		if applied {
+			drillMsg := fmt.Sprintf("%s ran advanced 1-on-1 drills with %s (%s).", mName, playerName, skillLabel)
+			events = append(events, drillMsg)
+			milestone := GrowthMilestone{
+				Timestamp:   "Mentorship Drills",
+				PlayerName:  playerName,
+				EventType:   "ATTRIBUTE",
+				Description: drillMsg,
+				BadgeColor:  "green",
+			}
+			ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
 		}
-		ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
 	}
 
 	// 3. Direct XP injection from veteran guidance
@@ -284,15 +314,19 @@ func (ge *GrowthEngine) RunTrainingCycle(
 			"message": "Prodigy not found",
 		}, errors.New("prodigy not found")
 	}
+	posCat := bio.PositionCategory
+	if posCat == "" {
+		posCat = "FWD"
+	}
+	ge.enforceSeasonOVRCapUnlocked(playerID, posCat)
 
 	if shouldConsume {
 		ge.TrainingEnergy--
 	}
 
 	gains := make(map[string]interface{})
-	bump := 1
 	var msg string
-
+	var attrGains []string
 	switch focus {
 	case "hypertrophy":
 		if ge.StillGrowing(bio) && bio.WeightGainKG() < 5.0 {
@@ -302,33 +336,59 @@ func (ge *GrowthEngine) RunTrainingCycle(
 			bio.CurrentWeightKG = math.Round(math.Min(targetW, bio.CurrentWeightKG+wGain)*10) / 10
 			gains["weight"] = fmt.Sprintf("+%.1f kg", wGain)
 		}
-		attrs.Strength = minInt(99, attrs.Strength+bump)
-		attrs.Stamina = minInt(99, attrs.Stamina+bump)
-		gains["attributes"] = []string{"Strength +1", "Stamina +1"}
-		msg = fmt.Sprintf("Hypertrophy training: %s added a little strength and stamina.", bio.FullName)
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "strength") {
+			attrGains = append(attrGains, "Strength +1")
+		}
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "stamina") {
+			attrGains = append(attrGains, "Stamina +1")
+		}
+		if len(attrGains) > 0 {
+			msg = fmt.Sprintf("Hypertrophy training: %s added a little strength and stamina.", bio.FullName)
+		}
 
 	case "technical":
-		attrs.Dribbling = minInt(99, attrs.Dribbling+bump)
-		attrs.Passing = minInt(99, attrs.Passing+bump)
-		attrs.Composure = minInt(99, attrs.Composure+bump)
-		gains["attributes"] = []string{"Dribbling +1", "Passing +1", "Composure +1"}
-		msg = fmt.Sprintf("Technical work: %s sharpened his touch and tactical composure.", bio.FullName)
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "dribbling") {
+			attrGains = append(attrGains, "Dribbling +1")
+		}
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "passing") {
+			attrGains = append(attrGains, "Passing +1")
+		}
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "composure") {
+			attrGains = append(attrGains, "Composure +1")
+		}
+		if len(attrGains) > 0 {
+			msg = fmt.Sprintf("Technical work: %s sharpened his touch and tactical composure.", bio.FullName)
+		}
 
 	default: // "tactical"
-		attrs.Pace = minInt(99, attrs.Pace+bump)
-		attrs.PressResistance = minInt(99, attrs.PressResistance+bump)
-		gains["attributes"] = []string{"Pace +1", "Press resistance +1"}
-		msg = fmt.Sprintf("Tactical work: %s moved a little quicker between lines.", bio.FullName)
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "pace") {
+			attrGains = append(attrGains, "Pace +1")
+		}
+		if ge.tryIncrementAttributeUnlocked(playerID, posCat, "press_resistance") {
+			attrGains = append(attrGains, "Press resistance +1")
+		}
+		if len(attrGains) > 0 {
+			msg = fmt.Sprintf("Tactical work: %s moved a little quicker between lines.", bio.FullName)
+		}
 	}
 
-	milestone := GrowthMilestone{
-		Timestamp:   "Training Cycle",
-		PlayerName:  bio.FullName,
-		EventType:   "ATTRIBUTE",
-		Description: msg,
-		BadgeColor:  "purple",
+	if attrGains == nil {
+		attrGains = []string{}
 	}
-	ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
+	gains["attributes"] = attrGains
+
+	if len(attrGains) == 0 && gains["weight"] == nil {
+		msg = fmt.Sprintf("%s is at his annual development ceiling.", bio.FullName)
+	} else {
+		milestone := GrowthMilestone{
+			Timestamp:   "Training Cycle",
+			PlayerName:  bio.FullName,
+			EventType:   "ATTRIBUTE",
+			Description: msg,
+			BadgeColor:  "purple",
+		}
+		ge.Milestones = append([]GrowthMilestone{milestone}, ge.Milestones...)
+	}
 
 	res := map[string]interface{}{
 		"status":           "success",

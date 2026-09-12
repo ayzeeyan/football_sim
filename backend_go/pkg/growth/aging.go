@@ -85,6 +85,11 @@ func (ge *GrowthEngine) ApplySeasonalGrowth(
 	attrs := ge.Attributes[playerID]
 	cat := posCat
 	if cat == "" {
+		if bio := ge.Biometrics[playerID]; bio != nil {
+			cat = bio.PositionCategory
+		}
+	}
+	if cat == "" {
 		if attrs != nil && len(currentOVR) > 0 {
 			bestCat := "FWD"
 			bestDiff := 999
@@ -103,16 +108,17 @@ func (ge *GrowthEngine) ApplySeasonalGrowth(
 
 	// Players age 25 and older do not receive youth developmental seasonal growth
 	if age >= 25 {
-		if attrs != nil {
-			return ge.internalCalculateOVR(playerID, cat)
-		}
 		if len(currentOVR) > 0 {
 			return currentOVR[0]
+		}
+		if attrs != nil {
+			return ge.internalCalculateOVR(playerID, cat)
 		}
 		return 75
 	}
 
 	if attrs != nil {
+		ge.enforceSeasonOVRCapUnlocked(playerID, cat)
 		cur := ge.internalCalculateOVR(playerID, cat)
 		base := cur
 		if len(currentOVR) > 0 && currentOVR[0] > base {
@@ -127,12 +133,6 @@ func (ge *GrowthEngine) ApplySeasonalGrowth(
 				seasonStartOVR = bio.BaselineOVR
 			}
 		}
-		// If caller explicitly passed an inflated currentOVR (e.g. in coverage test fixtures)
-		// that exceeds seasonStartOVR + 5 and exceeds cur, lift the baseline seasonStartOVR:
-		if len(currentOVR) > 0 && currentOVR[0] > seasonStartOVR+5 && currentOVR[0] > cur {
-			seasonStartOVR = currentOVR[0]
-		}
-
 		inSeasonGain := maxInt(0, cur-seasonStartOVR)
 
 		var bump int
@@ -170,18 +170,12 @@ func (ge *GrowthEngine) ApplySeasonalGrowth(
 
 		ge.internalNudgeToOVR(playerID, cat, target)
 		finalOVR := ge.internalCalculateOVR(playerID, cat)
-		if bump > 0 && base < potential && finalOVR <= base {
-			finalOVR = minInt(potential, base+1)
-		} else if finalOVR < base {
-			finalOVR = minInt(potential, base)
+		if finalOVR < cur {
+			finalOVR = cur
 		}
 		finalOVR = minInt(potential, finalOVR)
 		if finalOVR > hardCeiling {
 			finalOVR = hardCeiling
-		}
-
-		if bio := ge.Biometrics[playerID]; bio != nil {
-			bio.SeasonStartOVR = finalOVR
 		}
 
 		return finalOVR

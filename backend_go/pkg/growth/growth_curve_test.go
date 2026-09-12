@@ -118,6 +118,7 @@ func TestWonderkid_MultiYearTrajectory(t *testing.T) {
 		for age := 14; age <= 21; age++ {
 			seasonStartOVR := ge.CalculateOVR(wk.id, "FWD")
 			_, endOVR := simulateSeasonMatches(ge, wk.id, wk.name, wk.potential, age, rng)
+			ge.AdvanceSeasonStartOVR(wk.id, "FWD")
 			seasonGain := endOVR - seasonStartOVR
 			if seasonGain > 5 {
 				t.Fatalf("[Seed %d, Age %d] Single-season gain +%d exceeded +5 ceiling!", seed, age, seasonGain)

@@ -1529,7 +1529,7 @@ func (s *Server) handleTrainProdigy(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _ := s.findPlayer(pid)
 	if p != nil {
-		p.OVR = s.GrowthEngine.CalculateOVR(pid, p.Category)
+		p.OVR = s.GrowthEngine.EnforceSeasonOVRCap(pid, p.Category)
 		res["ovr"] = p.OVR
 	}
 	snap, gen := s.takeCareerSnapshotLocked()

@@ -6,19 +6,12 @@ package growth
 // boundary before the season-end growth pass runs.
 const MaxAnnualOVRGain = 5
 
-// EnforceSeasonOVRCap constrains the technical attribute matrix to the current
-// season's hard OVR ceiling and returns the resulting OVR. It intentionally
-// operates on attributes as well as the displayed OVR: merely clamping the
-// returned number would leave hidden over-development that reappears next
-// season.
-func (ge *GrowthEngine) EnforceSeasonOVRCap(playerID, posCat string) int {
-	ge.mu.Lock()
-	defer ge.mu.Unlock()
-
+// seasonOVRCeilingUnlocked returns the current season's OVR ceiling. Callers
+// must hold ge.mu when using this helper.
+func (ge *GrowthEngine) seasonOVRCeilingUnlocked(playerID string) (int, bool) {
 	bio := ge.Biometrics[playerID]
-	attrs := ge.Attributes[playerID]
-	if bio == nil || attrs == nil {
-		return ge.internalCalculateOVR(playerID, posCat)
+	if bio == nil {
+		return 0, false
 	}
 
 	start := bio.SeasonStartOVR
@@ -26,7 +19,11 @@ func (ge *GrowthEngine) EnforceSeasonOVRCap(playerID, posCat string) int {
 		start = bio.BaselineOVR
 	}
 	if start <= 0 {
-		return ge.internalCalculateOVR(playerID, posCat)
+		return 0, false
+	}
+
+	if bio.Age >= 30 {
+		return start, true
 	}
 
 	ceiling := start + MaxAnnualOVRGain
@@ -35,6 +32,53 @@ func (ge *GrowthEngine) EnforceSeasonOVRCap(playerID, posCat string) int {
 	}
 	if ceiling > 99 {
 		ceiling = 99
+	}
+	return ceiling, true
+}
+
+// tryIncrementAttributeUnlocked applies one positive attribute point only when
+// it remains inside the season ceiling. Callers must hold ge.mu. The tentative
+// write is reverted if the positional OVR would cross the ceiling, which also
+// prevents raw attributes from accumulating behind a rounded OVR value.
+func (ge *GrowthEngine) tryIncrementAttributeUnlocked(playerID, posCat, key string) bool {
+	attrs := ge.Attributes[playerID]
+	if attrs == nil {
+		return false
+	}
+
+	before := getAttr(attrs, key)
+	after := minInt(99, before+1)
+	if after <= before {
+		return false
+	}
+	ceiling, capped := ge.seasonOVRCeilingUnlocked(playerID)
+	if capped && ge.internalCalculateOVR(playerID, posCat) >= ceiling {
+		return false
+	}
+	setAttr(attrs, key, after)
+	if getAttr(attrs, key) != after {
+		return false
+	}
+
+	if capped {
+		if ge.internalCalculateOVR(playerID, posCat) > ceiling {
+			setAttr(attrs, key, before)
+			return false
+		}
+	}
+	return true
+}
+
+func (ge *GrowthEngine) enforceSeasonOVRCapUnlocked(playerID, posCat string) int {
+	bio := ge.Biometrics[playerID]
+	attrs := ge.Attributes[playerID]
+	if bio == nil || attrs == nil {
+		return ge.internalCalculateOVR(playerID, posCat)
+	}
+
+	ceiling, capped := ge.seasonOVRCeilingUnlocked(playerID)
+	if !capped {
+		return ge.internalCalculateOVR(playerID, posCat)
 	}
 
 	// Reduce the attributes that matter most for this positional OVR first.
@@ -71,4 +115,15 @@ func (ge *GrowthEngine) EnforceSeasonOVRCap(playerID, posCat string) int {
 		return ceiling
 	}
 	return result
+}
+
+// EnforceSeasonOVRCap constrains the technical attribute matrix to the current
+// season's hard OVR ceiling and returns the resulting OVR. It intentionally
+// operates on attributes as well as the displayed OVR: merely clamping the
+// returned number would leave hidden over-development that reappears next
+// season.
+func (ge *GrowthEngine) EnforceSeasonOVRCap(playerID, posCat string) int {
+	ge.mu.Lock()
+	defer ge.mu.Unlock()
+	return ge.enforceSeasonOVRCapUnlocked(playerID, posCat)
 }

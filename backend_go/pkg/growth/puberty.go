@@ -16,6 +16,11 @@ func (ge *GrowthEngine) SimulatePubertyCycle(playerID string, week ...int) []str
 	if bio == nil || attrs == nil {
 		return nil
 	}
+	posCat := bio.PositionCategory
+	if posCat == "" {
+		posCat = "FWD"
+	}
+	ge.enforceSeasonOVRCapUnlocked(playerID, posCat)
 
 	playerName := bio.FullName
 	events := make([]string, 0)
@@ -44,7 +49,7 @@ func (ge *GrowthEngine) SimulatePubertyCycle(playerID string, week ...int) []str
 			bio.YearlyHeightTaken = math.Round((bio.YearlyHeightTaken+hGain)*10) / 10
 
 			if ge.rng.Float64() < 0.45 {
-				attrs.AerialReach = minInt(99, attrs.AerialReach+1)
+				ge.tryIncrementAttributeUnlocked(playerID, posCat, "aerial_reach")
 			}
 
 			msg := fmt.Sprintf("Growth spurt: %s grew +%.1f cm (%s).",
@@ -74,7 +79,7 @@ func (ge *GrowthEngine) SimulatePubertyCycle(playerID string, week ...int) []str
 			bio.CurrentWeightKG = math.Round((bio.CurrentWeightKG+wGain)*10) / 10
 
 			if ge.rng.Float64() < 0.40 {
-				attrs.Stamina = minInt(99, attrs.Stamina+1)
+				ge.tryIncrementAttributeUnlocked(playerID, posCat, "stamina")
 			}
 
 			msg := fmt.Sprintf("Athletic framing: %s gained +%.1f kg (%.1f kg).",

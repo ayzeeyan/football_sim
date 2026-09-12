@@ -6,16 +6,18 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"football_sim/pkg/growth"
 )
 
 type wonderkidAuditRow struct {
-	PlayerID string
-	Age int
-	OVR int
+	PlayerID  string
+	Age       int
+	OVR       int
 	Potential int
-	HeightCM float64
-	WeightKG float64
-	ClubID string
+	HeightCM  float64
+	WeightKG  float64
+	ClubID    string
 }
 
 func captureWonderkidAudit(tm *TournamentManager) []wonderkidAuditRow {
@@ -71,6 +73,9 @@ func auditFiveSeasons(t *testing.T, seed int64) map[int][]wonderkidAuditRow {
 			if i < len(previous) && previous[i].PlayerID == row.PlayerID {
 				if row.OVR < previous[i].OVR {
 					t.Fatalf("season %d %s regressed from OVR %d to %d while still a developing teenager", season, row.PlayerID, previous[i].OVR, row.OVR)
+				}
+				if row.OVR > previous[i].OVR+growth.MaxAnnualOVRGain {
+					t.Fatalf("season %d %s gained %d OVR from %d to %d, above annual cap +%d", season, row.PlayerID, row.OVR-previous[i].OVR, previous[i].OVR, row.OVR, growth.MaxAnnualOVRGain)
 				}
 				if row.HeightCM+0.01 < previous[i].HeightCM {
 					t.Fatalf("season %d %s height regressed from %.2f to %.2f", season, row.PlayerID, previous[i].HeightCM, row.HeightCM)

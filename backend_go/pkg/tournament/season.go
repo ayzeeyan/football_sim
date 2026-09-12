@@ -202,6 +202,23 @@ func (tm *TournamentManager) processRetirementsUnlocked() {
 	}
 }
 
+// advanceGrowthBaselinesUnlocked commits each registered player's capped OVR
+// once at the new-season boundary. Weekly growth and repeated seasonal calls
+// must continue to share the same baseline until this point.
+func (tm *TournamentManager) advanceGrowthBaselinesUnlocked() {
+	if tm.GrowthEngine == nil {
+		return
+	}
+	for _, club := range tm.ClubsList {
+		for _, p := range club.Squad {
+			if p == nil {
+				continue
+			}
+			tm.GrowthEngine.AdvanceSeasonStartOVR(p.PlayerID, p.Category, p.OVR)
+		}
+	}
+}
+
 // ResetNewSeason archives the campaign, ages the squad, and rebuilds the calendar.
 // Current squad membership is authoritative; OriginalClubID is historical metadata
 // and is never used to reconstruct rosters.
@@ -278,6 +295,7 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 	tm.ageAllPlayersUnlocked()
 	tm.applySeasonalChangesUnlocked()
 	tm.processRetirementsUnlocked()
+	tm.advanceGrowthBaselinesUnlocked()
 
 	for _, club := range tm.ClubsList {
 		for _, p := range club.Squad {

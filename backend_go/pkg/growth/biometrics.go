@@ -16,6 +16,7 @@ type BiometricProfile struct {
 	CurrentWeightKG   float64 `json:"current_weight_kg"`
 	BaselineWeightKG  float64 `json:"baseline_weight_kg"`
 	Potential         int     `json:"potential"`
+	PositionCategory  string  `json:"position_category,omitempty"`
 	GrowthVelocity    float64 `json:"growth_velocity"` // remaining height budget in cm
 	PubertyStage      string  `json:"puberty_stage"`   // Early-puberty / Mid-puberty / Late-puberty / Adult frame
 	AccumulatedXP     float64 `json:"accumulated_xp"`
