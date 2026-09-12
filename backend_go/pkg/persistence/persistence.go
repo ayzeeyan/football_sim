@@ -138,6 +138,9 @@ func BuildSnapshot(
 	ge *growth.GrowthEngine,
 	te *transfers.TransferEngine,
 ) *CareerSnapshot {
+	if te != nil {
+		te.SyncAllManagerBudgets()
+	}
 	snap := &CareerSnapshot{
 		Version:               SaveVersion,
 		SeasonName:            tm.SeasonName,
@@ -558,6 +561,14 @@ func RestoreCareer(
 		if !savedClub.Identity.IsZero() {
 			club.Identity = savedClub.Identity.Clamp()
 		}
+		if !savedClub.Identity.IsZero() || savedClub.Finances.TransferBudget > 0 || savedClub.Finances.Balance > 0 {
+			club.Finances = savedClub.Finances
+		}
+		if tm.Managers != nil {
+			if mgr := tm.Managers[clubID]; mgr != nil {
+				mgr.BudgetEur = club.Finances.TransferBudget
+			}
+		}
 
 		// Standings & Form
 		club.Played = savedClub.Played
@@ -725,9 +736,13 @@ func RestoreCareer(
 
 	// 7. Restore Transfer Engine
 	if te != nil {
+		if tm.Clubs != nil {
+			te.Clubs = tm.Clubs
+		}
 		if tm.Managers != nil {
 			te.Managers = tm.Managers
 		}
+		te.SyncAllManagerBudgets()
 		if snap.Transfers.CurrentDay > 0 {
 			te.CurrentDay = snap.Transfers.CurrentDay
 		}

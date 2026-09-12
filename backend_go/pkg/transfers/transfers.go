@@ -126,6 +126,20 @@ func (te *TransferEngine) syncManagerBudget(clubID string) {
 	}
 }
 
+// SyncAllManagerBudgets updates all manager budgets from authoritative club finances.
+func (te *TransferEngine) SyncAllManagerBudgets() {
+	if te == nil {
+		return
+	}
+	te.mu.Lock()
+	defer te.mu.Unlock()
+	for cid, club := range te.Clubs {
+		if mgr := te.Managers[cid]; mgr != nil && club != nil {
+			mgr.BudgetEur = club.Finances.TransferBudget
+		}
+	}
+}
+
 func canAfford(club *models.Club, fee int64) bool {
 	return club != nil && fee > 0 && club.Finances.TransferBudget >= fee && club.Finances.Balance >= fee
 }

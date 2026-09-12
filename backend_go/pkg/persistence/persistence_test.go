@@ -239,6 +239,44 @@ func TestRestoreCareerPersistsClubIdentityAcrossReloads(t *testing.T) {
 	assertClubIdentities(t, repeatedTM, want)
 }
 
+func TestRestoreCareerPersistsClubFinancesAcrossReloads(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	wantFinances := map[string]models.ClubFinances{
+		"LAL-RMA": {TransferBudget: 145_000_000, Balance: 300_000_000},
+		"LAL-BAR": {TransferBudget: 25_000_000, Balance: 50_000_000},
+		"BUN-BAY": {TransferBudget: 0, Balance: 100_000_000},
+	}
+	for clubID, fin := range wantFinances {
+		tm.Clubs[clubID].Finances = fin
+	}
+
+	path := filepath.Join(t.TempDir(), "finances.json")
+	if _, err := SaveCareer(tm, ge, te, path); err != nil {
+		t.Fatalf("save failed: %v", err)
+	}
+	loaded, err := LoadCareer(path)
+	if err != nil {
+		t.Fatalf("load failed: %v", err)
+	}
+
+	_, freshGE, freshTM, freshTE := setupTestWorld(t)
+	if err := RestoreCareer(freshTM, freshGE, freshTE, loaded); err != nil {
+		t.Fatalf("restore failed: %v", err)
+	}
+
+	for clubID, want := range wantFinances {
+		got := freshTM.Clubs[clubID].Finances
+		if got != want {
+			t.Errorf("club %s finances mismatch: got %+v, want %+v", clubID, got, want)
+		}
+		if freshTE != nil && freshTE.Managers[clubID] != nil {
+			if mgrBudget := freshTE.Managers[clubID].BudgetEur; mgrBudget != want.TransferBudget {
+				t.Errorf("club %s manager budget mismatch: got %d, want %d", clubID, mgrBudget, want.TransferBudget)
+			}
+		}
+	}
+}
+
 func TestRestoreCareerPreservesFreshIdentityForProgrammaticLegacySnapshot(t *testing.T) {
 	_, ge, tm, te := setupTestWorld(t)
 	clubID := "LAL-RMA"

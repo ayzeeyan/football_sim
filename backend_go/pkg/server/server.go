@@ -805,30 +805,50 @@ func (s *Server) serializeClubRecord(c *models.Club, rec *models.CompetitionReco
 		gf, ga, gd, pts = rec.GoalsFor, rec.GoalsAgainst, rec.GoalDifference, rec.Points
 		form = rec.Form
 	}
+	warchest := c.Finances.TransferBudget
 	return map[string]interface{}{
-		"club_id":             c.ClubID,
-		"club_name":           c.ClubName,
-		"short_name":          c.ShortName,
-		"league":              c.League,
-		"country":             c.Country,
-		"home_stadium":        c.HomeStadium,
-		"stadium_capacity":    c.StadiumCapacity,
-		"overall_team_rating": c.OverallTeamRating,
-		"squad_size":          c.SquadSize,
-		"squad_avg_ovr":       c.SquadAvgOVR,
-		"primary_color":       c.PrimaryColor,
-		"secondary_color":     c.SecondaryColor,
-		"p":                   p,
-		"w":                   w,
-		"d":                   d,
-		"l":                   l,
-		"gf":                  gf,
-		"ga":                  ga,
-		"gd":                  gd,
-		"pts":                 pts,
-		"form":                form,
-		"morale":              c.Morale,
-		"manager":             s.serializeManager(mgr),
+		"club_id":                     c.ClubID,
+		"club_name":                   c.ClubName,
+		"short_name":                  c.ShortName,
+		"league":                      c.League,
+		"country":                     c.Country,
+		"home_stadium":                c.HomeStadium,
+		"stadium_capacity":            c.StadiumCapacity,
+		"overall_team_rating":         c.OverallTeamRating,
+		"squad_size":                  c.SquadSize,
+		"squad_avg_ovr":               c.SquadAvgOVR,
+		"primary_color":               c.PrimaryColor,
+		"secondary_color":             c.SecondaryColor,
+		"p":                           p,
+		"w":                           w,
+		"d":                           d,
+		"l":                           l,
+		"gf":                          gf,
+		"ga":                          ga,
+		"gd":                          gd,
+		"pts":                         pts,
+		"form":                        form,
+		"morale":                      c.Morale,
+		"reputation":                  c.Identity.Reputation,
+		"budget_eur":                  warchest,
+		"transfer_warchest_eur":       warchest,
+		"formatted_transfer_warchest": models.FormatCurrency(warchest),
+		"identity": map[string]interface{}{
+			"reputation":              c.Identity.Reputation,
+			"historical_prestige":     c.Identity.HistoricalPrestige,
+			"financial_power":         c.Identity.FinancialPower,
+			"board_patience":          c.Identity.BoardPatience,
+			"academy_quality":         c.Identity.AcademyQuality,
+			"recruitment_ambition":    c.Identity.RecruitmentAmbition,
+			"youth_preference":        c.Identity.YouthPreference,
+			"transfer_aggressiveness": c.Identity.TransferAggressiveness,
+			"selling_tendency":        c.Identity.SellingTendency,
+		},
+		"finances": map[string]interface{}{
+			"transfer_budget": c.Finances.TransferBudget,
+			"balance":         c.Finances.Balance,
+		},
+		"manager":                     s.serializeManager(mgr),
 	}
 }
 
@@ -2349,14 +2369,15 @@ func (s *Server) transfersPayload() map[string]interface{} {
 		if mgr == nil {
 			continue
 		}
+		budget := club.Finances.TransferBudget
 		warchests = append(warchests, map[string]interface{}{
 			"club_name":        club.ClubName,
 			"club_short":       club.ShortName,
 			"manager_name":     mgr.Name,
 			"tactic":           mgr.Tactic(),
 			"focus":            mgr.FocusLabel(),
-			"budget_eur":       mgr.BudgetEur,
-			"formatted_budget": models.FormatCurrency(mgr.BudgetEur),
+			"budget_eur":       budget,
+			"formatted_budget": models.FormatCurrency(budget),
 			"wage_bill_eur":    mgr.WageBill(club),
 		})
 	}
