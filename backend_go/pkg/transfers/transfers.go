@@ -112,8 +112,11 @@ func calculateClubWindowBudget(club *models.Club) int64 {
 		millions = 180
 	}
 	budget := millions * models.EuroMillion
-	if club.Finances.Balance > 0 && budget > club.Finances.Balance {
+	if budget > club.Finances.Balance {
 		budget = club.Finances.Balance
+	}
+	if budget < 0 {
+		budget = 0
 	}
 	return budget
 }

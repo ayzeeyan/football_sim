@@ -770,6 +770,14 @@ func RestoreCareer(
 			te.CurrentWeek = snap.Transfers.CurrentWeek
 		}
 		te.IsOffSeason = snap.Transfers.IsOffSeason
+		if tm.SeasonPhase == "transfer_window" {
+			if te.CurrentWeek < 1 {
+				te.CurrentWeek = 1
+			}
+			if te.CurrentWeek <= transfers.TransferWindowWeeks {
+				te.IsOffSeason = true
+			}
+		}
 		if snap.Transfers.TransferredThisWindow != nil {
 			te.TransferredThisWindow = copyBoolMap(snap.Transfers.TransferredThisWindow)
 		}

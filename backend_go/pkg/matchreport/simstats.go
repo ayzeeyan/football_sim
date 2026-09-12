@@ -673,6 +673,8 @@ func maxInt(a, b int) int {
 type InstantPayload struct {
 	HomeGoals  int
 	AwayGoals  int
+	HomeClubName string
+	AwayClubName string
 	Events     []MatchEventItem
 	HomeXI     []*models.Player
 	AwayXI     []*models.Player
@@ -702,6 +704,61 @@ func AssembleReport(payload InstantPayload, method string, rng *rand.Rand) Match
 		}
 		return events[i].Minute < events[j].Minute
 	})
+
+	var homeClubID, awayClubID string
+	for _, p := range payload.HomeXI {
+		if p != nil && p.ClubID != "" {
+			homeClubID = p.ClubID
+			break
+		}
+	}
+	for _, p := range payload.AwayXI {
+		if p != nil && p.ClubID != "" {
+			awayClubID = p.ClubID
+			break
+		}
+	}
+
+	for i := range events {
+		ev := &events[i]
+		if ev.Side == "home" {
+			if ev.ClubID == "" {
+				ev.ClubID = homeClubID
+			}
+			if ev.ClubName == "" {
+				ev.ClubName = payload.HomeClubName
+			}
+		} else if ev.Side == "away" {
+			if ev.ClubID == "" {
+				ev.ClubID = awayClubID
+			}
+			if ev.ClubName == "" {
+				ev.ClubName = payload.AwayClubName
+			}
+		}
+		if ev.Player != nil {
+			if ev.PlayerID == "" {
+				ev.PlayerID = ev.Player.PlayerID
+			}
+			if ev.PlayerName == "" {
+				ev.PlayerName = ev.Player.FullName
+			}
+		} else if ev.Scorer != nil {
+			if ev.PlayerID == "" {
+				ev.PlayerID = ev.Scorer.PlayerID
+			}
+			if ev.PlayerName == "" {
+				ev.PlayerName = ev.Scorer.FullName
+			}
+		} else if ev.PlayerIn != nil {
+			if ev.PlayerID == "" {
+				ev.PlayerID = ev.PlayerIn.PlayerID
+			}
+			if ev.PlayerName == "" {
+				ev.PlayerName = ev.PlayerIn.FullName
+			}
+		}
+	}
 
 	homeWon := payload.HomeGoals > payload.AwayGoals
 	awayWon := payload.AwayGoals > payload.HomeGoals

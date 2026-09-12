@@ -238,100 +238,131 @@ func sortPlayersForXI(players []*Player) {
 	})
 }
 
+// StartingSlot represents a player selected for a specific tactical position in the starting XI.
+type StartingSlot struct {
+	Slot   string  `json:"slot"`
+	Player *Player `json:"player"`
+}
+
+// GetStartingElevenSlots selects the starting lineup mapped to 11 explicit tactical slots
+// (GK, LB, LCB, RCB, RB, LCM, CM/CDM/CAM, RCM, LW, ST, RW) adhering to positional affinity,
+// wonderkid priority, and fatigue rotation, guaranteeing 0 player duplication.
+func (c *Club) GetStartingElevenSlots(fixture ...string) []StartingSlot {
+	pool := c.AvailableSquad(fixture...)
+	if len(pool) == 0 {
+		return nil
+	}
+	// Preserve the longstanding malformed-squad fallback: when no goalkeeper
+	// is available, the first available squad player takes the emergency GK
+	// slot. Tactical selection below can still sort every normal role by merit.
+	emergencyGK := pool[0]
+	hasGoalkeeper := false
+	for _, p := range pool {
+		if p != nil && (p.Position == "GK" || p.Category == "GK") {
+			hasGoalkeeper = true
+			break
+		}
+	}
+	sortPlayersForXI(pool)
+
+	type tacticalSlot struct {
+		name       string
+		exact      []string
+		compatible []string
+		category   string
+	}
+
+	// Assign all exact matches before considering compatible positions. This
+	// reserves specialists for their real role: an RB cannot be consumed as an
+	// emergency LB while an RB slot is still waiting to be filled.
+	slots := []tacticalSlot{
+		{name: "GK", exact: []string{"GK"}, category: "GK"},
+		{name: "LB", exact: []string{"LB", "LWB"}, compatible: []string{"CB", "RB", "RWB"}, category: "DEF"},
+		{name: "LCB", exact: []string{"CB"}, compatible: []string{"LB", "LWB", "RB", "RWB"}, category: "DEF"},
+		{name: "RCB", exact: []string{"CB"}, compatible: []string{"RB", "RWB", "LB", "LWB"}, category: "DEF"},
+		{name: "RB", exact: []string{"RB", "RWB"}, compatible: []string{"CB", "LB", "LWB"}, category: "DEF"},
+		{name: "LCM", exact: []string{"LCM", "LM"}, compatible: []string{"CM", "CDM", "CAM", "RM"}, category: "MID"},
+		{name: "CM", exact: []string{"CAM", "CM", "CDM"}, compatible: []string{"LCM", "RCM", "LM", "RM"}, category: "MID"},
+		{name: "RCM", exact: []string{"RCM", "RM"}, compatible: []string{"CM", "CDM", "CAM", "LM"}, category: "MID"},
+		{name: "LW", exact: []string{"LW", "LM", "LF"}, compatible: []string{"ST", "CF", "CAM"}, category: "FWD"},
+		{name: "ST", exact: []string{"ST", "CF"}, compatible: []string{"LW", "RW", "LF", "RF"}, category: "FWD"},
+		{name: "RW", exact: []string{"RW", "RM", "RF"}, compatible: []string{"ST", "CF", "CAM"}, category: "FWD"},
+	}
+
+	assignments := make([]*Player, len(slots))
+	used := make(map[string]bool, len(pool))
+	pick := func(positions []string, category string, any bool) *Player {
+		if category != "" || any {
+			for _, p := range pool {
+				if p == nil || used[p.PlayerID] || (!any && p.Category != category) {
+					continue
+				}
+				used[p.PlayerID] = true
+				return p
+			}
+			return nil
+		}
+		for _, position := range positions {
+			for _, p := range pool {
+				if p != nil && !used[p.PlayerID] && p.Position == position {
+					used[p.PlayerID] = true
+					return p
+				}
+			}
+		}
+		return nil
+	}
+
+	// Exact role, compatible position, category fallback, then emergency
+	// fallback. The passes—not just the candidate list—prevent specialists from
+	// being selected into a different role before their own slot is considered.
+	for i, slot := range slots {
+		assignments[i] = pick(slot.exact, "", false)
+	}
+	if !hasGoalkeeper && assignments[0] == nil && emergencyGK != nil && !used[emergencyGK.PlayerID] {
+		assignments[0] = emergencyGK
+		used[emergencyGK.PlayerID] = true
+	}
+	for i, slot := range slots {
+		if assignments[i] == nil {
+			assignments[i] = pick(slot.compatible, "", false)
+		}
+	}
+	for i, slot := range slots {
+		if assignments[i] == nil {
+			assignments[i] = pick(nil, slot.category, false)
+		}
+	}
+	for i := range slots {
+		if assignments[i] == nil {
+			assignments[i] = pick(nil, "", true)
+		}
+	}
+
+	out := make([]StartingSlot, 0, len(slots))
+	for i, slot := range slots {
+		p := assignments[i]
+		if p == nil {
+			continue
+		}
+		name := slot.name
+		if name == "CM" && (p.Position == "CAM" || p.Position == "CDM") {
+			name = p.Position
+		}
+		out = append(out, StartingSlot{Slot: name, Player: p})
+	}
+	return out
+}
+
 // GetStartingEleven selects the best 11 players in a 4-3-3 formation
 // (1 GK, 4 DEF, 3 MID, 3 FWD) with wonderkid priority and fatigue rotation.
 func (c *Club) GetStartingEleven(fixture ...string) []*Player {
-	pool := c.AvailableSquad(fixture...)
-
-	var gks, defs, mids, fwds []*Player
-	for _, p := range pool {
-		switch p.Category {
-		case "GK":
-			gks = append(gks, p)
-		case "DEF":
-			defs = append(defs, p)
-		case "MID":
-			mids = append(mids, p)
-		case "FWD":
-			fwds = append(fwds, p)
-		default:
-			fwds = append(fwds, p)
-		}
+	slots := c.GetStartingElevenSlots(fixture...)
+	starters := make([]*Player, len(slots))
+	for i, s := range slots {
+		starters[i] = s.Player
 	}
-
-	sortPlayersForXI(gks)
-	sortPlayersForXI(defs)
-	sortPlayersForXI(mids)
-	sortPlayersForXI(fwds)
-
-	var startingXI []*Player
-
-	// 1 GK
-	if len(gks) > 0 {
-		startingXI = append(startingXI, gks[0])
-	} else if len(pool) > 0 {
-		startingXI = append(startingXI, pool[0])
-	}
-
-	// 4 DEF
-	takeDEF := len(defs)
-	if takeDEF > 4 {
-		takeDEF = 4
-	}
-	startingXI = append(startingXI, defs[:takeDEF]...)
-
-	// 3 MID
-	takeMID := len(mids)
-	if takeMID > 3 {
-		takeMID = 3
-	}
-	startingXI = append(startingXI, mids[:takeMID]...)
-
-	// 3 FWD
-	takeFWD := len(fwds)
-	if takeFWD > 3 {
-		takeFWD = 3
-	}
-	startingXI = append(startingXI, fwds[:takeFWD]...)
-
-	// Dedupe: the no-GK fallback (pool[0]) may coincide with a positional
-	// pick in short squads. A starting XI must never name a player twice.
-	seenXI := make(map[*Player]bool, len(startingXI))
-	uniqueXI := make([]*Player, 0, len(startingXI))
-	for _, p := range startingXI {
-		if p == nil || seenXI[p] {
-			continue
-		}
-		seenXI[p] = true
-		uniqueXI = append(uniqueXI, p)
-	}
-	startingXI = uniqueXI
-
-	// Fill to 11 if position counts are insufficient
-	if len(startingXI) < 11 && len(pool) > len(startingXI) {
-		used := make(map[string]bool)
-		for _, p := range startingXI {
-			used[p.PlayerID] = true
-		}
-
-		var remain []*Player
-		for _, p := range pool {
-			if !used[p.PlayerID] {
-				remain = append(remain, p)
-			}
-		}
-
-		sortPlayersForXI(remain)
-		needed := 11 - len(startingXI)
-		if needed > len(remain) {
-			needed = len(remain)
-		}
-		startingXI = append(startingXI, remain[:needed]...)
-	}
-
-	// Assembly is capped at exactly 11 (1 GK + 4 DEF + 3 MID + 3 FWD) and the
-	// fill above tops up to precisely 11, so no truncation is needed.
-	return startingXI
+	return starters
 }
 
 // FixtureContext builds the competition:matchweek key used by XI/bench selection

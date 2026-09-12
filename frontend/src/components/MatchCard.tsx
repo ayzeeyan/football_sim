@@ -32,29 +32,46 @@ function sideLines(f: Fixture, side: 'home' | 'away'): ScorerLine[] {
   const cards: ScorerLine[] = [];
   const sentOff = new Set<string>();
   for (const e of f.events) {
-    if (e.type === 'red' && e.sent_off && e.player) sentOff.add(e.player.player_id);
+    const pId = e.player?.player_id || e.player_id;
+    if (e.type === 'red' && e.sent_off && pId) sentOff.add(pId);
   }
   for (const e of f.events) {
     if (isGoalKind(e.type)) {
       if (e.disallowed) continue;
-      if (e.side !== side || !e.scorer) continue;
+      let eventSide = e.side;
+      if (e.club_id) {
+        eventSide = e.club_id === f.home.club_id ? 'home' : 'away';
+      }
+      if (eventSide !== side) continue;
+      const pId = e.scorer?.player_id || e.player_id;
+      const pName = e.scorer?.full_name || e.player_name || '';
+      if (!pId && !pName) continue;
+      const scorerKey = pId || pName;
       const kind = e.type === 'penalty' ? 'penalty' : 'goal';
-      const g = goals.get(e.scorer.player_id) ?? { name: nameOf(e.scorer.player_id, e.scorer.full_name), minutes: [], first: e.minute, kind };
+      const g = goals.get(scorerKey) ?? { name: nameOf(pId, pName), minutes: [], first: e.minute, kind };
       g.minutes.push(minuteOf(e.minute));
       if (e.minute < g.first) g.first = e.minute;
-      goals.set(e.scorer.player_id, g);
-    } else if (e.type === 'own_goal' && e.scorer) {
+      goals.set(scorerKey, g);
+    } else if (e.type === 'own_goal') {
       if (e.disallowed) continue;
       // Own goals read under the benefiting side, red text, tagged (og)
       const benefiting = e.beneficiary ?? (e.side === 'home' ? 'away' : 'home');
       if (benefiting !== side) continue;
-      const key = `og-${e.scorer.player_id}-${e.seq}`;
-      goals.set(key, { name: nameOf(e.scorer.player_id, e.scorer.full_name), minutes: [minuteOf(e.minute)], first: e.minute, kind: 'own_goal' });
-    } else if ((e.type === 'yellow' || e.type === 'red') && e.player) {
-      if (e.side !== side) continue;
+      const pId = e.scorer?.player_id || e.player_id;
+      const pName = e.scorer?.full_name || e.player_name || '';
+      const key = `og-${pId || pName}-${e.seq}`;
+      goals.set(key, { name: nameOf(pId, pName), minutes: [minuteOf(e.minute)], first: e.minute, kind: 'own_goal' });
+    } else if (e.type === 'yellow' || e.type === 'red') {
+      let eventSide = e.side;
+      if (e.club_id) {
+        eventSide = e.club_id === f.home.club_id ? 'home' : 'away';
+      }
+      if (eventSide !== side) continue;
+      const pId = e.player?.player_id || e.player_id;
+      const pName = e.player?.full_name || e.player_name || '';
       // A second yellow is folded into the sending-off line
-      if (e.type === 'yellow' && sentOff.has(e.player.player_id)) continue;
-      cards.push({ minute: e.minute, label: `${nameOf(e.player.player_id, e.player.full_name)} ${minuteOf(e.minute)}`, kind: e.type });
+      if (pId && e.type === 'yellow' && sentOff.has(pId)) continue;
+      cards.push({ minute: e.minute, label: `${nameOf(pId, pName)} ${minuteOf(e.minute)}`, kind: e.type });
     }
   }
   const lines: ScorerLine[] = [...goals.values()].map((g) => ({
@@ -239,6 +256,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({ fixture: f, onWatch, onSim
                     {l.kind === 'yellow' && (
                       <span className="w-2.5 h-3 rounded-[2px] shrink-0 inline-block bg-brass" />
                     )}
+                    {l.kind === 'red' && (
+                      <span className="w-2.5 h-3 rounded-[2px] shrink-0 inline-block bg-ember" />
+                    )}
                     <span>{stripEmojis(l.label)}</span>
                   </p>
                 ))}
@@ -249,6 +269,9 @@ export const MatchCard: React.FC<MatchCardProps> = ({ fixture: f, onWatch, onSim
                     <span>{stripEmojis(l.label)}</span>
                     {l.kind === 'yellow' && (
                       <span className="w-2.5 h-3 rounded-[2px] shrink-0 inline-block bg-brass" />
+                    )}
+                    {l.kind === 'red' && (
+                      <span className="w-2.5 h-3 rounded-[2px] shrink-0 inline-block bg-ember" />
                     )}
                   </p>
                 ))}

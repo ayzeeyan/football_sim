@@ -67,4 +67,30 @@ describe('formation pitch slot assignment', () => {
     expect(first.position).toBe('CB');
     expect(second.position).toBe('CB');
   });
+
+  test('explicit player.slot maps 1:1 to non-colliding tactical coordinates for 11 starters', () => {
+    const startingEleven = [
+      { ...player('P-GK', 'GK', 'GK'), slot: 'GK' },
+      { ...player('P-LB', 'LB', 'DEF'), slot: 'LB' },
+      { ...player('P-LCB', 'CB', 'DEF'), slot: 'LCB' },
+      { ...player('P-RCB', 'CB', 'DEF'), slot: 'RCB' },
+      { ...player('P-RB', 'RB', 'DEF'), slot: 'RB' },
+      { ...player('P-LCM', 'CM', 'MID'), slot: 'LCM' },
+      { ...player('P-CAM', 'CAM', 'MID'), slot: 'CAM' },
+      { ...player('P-RCM', 'CM', 'MID'), slot: 'RCM' },
+      { ...player('P-LW', 'LW', 'FWD'), slot: 'LW' },
+      { ...player('P-ST', 'ST', 'FWD'), slot: 'ST' },
+      { ...player('P-RW', 'RW', 'FWD'), slot: 'RW' },
+    ];
+
+    const slots = assignFormationSlots(startingEleven);
+    expect(slots).toHaveLength(11);
+
+    const positions = new Set<string>();
+    for (const s of slots) {
+      const key = `${s.x}:${s.y}`;
+      expect(positions.has(key)).toBe(false);
+      positions.add(key);
+    }
+  });
 });

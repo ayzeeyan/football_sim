@@ -568,6 +568,9 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	if tm.CurrentMatchweek > tm.MaxMatchweeks {
 		tm.SeasonPhase = "transfer_window"
 		tm.applyCompletedSeasonReputationUnlocked()
+		if tm.TransferEngine != nil && !tm.TransferEngine.IsOffSeason && tm.ReputationAppliedSeason == tm.SeasonName {
+			tm.TransferEngine.BeginOffSeasonWindow()
+		}
 		return map[string]interface{}{"rolled": false, "is_finished": true, "champion": tm.championNameUnlocked()}
 	}
 	pending := false
@@ -593,6 +596,9 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 		// fixture. The helper is guarded and will wait for those results before
 		// marking this season's reputation update complete.
 		tm.applyCompletedSeasonReputationUnlocked()
+		if tm.TransferEngine != nil && !tm.TransferEngine.IsOffSeason && tm.ReputationAppliedSeason == tm.SeasonName {
+			tm.TransferEngine.BeginOffSeasonWindow()
+		}
 	}
 	champ := tm.championNameUnlocked()
 	if isFinished && champ != "" {

@@ -45,6 +45,10 @@ type MatchEventItem struct {
 	Player      *MiniPlayer `json:"player,omitempty"`     // booked player
 	PlayerOut   *MiniPlayer `json:"player_out,omitempty"` // subbed out
 	PlayerIn    *MiniPlayer `json:"player_in,omitempty"`  // subbed in
+	PlayerID    string      `json:"player_id,omitempty"`
+	PlayerName  string      `json:"player_name,omitempty"`
+	ClubID      string      `json:"club_id,omitempty"`
+	ClubName    string      `json:"club_name,omitempty"`
 	Display     string      `json:"display"`
 	Disallowed  bool        `json:"disallowed,omitempty"`
 	Outcome     string      `json:"outcome,omitempty"`  // for var_review: goal_stands, goal_disallowed

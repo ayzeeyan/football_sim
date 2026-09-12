@@ -156,6 +156,8 @@ func (tm *TournamentManager) computeSlateFixture(f *Fixture, rng *rand.Rand) (sl
 	payload := matchreport.InstantPayload{
 		HomeGoals:  report.HomeGoals,
 		AwayGoals:  report.AwayGoals,
+		HomeClubName: home.ClubName,
+		AwayClubName: away.ClubName,
 		Events:     report.Events,
 		HomeXI:     home.GetStartingEleven(models.FixtureContext(f.Competition, f.Matchweek)),
 		AwayXI:     away.GetStartingEleven(models.FixtureContext(f.Competition, f.Matchweek)),

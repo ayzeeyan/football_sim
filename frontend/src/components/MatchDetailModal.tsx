@@ -51,6 +51,9 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
   // Timestamps come from the structured minute — never from Display, which
   // embeds verbose backend text ("Yellow Card: …", assists) on instant sims.
   const stamp = `${event.minute}'`;
+  const eventPlayerId = event.player_id || event.scorer?.player_id || event.player?.player_id;
+  const eventPlayerName = event.player_name || event.scorer?.full_name || event.player?.full_name || 'Unknown';
+  const eventPlayerPosition = event.scorer?.position || event.player?.position;
   if (event.type === 'goal' || event.type === 'penalty' || event.type === 'own_goal') {
     const isOg = event.type === 'own_goal';
     const beneficiary = isOg ? (event.beneficiary ?? (event.side === 'home' ? 'away' : 'home')) : event.side;
@@ -69,10 +72,10 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
         <div className="bg-ink/60 px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="font-semibold text-[15px] text-bone truncate">
-              <PlayerNameButton playerId={event.scorer?.player_id}>{event.scorer?.full_name}</PlayerNameButton>
+              <PlayerNameButton playerId={eventPlayerId}>{eventPlayerName}</PlayerNameButton>
             </p>
             <p className="text-[12.5px] text-sage mt-0.5">
-              {club.club_name} · {event.scorer?.position}
+              {club.club_name}{eventPlayerPosition ? ` · ${eventPlayerPosition}` : ''}
               {!isOg && event.assister && <span className="block">Assist: {event.assister.full_name}</span>}
               {isOg && <span className="block">Turned into his own net</span>}
             </p>
@@ -125,7 +128,7 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
         </div>
         <div className="mt-1.5">
           <p className="font-semibold text-[14px] text-bone truncate">
-            <PlayerNameButton playerId={event.scorer?.player_id}>{event.scorer?.full_name}</PlayerNameButton>
+            <PlayerNameButton playerId={eventPlayerId}>{eventPlayerName}</PlayerNameButton>
           </p>
           <p className="text-[12px] text-sage">{club.club_name} · dragged it wide</p>
         </div>
@@ -153,7 +156,31 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
   }
 
   const red = event.type === 'red';
-  const club = event.side === 'home' ? fixture.home : fixture.away;
+  let club = event.side === 'home' ? fixture.home : fixture.away;
+  if (event.club_id) {
+    if (event.club_id === fixture.home.club_id) club = fixture.home;
+    else if (event.club_id === fixture.away.club_id) club = fixture.away;
+  }
+
+  const playerId = event.player_id || event.player?.player_id;
+  let playerName = event.player_name || event.player?.full_name;
+  let playerPos = event.player?.position;
+
+  if (!playerName || !playerPos) {
+    const pools = [fixture.home_xi, fixture.away_xi, fixture.home_bench ?? [], fixture.away_bench ?? []];
+    if (playerId) {
+      for (const pool of pools) {
+        const hit = pool.find((r) => r.player_id === playerId);
+        if (hit) {
+          if (!playerName) playerName = hit.full_name;
+          if (!playerPos) playerPos = hit.position;
+          break;
+        }
+      }
+    }
+  }
+  const cleanPlayerName = stripEmojis(playerName ?? 'Unknown');
+
   const redDetail = red
     ? event.detail === 'second_yellow'
       ? 'second yellow'
@@ -177,9 +204,9 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
         <span className={cx('w-3 h-4 rounded-[3px] shrink-0 inline-block', red ? 'bg-ember' : 'bg-brass')} />
         <div className="min-w-0">
           <p className="font-semibold text-[14px] text-bone truncate">
-            <PlayerNameButton playerId={event.player?.player_id}>{stripEmojis(event.player?.full_name ?? 'Unknown')}</PlayerNameButton>
+            <PlayerNameButton playerId={playerId}>{cleanPlayerName}</PlayerNameButton>
           </p>
-          <p className="text-[12px] text-sage">{club.club_name} · {event.player?.position}{redDetail ? ` · ${redDetail}` : ''}</p>
+          <p className="text-[12px] text-sage">{club.club_name}{playerPos ? ` · ${playerPos}` : ''}{redDetail ? ` · ${redDetail}` : ''}</p>
         </div>
       </div>
     </div>
@@ -240,13 +267,38 @@ const PitchDot: React.FC<{
       )}
       {player.card && (
         <rect
-          x={-DOT_R - 0.2}
+          x={-DOT_R - 1.0}
           y={-DOT_R - 1.4}
           width={2.2}
           height={3.2}
           rx={0.5}
           fill={player.card === 'red' ? '#BE5A38' : '#C7A23A'}
         />
+      )}
+      {player.off_minute != null && (
+        <g transform="translate(0, -7.2)">
+          <rect
+            x={-3.6}
+            y={-1.8}
+            width={7.2}
+            height={3.6}
+            rx={1.0}
+            fill="#121714"
+            stroke="#BE5A38"
+            strokeWidth={0.5}
+          />
+          <text
+            y={0.35}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#EAE4D6"
+            fontSize={2.5}
+            fontWeight={800}
+            fontFamily="'IBM Plex Mono', monospace"
+          >
+            ↓{player.off_minute}'
+          </text>
+        </g>
       )}
       {player.match_assists > 0 && (
         <g transform={`translate(${PILL_W / 2 + BUBBLE_R + 0.2},${PILL_TOP + PILL_H / 2})`}>
@@ -317,7 +369,7 @@ const PitchDot: React.FC<{
         fontFamily="Inter, sans-serif"
         clipPath={`url(#nl-${player.player_id})`}
       >
-        {shown}{player.off_minute != null ? ` ↓${player.off_minute}` : ''}
+        {shown}
       </text>
     </g>
   );
