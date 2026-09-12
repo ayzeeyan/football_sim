@@ -2104,10 +2104,19 @@ func (s *Server) handleGetSeasonAwards(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetAwardsCeremony serves the gala contract: ranked categories with
-// nominees and winners, plus the Ballon d'Or shortlist. Team of the season
-// and manager of the year are null until computed; the client guards them.
+// nominees and winners, plus Ballon d'Or shortlist, Team of the Season, and Manager of the Year.
+// Guarded: returns HTTP 409 Conflict if called mid-season or after season rollover.
 func (s *Server) handleGetAwardsCeremony(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()
+	if !s.TournamentManager.AwardsCeremonyReady() {
+		s.worldMu.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "awards ceremony is only available at the conclusion of the season before rollover",
+		})
+		return
+	}
 	ceremony := s.TournamentManager.GetAwardsCeremony()
 	awards := s.TournamentManager.GetSeasonAwards()
 	s.worldMu.RUnlock()

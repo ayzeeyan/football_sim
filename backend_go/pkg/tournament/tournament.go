@@ -524,40 +524,7 @@ func (tm *TournamentManager) seasonAwardsUnlocked() map[string]interface{} {
 		runner = standings[1]
 	}
 
-	var allPlayers []*models.Player
-	for _, c := range tm.ClubsList {
-		allPlayers = append(allPlayers, c.Squad...)
-	}
-
-	sort.Slice(allPlayers, func(i, j int) bool {
-		scoreI := float64(allPlayers[i].OVR) + float64(allPlayers[i].Goals)*2.5 + float64(allPlayers[i].Assists)*1.5
-		scoreJ := float64(allPlayers[j].OVR) + float64(allPlayers[j].Goals)*2.5 + float64(allPlayers[j].Assists)*1.5
-		return scoreI > scoreJ
-	})
-
-	var ballonDor []map[string]interface{}
-	for idx, p := range allPlayers {
-		if idx >= 10 {
-			break
-		}
-		clubShort := p.ClubID
-		if c := tm.Clubs[p.ClubID]; c != nil {
-			clubShort = c.ShortName
-		}
-		score := p.OVR + p.Goals*2 + p.Assists
-		ballonDor = append(ballonDor, map[string]interface{}{
-			"rank":         idx + 1,
-			"player_id":    p.PlayerID,
-			"full_name":    p.FullName,
-			"club_short":   clubShort,
-			"position":     p.Position,
-			"ovr":          p.OVR,
-			"goals":        p.Goals,
-			"assists":      p.Assists,
-			"score":        score,
-			"is_wonderkid": p.UniverseWonderkid,
-		})
-	}
+	allPlayers := tm.allPlayersUnlocked()
 
 	clubMini := func(c *models.Club) map[string]interface{} {
 		if c == nil {
@@ -596,29 +563,36 @@ func (tm *TournamentManager) seasonAwardsUnlocked() map[string]interface{} {
 		return m
 	}
 
-	var topScorer, topAssister, goldenBoy, pots *models.Player
+	topScorers := rankPlayers(allPlayers, goalScore, 1)
+	var topScorer *models.Player
+	if len(topScorers) > 0 {
+		topScorer = topScorers[0].player
+	}
+
+	topAssisters := rankPlayers(allPlayers, assistScore, 1)
+	var topAssister *models.Player
+	if len(topAssisters) > 0 {
+		topAssister = topAssisters[0].player
+	}
+
+	var goldenBoyPool []*models.Player
 	for _, p := range allPlayers {
-		if topScorer == nil || p.Goals > topScorer.Goals || (p.Goals == topScorer.Goals && p.OVR > topScorer.OVR) {
-			topScorer = p
+		if p.UniverseWonderkid && p.Age <= 21 {
+			goldenBoyPool = append(goldenBoyPool, p)
 		}
-		if topAssister == nil || p.Assists > topAssister.Assists || (p.Assists == topAssister.Assists && p.OVR > topAssister.OVR) {
-			topAssister = p
-		}
-		score := float64(p.Goals)*3 + float64(p.Assists)*2 + float64(p.Appearances)*0.5 + float64(p.OVR)
-		if pots == nil {
-			pots = p
-		} else {
-			best := float64(pots.Goals)*3 + float64(pots.Assists)*2 + float64(pots.Appearances)*0.5 + float64(pots.OVR)
-			if score > best {
-				pots = p
-			}
-		}
-		if p.UniverseWonderkid {
-			gb := tm.goldenBoyScoreUnlocked(p)
-			if goldenBoy == nil || gb > tm.goldenBoyScoreUnlocked(goldenBoy) {
-				goldenBoy = p
-			}
-		}
+	}
+	goldenBoys := rankPlayers(goldenBoyPool, tm.goldenBoyScoreUnlocked, 1)
+	var goldenBoy *models.Player
+	var gbExtra map[string]interface{}
+	if len(goldenBoys) > 0 {
+		goldenBoy = goldenBoys[0].player
+		gbExtra = map[string]interface{}{"score": round2(goldenBoys[0].score)}
+	}
+
+	potsList := rankPlayers(allPlayers, seasonScore, 1)
+	var pots *models.Player
+	if len(potsList) > 0 {
+		pots = potsList[0].player
 	}
 
 	var uclChamp, scChamp *models.Club
@@ -637,9 +611,11 @@ func (tm *TournamentManager) seasonAwardsUnlocked() map[string]interface{} {
 		"super_cup_champion":     clubMini(scChamp),
 		"top_scorer":             playerMini(topScorer, nil),
 		"top_assister":           playerMini(topAssister, nil),
-		"golden_boy":             playerMini(goldenBoy, map[string]interface{}{"score": tm.goldenBoyScoreUnlocked(goldenBoy)}),
+		"golden_boy":             playerMini(goldenBoy, gbExtra),
 		"player_of_the_season":   playerMini(pots, nil),
-		"ballon_dor":             ballonDor,
+		"ballon_dor":             tm.ballonDorUnlocked(),
+		"team_of_the_season":     tm.teamOfTheSeasonUnlocked(),
+		"manager_of_the_year":    tm.managerOfTheYearUnlocked(),
 		"monthly_awards":         tm.MonthlyAwards,
 		"player_of_the_week":     tm.PlayerOfTheWeek,
 	}
