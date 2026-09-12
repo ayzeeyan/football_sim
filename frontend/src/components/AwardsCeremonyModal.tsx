@@ -127,7 +127,7 @@ const BallonDorPodiumView: React.FC<{ rankings: BallonDorRankItem[]; onNext: () 
   const rest = rankings.slice(3, 10);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 animate-fade-in">
       <div className="text-center">
         <span className="px-3 py-1 rounded-full bg-brass/15 border border-brass/40 text-brass text-[11px] font-mono font-bold uppercase tracking-wider">Global Football Honors</span>
         <h3 className="font-display text-[26px] font-semibold text-bone mt-2 flex items-center justify-center gap-2">
@@ -136,16 +136,16 @@ const BallonDorPodiumView: React.FC<{ rankings: BallonDorRankItem[]; onNext: () 
         <p className="text-[13px] text-sage mt-1">Continental jury ranking based on performance, production and team achievement.</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end pt-4 pb-2">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end pt-2 pb-1">
         {top2 && (
-          <div className="flex flex-col items-center">
-            <div className="mb-2 text-center">
+          <div className="flex min-w-0 flex-col items-center">
+            <div className="mb-1.5 min-h-[72px] text-center">
               <span className="text-xl">🥈</span>
-              <p className="font-bold text-[14px] text-bone truncate max-w-[120px]">{top2.full_name}</p>
-              <p className="text-[11px] text-sage font-mono">{top2.club_short} · {top2.ovr} OVR</p>
+              <p title={top2.full_name} className="font-bold text-[13px] text-bone truncate max-w-[120px] mx-auto">{top2.full_name}</p>
+              <p title={top2.club_name} className="text-[10px] text-sage font-mono truncate max-w-[120px] mx-auto">{top2.club_short} · {top2.ovr} OVR</p>
               <p className="text-[11px] text-bone/80 font-mono mt-0.5">{top2.goals}G · {top2.assists}A</p>
             </div>
-            <div className="w-full h-32 rounded-t-xl bg-gradient-to-t from-ink/80 to-slate-400/20 border-t-2 border-x border-slate-300/40 flex flex-col items-center justify-center p-2">
+            <div className="w-full h-24 sm:h-28 rounded-t-xl bg-gradient-to-t from-ink/80 to-slate-400/20 border-t-2 border-x border-slate-300/40 flex flex-col items-center justify-center p-2">
               <span className="font-mono text-[10px] text-slate-300 font-bold uppercase">2nd Place</span>
               <span className="font-mono font-bold text-[16px] text-bone mt-1">{top2.score} pts</span>
             </div>
@@ -153,16 +153,16 @@ const BallonDorPodiumView: React.FC<{ rankings: BallonDorRankItem[]; onNext: () 
         )}
 
         {top1 && (
-          <div className="flex flex-col items-center">
-            <div className="mb-2 text-center animate-bounce"><span className="text-3xl">🥇</span></div>
-            <div className="mb-2 text-center">
+          <div className="flex min-w-0 flex-col items-center">
+            <div className="mb-1 text-center animate-bounce"><span className="text-3xl">🥇</span></div>
+            <div className="mb-1.5 min-h-[72px] text-center">
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-brass/20 text-brass border border-brass/50 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">Winner</span>
-              <p className="font-bold text-[16px] text-brass truncate max-w-[140px]">{top1.full_name}</p>
-              <p className="text-[12px] text-bone/85 font-mono">{top1.club_name} ({top1.club_short})</p>
+              <p title={top1.full_name} className="font-bold text-[15px] text-brass truncate max-w-[140px] mx-auto">{top1.full_name}</p>
+              <p title={top1.club_name} className="text-[11px] text-bone/85 font-mono truncate max-w-[140px] mx-auto">{top1.club_name} ({top1.club_short})</p>
               <p className="text-[12px] text-brass font-mono font-semibold mt-0.5">{top1.goals}G · {top1.assists}A · {top1.ovr} OVR</p>
             </div>
-            <div className="w-full h-44 rounded-t-xl bg-gradient-to-t from-brass/25 to-brass/10 border-t-4 border-x border-brass flex flex-col items-center justify-center p-2 shadow-[0_-4px_20px_rgba(199,162,58,0.25)]">
-              <Trophy size={28} className="text-brass animate-pulse" />
+            <div className="w-full h-32 sm:h-36 rounded-t-xl bg-gradient-to-t from-brass/25 to-brass/10 border-t-4 border-x border-brass flex flex-col items-center justify-center p-2 shadow-[0_-4px_20px_rgba(199,162,58,0.25)]">
+              <Trophy size={24} className="text-brass animate-pulse" />
               <span className="font-mono text-[11px] text-brass font-bold uppercase mt-1">1st Place</span>
               <span className="font-mono font-bold text-[20px] text-bone mt-0.5">{top1.score} pts</span>
             </div>
@@ -170,14 +170,14 @@ const BallonDorPodiumView: React.FC<{ rankings: BallonDorRankItem[]; onNext: () 
         )}
 
         {top3 && (
-          <div className="flex flex-col items-center">
-            <div className="mb-2 text-center">
+          <div className="flex min-w-0 flex-col items-center">
+            <div className="mb-1.5 min-h-[72px] text-center">
               <span className="text-xl">🥉</span>
-              <p className="font-bold text-[14px] text-bone truncate max-w-[120px]">{top3.full_name}</p>
-              <p className="text-[11px] text-sage font-mono">{top3.club_short} · {top3.ovr} OVR</p>
+              <p title={top3.full_name} className="font-bold text-[13px] text-bone truncate max-w-[120px] mx-auto">{top3.full_name}</p>
+              <p title={top3.club_name} className="text-[10px] text-sage font-mono truncate max-w-[120px] mx-auto">{top3.club_short} · {top3.ovr} OVR</p>
               <p className="text-[11px] text-bone/80 font-mono mt-0.5">{top3.goals}G · {top3.assists}A</p>
             </div>
-            <div className="w-full h-24 rounded-t-xl bg-gradient-to-t from-ink/80 to-amber-700/20 border-t-2 border-x border-amber-600/40 flex flex-col items-center justify-center p-2">
+            <div className="w-full h-20 sm:h-24 rounded-t-xl bg-gradient-to-t from-ink/80 to-amber-700/20 border-t-2 border-x border-amber-600/40 flex flex-col items-center justify-center p-2">
               <span className="font-mono text-[10px] text-amber-500 font-bold uppercase">3rd Place</span>
               <span className="font-mono font-bold text-[14px] text-bone mt-1">{top3.score} pts</span>
             </div>
@@ -342,7 +342,7 @@ export const AwardsCeremonyModal: React.FC<AwardsCeremonyModalProps> = ({ open, 
         subtitle="The continental gala of prestige and legacy."
         onClose={onClose}
       />
-      <div className="p-6">
+      <div className="p-6 overflow-y-auto flex-1 min-h-0">
         {loading && <LoadingState message="Sealing the envelopes…" />}
         {!loading && !data && <EmptyState message="The votes are still being counted. Finish the season first." />}
 

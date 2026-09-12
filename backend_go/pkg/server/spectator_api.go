@@ -143,9 +143,18 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 	advance := 1
 	switch mode {
 	case "month":
-		advance = 4
+		if s.TransferEngine.CurrentWeek < 12 {
+			advance = 4
+			if remaining := 12 - s.TransferEngine.CurrentWeek; advance > remaining {
+				advance = remaining
+			}
+		} else {
+			advance = 1
+		}
 	case "season":
 		advance = 13 - s.TransferEngine.CurrentWeek
+	default:
+		advance = 1
 	}
 	if remaining := 13 - s.TransferEngine.CurrentWeek; advance > remaining {
 		advance = remaining
@@ -195,7 +204,11 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 	out.SeasonName = tm.SeasonName
 	out.SeasonPhase = tm.SeasonPhase
 	out.CurrentMatchweek = tm.CurrentMatchweek
-	out.Message = fmt.Sprintf("Transfer window advanced to week %d of 12.", s.TransferEngine.CurrentWeek)
+	if s.TransferEngine.CurrentWeek > 12 {
+		out.Message = "All 12 transfer weeks were processed. Ready to conclude the window and start the new season."
+	} else {
+		out.Message = fmt.Sprintf("Transfer window advanced to week %d of 12.", s.TransferEngine.CurrentWeek)
+	}
 	s.clearLiveFixtureSelection()
 	s.lastCommittedLiveInstance = -1
 	return out, http.StatusOK

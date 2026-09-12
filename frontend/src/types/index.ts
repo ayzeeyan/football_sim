@@ -46,6 +46,7 @@ export interface Player {
   mentor_id?: string | null;
   mentor_name?: string | null;
   mentor_ovr?: number | null;
+  slot?: string;
 }
 
 export interface ManagerHistoryEntry {
@@ -222,6 +223,10 @@ export interface MatchEventItem {
   decision?: string | null;
   home_score?: number | null;
   away_score?: number | null;
+  player_id?: string;
+  player_name?: string;
+  club_id?: string;
+  club_name?: string;
 }
 
 export interface MatchPlayerRow extends MatchMiniPlayer {

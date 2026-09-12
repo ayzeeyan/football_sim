@@ -15,38 +15,65 @@ interface PitchSlot {
   slot: string;
 }
 
-const EXACT_COORDS: Record<string, [number, number]> = {
+export const EXACT_COORDS: Record<string, [number, number]> = {
   GK: [50, 91],
-  LB: [17, 76],
-  LWB: [13, 66],
-  LCB: [38, 76],
-  RCB: [62, 76],
-  RB: [83, 76],
-  RWB: [87, 66],
-  LDM: [38, 62],
-  CDM: [50, 62],
-  RDM: [62, 62],
-  LM: [18, 50],
-  LCM: [38, 51],
-  RCM: [62, 51],
-  RM: [82, 50],
-  LAM: [31, 38],
-  CAM: [50, 38],
-  RAM: [69, 38],
-  LW: [17, 20],
-  LF: [34, 24],
-  CF: [50, 24],
-  RF: [66, 24],
-  RW: [83, 20],
+  LB: [16, 75],
+  LWB: [16, 68],
+  LCB: [38, 77],
+  CB: [50, 77],
+  RCB: [62, 77],
+  RB: [84, 75],
+  RWB: [84, 68],
+  LDM: [35, 60],
+  CDM: [50, 58],
+  RDM: [65, 60],
+  LM: [18, 52],
+  LCM: [30, 52],
+  CM: [50, 58],
+  CAM: [50, 42],
+  RCM: [70, 52],
+  RM: [82, 52],
+  LAM: [31, 42],
+  RAM: [69, 42],
+  LW: [18, 20],
+  LF: [34, 22],
+  CF: [50, 22],
+  RF: [66, 22],
+  RW: [82, 20],
+  ST: [50, 18],
 };
 
-const GENERIC_COORDS: Record<string, Array<[number, number]>> = {
-  CB: [[38, 76], [62, 76], [50, 77]],
-  CM: [[38, 51], [62, 51], [50, 51]],
-  CDM: [[38, 62], [62, 62], [50, 62]],
-  CAM: [[50, 38], [38, 39], [62, 39]],
-  ST: [[50, 18], [39, 20], [61, 20]],
-  CF: [[50, 24], [39, 25], [61, 25]],
+const GENERIC_COORDS: Record<string, Array<{ slot: string; coords: [number, number] }>> = {
+  CB: [
+    { slot: 'LCB', coords: [38, 77] },
+    { slot: 'RCB', coords: [62, 77] },
+    { slot: 'CB', coords: [50, 77] },
+  ],
+  CM: [
+    { slot: 'LCM', coords: [30, 52] },
+    { slot: 'RCM', coords: [70, 52] },
+    { slot: 'CM', coords: [50, 58] },
+  ],
+  CDM: [
+    { slot: 'CDM', coords: [50, 58] },
+    { slot: 'LDM', coords: [35, 60] },
+    { slot: 'RDM', coords: [65, 60] },
+  ],
+  CAM: [
+    { slot: 'CAM', coords: [50, 42] },
+    { slot: 'LAM', coords: [31, 42] },
+    { slot: 'RAM', coords: [69, 42] },
+  ],
+  ST: [
+    { slot: 'ST', coords: [50, 18] },
+    { slot: 'LF', coords: [34, 22] },
+    { slot: 'RF', coords: [66, 22] },
+  ],
+  CF: [
+    { slot: 'CF', coords: [50, 22] },
+    { slot: 'LF', coords: [34, 22] },
+    { slot: 'RF', coords: [66, 22] },
+  ],
 };
 
 function normalizedPosition(position: string): string {
@@ -58,11 +85,11 @@ function fallbackCoords(player: Player, occurrence: number): [number, number] {
     case 'GK':
       return [50, 91];
     case 'DEF':
-      return [[25, 76], [42, 76], [58, 76], [75, 76]][occurrence % 4] as [number, number];
+      return [[16, 75], [38, 77], [62, 77], [84, 75]][occurrence % 4] as [number, number];
     case 'MID':
-      return [[31, 51], [50, 51], [69, 51]][occurrence % 3] as [number, number];
+      return [[30, 52], [50, 58], [70, 52]][occurrence % 3] as [number, number];
     default:
-      return [[22, 21], [50, 18], [78, 21]][occurrence % 3] as [number, number];
+      return [[18, 20], [50, 18], [82, 20]][occurrence % 3] as [number, number];
   }
 }
 
@@ -78,9 +105,9 @@ function assignFormationSlots(players: Player[]): PitchSlot[] {
     let attempt = 0;
     while (occupied.has(key) && attempt < 8) {
       const direction = attempt % 2 === 0 ? -1 : 1;
-      const distance = 5 + Math.floor(attempt / 2) * 4;
-      nx = Math.max(8, Math.min(92, x + direction * distance));
-      ny = y + Math.floor(attempt / 4) * 3;
+      const distance = 6 + Math.floor(attempt / 2) * 5;
+      nx = Math.max(12, Math.min(88, x + direction * distance));
+      ny = y + Math.floor(attempt / 4) * 4;
       key = `${nx}:${ny}`;
       attempt += 1;
     }
@@ -89,14 +116,24 @@ function assignFormationSlots(players: Player[]): PitchSlot[] {
   };
 
   return players.map((player) => {
+    const explicitSlot = player.slot ? normalizedPosition(player.slot) : null;
+    if (explicitSlot && EXACT_COORDS[explicitSlot]) {
+      const [x, y] = claim(EXACT_COORDS[explicitSlot][0], EXACT_COORDS[explicitSlot][1]);
+      return { player, x, y, slot: explicitSlot };
+    }
+
     const pos = normalizedPosition(player.position);
     const occurrence = positionUse.get(pos) ?? 0;
     positionUse.set(pos, occurrence + 1);
 
     let coords: [number, number] | undefined;
+    let assignedSlot = pos;
+
     const generic = GENERIC_COORDS[pos];
     if (generic) {
-      coords = generic[Math.min(occurrence, generic.length - 1)];
+      const item = generic[Math.min(occurrence, generic.length - 1)];
+      coords = item.coords;
+      assignedSlot = item.slot;
     } else if (EXACT_COORDS[pos]) {
       coords = EXACT_COORDS[pos];
     }
@@ -108,7 +145,7 @@ function assignFormationSlots(players: Player[]): PitchSlot[] {
     }
 
     const [x, y] = claim(coords[0], coords[1]);
-    return { player, x, y, slot: pos || player.category };
+    return { player, x, y, slot: assignedSlot || player.category };
   });
 }
 

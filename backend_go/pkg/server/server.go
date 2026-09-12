@@ -1285,12 +1285,14 @@ func (s *Server) handleGetClubXI(w http.ResponseWriter, r *http.Request) {
 	club := s.TournamentManager.Clubs[cid]
 	startersJSON := []map[string]interface{}{}
 	if club != nil {
-		starters := club.GetStartingEleven(s.clubFixtureContext(cid))
-		for _, p := range starters {
-			if p == nil {
+		slots := club.GetStartingElevenSlots(s.clubFixtureContext(cid))
+		for _, sl := range slots {
+			if sl.Player == nil {
 				continue
 			}
-			startersJSON = append(startersJSON, s.serializePlayer(p))
+			pj := s.serializePlayer(sl.Player)
+			pj["slot"] = sl.Slot
+			startersJSON = append(startersJSON, pj)
 		}
 	}
 	s.worldMu.RUnlock()
@@ -2475,6 +2477,24 @@ func (s *Server) handleTransferAdvance(w http.ResponseWriter, r *http.Request) {
 
 	if !s.careerWindowOpen() {
 		writeErrorJSON(w, http.StatusBadRequest, "The window opens when the season ends.")
+		return
+	}
+
+	if s.TransferEngine == nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "Transfer window state is unavailable.")
+		return
+	}
+
+	if !s.TransferEngine.IsOffSeason {
+		if !s.TournamentManager.ApplyCompletedSeasonReputation() && s.TournamentManager.ReputationAppliedSeason != s.TournamentManager.SeasonName {
+			writeErrorJSON(w, http.StatusConflict, "The completed season is not ready for the transfer window; finish all league and cup results first.")
+			return
+		}
+		s.TransferEngine.BeginOffSeasonWindow()
+	}
+
+	if s.TransferEngine.CurrentWeek > transfers.TransferWindowWeeks {
+		writeErrorJSON(w, http.StatusBadRequest, "All 12 transfer weeks have been processed. End the window to start the new season.")
 		return
 	}
 

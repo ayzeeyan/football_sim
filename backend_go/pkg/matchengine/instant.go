@@ -609,6 +609,7 @@ func SimulateInstantMatch(
 
 	payload := matchreport.InstantPayload{
 		HomeGoals: gh, AwayGoals: ga,
+		HomeClubName: homeClub.ClubName, AwayClubName: awayClub.ClubName,
 		Events: events,
 		HomeXI: homeXI, AwayXI: awayXI,
 		HomeBench: homeBench, AwayBench: awayBench,

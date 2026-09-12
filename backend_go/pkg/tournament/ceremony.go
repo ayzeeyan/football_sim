@@ -93,13 +93,16 @@ func (tm *TournamentManager) ballonScoreUnlocked(p *models.Player) float64 {
 		return 0
 	}
 	teamBonus := 0.0
+	standings := tm.standingsUnlocked()
+	if len(standings) > 0 && standings[0].ClubID == p.ClubID {
+		teamBonus += 10
+	}
 	if tm.UCLChampionID != "" && tm.UCLChampionID == p.ClubID {
 		teamBonus += 12
 	}
 	if tm.SuperCupChampionID != "" && tm.SuperCupChampionID == p.ClubID {
 		teamBonus += 5
 	}
-	standings := tm.standingsUnlocked()
 	for i, c := range standings {
 		if c.ClubID == p.ClubID {
 			teamBonus += float64(maxInt(0, len(standings)-i)) * 0.75
