@@ -73,6 +73,9 @@ type TournamentManager struct {
 	// already been applied to club reputation. It is persisted so repeated
 	// window/finalization actions and save/load cannot double-apply a season.
 	ReputationAppliedSeason string
+
+	// RetiredPlayerIDs tracks players who have retired across season rollovers.
+	RetiredPlayerIDs map[string]bool
 }
 
 // NewTournamentManager initializes a complete TournamentManager instance.
@@ -130,6 +133,7 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 		SuperCupPlayIn:        map[string]CupTie{},
 		SuperCupQuarterFinals: map[string]CupTie{},
 		SuperCupSemiFinals:    map[string]CupTie{},
+		RetiredPlayerIDs:      make(map[string]bool),
 	}
 	for _, c := range eliteClubs {
 		tm.MoraleStoryStatus[c.ClubID] = "normal"
@@ -900,4 +904,11 @@ func intVal(v interface{}) int {
 	default:
 		return -1
 	}
+}
+
+// IsPlayerRetired returns true if the player was retired during any season rollover.
+func (tm *TournamentManager) IsPlayerRetired(playerID string) bool {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	return tm.RetiredPlayerIDs != nil && tm.RetiredPlayerIDs[playerID]
 }

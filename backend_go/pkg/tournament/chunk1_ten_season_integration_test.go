@@ -204,6 +204,9 @@ func TestChunk1TenSeasonIntegrationSoak(t *testing.T) {
 			if done.PlayerID == "" {
 				continue
 			}
+			if tm.IsPlayerRetired(done.PlayerID) {
+				continue
+			}
 			foundAtBuyer := false
 			for _, p := range tm.Clubs[done.BuyerID].Squad {
 				if p != nil && p.PlayerID == done.PlayerID {

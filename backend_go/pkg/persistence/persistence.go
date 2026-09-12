@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"football_sim/pkg/growth"
@@ -113,7 +114,8 @@ type CareerSnapshot struct {
 	FavouriteClubID       string                               `json:"favourite_club_id,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
-	ReputationAppliedSeason string `json:"reputation_applied_season,omitempty"`
+	ReputationAppliedSeason string   `json:"reputation_applied_season,omitempty"`
+	RetiredPlayerIDs        []string `json:"retired_player_ids,omitempty"`
 }
 
 // SavePath returns the resolved file path for saving career snapshots,
@@ -140,6 +142,13 @@ func BuildSnapshot(
 ) *CareerSnapshot {
 	if te != nil {
 		te.SyncAllManagerBudgets()
+	}
+	var retiredIDs []string
+	if tm != nil && tm.RetiredPlayerIDs != nil {
+		for id := range tm.RetiredPlayerIDs {
+			retiredIDs = append(retiredIDs, id)
+		}
+		sort.Strings(retiredIDs)
 	}
 	snap := &CareerSnapshot{
 		Version:               SaveVersion,
@@ -186,6 +195,7 @@ func BuildSnapshot(
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
 		ReputationAppliedSeason: tm.ReputationAppliedSeason,
+		RetiredPlayerIDs:        retiredIDs,
 	}
 
 	// Snapshot all clubs and rosters
@@ -459,6 +469,10 @@ func RestoreCareer(
 		tm.SeasonPhase = snap.SeasonPhase
 	}
 	tm.ReputationAppliedSeason = snap.ReputationAppliedSeason
+	tm.RetiredPlayerIDs = make(map[string]bool)
+	for _, id := range snap.RetiredPlayerIDs {
+		tm.RetiredPlayerIDs[id] = true
+	}
 	if snap.SeasonHistory != nil {
 		tm.SeasonHistory = snap.SeasonHistory
 	}

@@ -167,7 +167,11 @@ func (tm *TournamentManager) applySeasonalChangesUnlocked() {
 	}
 }
 
-func (tm *TournamentManager) processRetirementsUnlocked() {
+func (tm *TournamentManager) processRetirementsUnlocked() []string {
+	if tm.RetiredPlayerIDs == nil {
+		tm.RetiredPlayerIDs = make(map[string]bool)
+	}
+	var retiredIDs []string
 	for _, club := range tm.ClubsList {
 		kept := club.Squad[:0]
 		for _, p := range club.Squad {
@@ -191,6 +195,8 @@ func (tm *TournamentManager) processRetirementsUnlocked() {
 				roll = tm.RNG.Float64()
 			}
 			if roll < chance {
+				retiredIDs = append(retiredIDs, p.PlayerID)
+				tm.RetiredPlayerIDs[p.PlayerID] = true
 				tm.PushInbox("honour",
 					fmt.Sprintf("%s hangs up his boots", p.FullName),
 					fmt.Sprintf("After a career at %s, %s retires at %d.", club.ClubName, p.FullName, p.Age),
@@ -201,6 +207,8 @@ func (tm *TournamentManager) processRetirementsUnlocked() {
 		}
 		club.Squad = kept
 	}
+	sort.Strings(retiredIDs)
+	return retiredIDs
 }
 
 // advanceGrowthBaselinesUnlocked commits each registered player's capped OVR
@@ -295,7 +303,7 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 
 	tm.ageAllPlayersUnlocked()
 	tm.applySeasonalChangesUnlocked()
-	tm.processRetirementsUnlocked()
+	retiredIDs := tm.processRetirementsUnlocked()
 	tm.advanceGrowthBaselinesUnlocked()
 
 	for _, club := range tm.ClubsList {
@@ -382,10 +390,11 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 	tm.seedOpeningInbox()
 
 	return map[string]interface{}{
-		"status":            "success",
-		"message":           "New European Super League season initialized. Permanent transfers and current squads were preserved.",
-		"current_matchweek": 1,
-		"max_matchweeks":    tm.MaxMatchweeks,
+		"status":             "success",
+		"message":            "New European Super League season initialized. Permanent transfers and current squads were preserved.",
+		"current_matchweek":  1,
+		"max_matchweeks":     tm.MaxMatchweeks,
+		"retired_player_ids": retiredIDs,
 	}
 }
 

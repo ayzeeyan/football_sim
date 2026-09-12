@@ -335,6 +335,38 @@ func TestReputationAppliedSeasonSurvivesSaveRestore(t *testing.T) {
 	}
 }
 
+func TestRetiredPlayerIDsSurvivesSaveRestore(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	tm.RetiredPlayerIDs = map[string]bool{
+		"P01001": true,
+		"P01002": true,
+	}
+
+	snap := BuildSnapshot(tm, ge, te)
+	if len(snap.RetiredPlayerIDs) != 2 || snap.RetiredPlayerIDs[0] != "P01001" || snap.RetiredPlayerIDs[1] != "P01002" {
+		t.Fatalf("snapshot retired IDs = %+v", snap.RetiredPlayerIDs)
+	}
+
+	_, freshGE, freshTM, freshTE := setupTestWorld(t)
+	freshTM.RetiredPlayerIDs = map[string]bool{"stale": true}
+	if err := RestoreCareer(freshTM, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("RestoreCareer failed: %v", err)
+	}
+	if !freshTM.IsPlayerRetired("P01001") || !freshTM.IsPlayerRetired("P01002") || freshTM.IsPlayerRetired("stale") {
+		t.Fatalf("restored retired IDs mismatch: %+v", freshTM.RetiredPlayerIDs)
+	}
+
+	// Legacy snapshot with nil retired IDs
+	snap.RetiredPlayerIDs = nil
+	freshTM.RetiredPlayerIDs = map[string]bool{"stale": true}
+	if err := RestoreCareer(freshTM, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("legacy RestoreCareer failed: %v", err)
+	}
+	if freshTM.IsPlayerRetired("stale") || len(freshTM.RetiredPlayerIDs) != 0 {
+		t.Fatalf("legacy snapshot retained retired IDs: %+v", freshTM.RetiredPlayerIDs)
+	}
+}
+
 func TestDeleteCareer(t *testing.T) {
 	tempDir := t.TempDir()
 	savePath := filepath.Join(tempDir, "delete_test.json")
