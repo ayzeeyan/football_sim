@@ -77,3 +77,51 @@ func TestFinalizeSeasonTransitionRejectsBeforeOffseasonPhase(t *testing.T) {
 		t.Fatal("rejected transition mutated universe")
 	}
 }
+
+func TestAdoptLongSeasonSequentialPairingAndInboxRemapping(t *testing.T) {
+	tm, _ := loadTestUniverse(t)
+	home, away := tm.ClubsList[0], tm.ClubsList[1]
+	hg, ag := 3, 1
+	legacyFixture := Fixture{
+		FixtureID:   "LEGACY_UNMAPPED_1",
+		Competition: "league",
+		Matchweek:   1,
+		HomeID:      home.ClubID,
+		AwayID:      away.ClubID,
+		Status:      "finished",
+		HomeGoals:   &hg,
+		AwayGoals:   &ag,
+	}
+	tm.Fixtures = []Fixture{legacyFixture}
+	tm.MaxMatchweeks = 1
+	tm.Inbox = []InboxItem{
+		{ID: "inbox-1", FixtureID: "LEGACY_UNMAPPED_1", Headline: "Big Win"},
+	}
+
+	if !tm.AdoptLongSeason() {
+		t.Fatal("AdoptLongSeason should report changed")
+	}
+
+	if len(tm.Fixtures) != 44*6 || tm.MaxMatchweeks != 44 {
+		t.Fatalf("expected 264 fixtures and 44 matchweeks, got %d / %d", len(tm.Fixtures), tm.MaxMatchweeks)
+	}
+
+	var remapped *Fixture
+	for i := range tm.Fixtures {
+		f := &tm.Fixtures[i]
+		if f.HomeID == home.ClubID && f.AwayID == away.ClubID && f.Status == "finished" {
+			remapped = f
+			break
+		}
+	}
+	if remapped == nil {
+		t.Fatal("expected finished fixture to be remapped to a canonical fixture")
+	}
+	if remapped.HomeGoals == nil || *remapped.HomeGoals != 3 || remapped.AwayGoals == nil || *remapped.AwayGoals != 1 {
+		t.Fatalf("remapped fixture lost results: %#v", remapped)
+	}
+
+	if tm.Inbox[0].FixtureID != remapped.FixtureID {
+		t.Fatalf("inbox item not remapped: got %q, want %q", tm.Inbox[0].FixtureID, remapped.FixtureID)
+	}
+}

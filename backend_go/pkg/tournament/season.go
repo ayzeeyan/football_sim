@@ -2,6 +2,7 @@ package tournament
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -406,24 +407,102 @@ func (tm *TournamentManager) adoptLongSeasonUnlocked() bool {
 	changed := false
 	if len(tm.Fixtures) != target || tm.MaxMatchweeks != LeagueRounds {
 		generated := GenerateLeagueFixtures(tm.ClubsList, tm.RNG)
-		existing := make(map[string]Fixture, len(tm.Fixtures))
+
+		finishedOld := make([]Fixture, 0)
 		for _, f := range tm.Fixtures {
 			if f.Status == "finished" {
-				existing[f.FixtureID] = f
+				finishedOld = append(finishedOld, f)
 			}
 		}
+		sort.SliceStable(finishedOld, func(i, j int) bool {
+			if finishedOld[i].Matchweek != finishedOld[j].Matchweek {
+				return finishedOld[i].Matchweek < finishedOld[j].Matchweek
+			}
+			return finishedOld[i].FixtureID < finishedOld[j].FixtureID
+		})
+
+		claimedGenerated := make(map[int]bool)
+		claimedOld := make(map[string]bool)
+		remapping := make(map[string]string)
+
+		// 1. Match by exact FixtureID first
+		for j, gen := range generated {
+			for _, old := range finishedOld {
+				if !claimedOld[old.FixtureID] && gen.FixtureID == old.FixtureID {
+					claimedGenerated[j] = true
+					claimedOld[old.FixtureID] = true
+					break
+				}
+			}
+		}
+
+		isLeagueComp := func(comp string) bool {
+			c := strings.ToLower(strings.TrimSpace(comp))
+			return c == "" || c == "super-league" || c == "super_league" || c == "super league" || c == "league"
+		}
+
+		// 2. For unmapped finished fixtures, match by (Competition, HomeClubID, AwayClubID)
+		// sequentially in chronological matchweek order
+		for _, old := range finishedOld {
+			if claimedOld[old.FixtureID] {
+				continue
+			}
+			for j, gen := range generated {
+				if claimedGenerated[j] {
+					continue
+				}
+				if gen.HomeID == old.HomeID && gen.AwayID == old.AwayID &&
+					(gen.Competition == old.Competition || (isLeagueComp(gen.Competition) && isLeagueComp(old.Competition))) {
+					claimedGenerated[j] = true
+					claimedOld[old.FixtureID] = true
+					remapping[old.FixtureID] = gen.FixtureID
+					break
+				}
+			}
+		}
+
+		oldMap := make(map[string]Fixture, len(finishedOld))
+		for _, f := range finishedOld {
+			oldMap[f.FixtureID] = f
+		}
+		reverseRemap := make(map[string]string)
+		for oldID, genID := range remapping {
+			reverseRemap[genID] = oldID
+		}
+
 		merged := make([]Fixture, 0, len(generated))
-		for _, f := range generated {
-			if old, ok := existing[f.FixtureID]; ok {
+		for _, gen := range generated {
+			if old, ok := oldMap[gen.FixtureID]; ok && claimedOld[gen.FixtureID] && remapping[gen.FixtureID] == "" {
 				merged = append(merged, old)
-			} else {
+			} else if oldID, ok := reverseRemap[gen.FixtureID]; ok {
+				old := oldMap[oldID]
+				f := gen
+				f.Status = old.Status
+				f.HomeGoals = old.HomeGoals
+				f.AwayGoals = old.AwayGoals
+				f.Report = old.Report
+				f.DecidedBy = old.DecidedBy
+				f.Penalties = old.Penalties
+				f.Method = old.Method
 				merged = append(merged, f)
+			} else {
+				merged = append(merged, gen)
 			}
 		}
+
 		tm.Fixtures = merged
 		tm.MaxMatchweeks = LeagueRounds
 		if tm.CurrentMatchweek > LeagueRounds+1 {
 			tm.CurrentMatchweek = LeagueRounds + 1
+		}
+
+		// Remap InboxItem.FixtureID where applicable
+		if len(remapping) > 0 {
+			for i := range tm.Inbox {
+				if newID, ok := remapping[tm.Inbox[i].FixtureID]; ok {
+					tm.Inbox[i].FixtureID = newID
+				}
+			}
 		}
 		changed = true
 	}

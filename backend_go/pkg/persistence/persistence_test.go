@@ -368,13 +368,61 @@ func TestLoadExistingCareerJSON(t *testing.T) {
 		t.Fatalf("failed to load existing saves/career.json: %v", err)
 	}
 
-	if snap.Version != 1 {
-		t.Errorf("expected version 1, got %d", snap.Version)
+	if snap.Version <= 0 {
+		t.Errorf("expected positive version, got %d", snap.Version)
 	}
 	if snap.SeasonName == "" {
 		t.Errorf("expected non-empty season_name")
 	}
 	if len(snap.Clubs) == 0 {
 		t.Errorf("expected clubs in existing saves/career.json")
+	}
+}
+
+func TestLoadLegacyCareerFixture(t *testing.T) {
+	tempDir := t.TempDir()
+	savePath := filepath.Join(tempDir, "legacy_v1.json")
+	v1JSON := []byte(`{"version": 1, "season_name": "2024-25", "clubs": {"ARS": {"club_id": "ARS", "club_name": "Arsenal", "short_name": "ARS", "squad": [{"player_id": "P001", "full_name": "Bukayo Saka", "position": "RW", "ovr": 88, "age": 23, "original_club_id": "ARS"}]}}}`)
+	if err := os.WriteFile(savePath, v1JSON, 0644); err != nil {
+		t.Fatalf("failed to write legacy fixture: %v", err)
+	}
+	snap, err := LoadCareer(savePath)
+	if err != nil {
+		t.Fatalf("failed to load legacy fixture: %v", err)
+	}
+	if snap.Version != 1 {
+		t.Errorf("expected version 1, got %d", snap.Version)
+	}
+	if snap.SeasonName != "2024-25" {
+		t.Errorf("expected season_name 2024-25, got %s", snap.SeasonName)
+	}
+	if len(snap.Clubs) != 1 {
+		t.Fatalf("expected 1 club, got %d", len(snap.Clubs))
+	}
+	arsClub := snap.Clubs["ARS"]
+	if arsClub == nil || len(arsClub.Squad) != 1 || arsClub.Squad[0].OriginalClubID != "ARS" {
+		t.Errorf("expected original_club_id ARS, got %#v", arsClub)
+	}
+}
+
+func TestRestoreCareerOriginalClubIDMetadata(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	player := tm.ClubsList[0].Squad[0]
+	origClubID := player.ClubID
+	player.OriginalClubID = origClubID
+
+	snap := BuildSnapshot(tm, ge, te)
+	if snap.Clubs[origClubID].Squad[0].OriginalClubID != origClubID {
+		t.Fatalf("snapshot missing original_club_id: %q", snap.Clubs[origClubID].Squad[0].OriginalClubID)
+	}
+
+	_, freshGE, freshTM, freshTE := setupTestWorld(t)
+	if err := RestoreCareer(freshTM, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("RestoreCareer failed: %v", err)
+	}
+
+	restored := freshTM.Clubs[origClubID].Squad[0]
+	if restored.OriginalClubID != origClubID {
+		t.Errorf("restored player missing original_club_id: got %q, want %q", restored.OriginalClubID, origClubID)
 	}
 }

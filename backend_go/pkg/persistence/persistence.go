@@ -625,6 +625,9 @@ func RestoreCareer(
 				} else {
 					// New regen or academy player
 					savedPlayer.ClubID = clubID
+					if savedPlayer.OriginalClubID == "" {
+						savedPlayer.OriginalClubID = clubID
+					}
 					club.Squad = append(club.Squad, savedPlayer)
 					existingPlayers[savedPlayer.PlayerID] = savedPlayer
 					existingByName[nameKey] = savedPlayer
@@ -911,6 +914,21 @@ func updatePlayerFromSaved(dest, src *models.Player) {
 	dest.MentorOVR = src.MentorOVR
 	dest.Composure = src.Composure
 	dest.ConsecutiveStarts = src.ConsecutiveStarts
+	if src.OriginalClubID != "" {
+		dest.OriginalClubID = src.OriginalClubID
+	}
+	if dest.OriginalClubID == "" && dest.ClubID != "" {
+		dest.OriginalClubID = dest.ClubID
+	}
+	if src.PlayerSource != "" {
+		dest.PlayerSource = src.PlayerSource
+	}
+	if src.UniverseWonderkid {
+		dest.UniverseWonderkid = true
+	}
+	if src.Season != "" {
+		dest.Season = src.Season
+	}
 	if src.Category != "" {
 		dest.Category = src.Category
 	}
