@@ -10,6 +10,7 @@ import { Card, ClubCrest, EmptyState, LoadingState, PanelHeader } from './ui/ui'
 import { cx, formatMillions, loyaltyLabel } from '../lib/format';
 import { usePlayerSheet } from './PlayerSheet';
 import { FormationPitch } from './FormationPitch';
+import { ClubIdentityPanel } from './ClubIdentityPanel';
 
 function formatWageBill(squad: Player[]): string {
   const annual = squad.reduce((sum, p) => sum + (p.wage_eur || 0) * 52, 0);
@@ -216,7 +217,10 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                     Managed by <strong className="text-bone">{selectedClub.manager.name}</strong>
                     {' · '}{selectedClub.manager.tactic}
                     {' · '}{selectedClub.manager.focus}
-                    {' · '}<strong className="text-brass font-mono">{selectedClub.manager.formatted_budget}</strong> warchest
+                    {' · '}<strong className="text-brass font-mono">{selectedClub.formatted_transfer_warchest ?? selectedClub.manager.formatted_budget}</strong> warchest
+                    {typeof selectedClub.finances?.balance === 'number' && (
+                      <span className="text-sage"> · <strong className="text-bone font-mono">{new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(selectedClub.finances.balance)}</strong> balance</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
                     <span className={cx(
@@ -263,6 +267,8 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
           </button>
         </Card>
       )}
+
+      {selectedClub && <ClubIdentityPanel club={selectedClub} />}
 
       {xi.length > 0 && (
         <Card>

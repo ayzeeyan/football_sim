@@ -61,10 +61,9 @@ const CategoryStage: React.FC<{
   }, [category.key]);
 
   const explicitWinnerId = category.winner_id ?? category.winner?.player_id;
-  const nomineeIsWinner = (playerId: string | undefined, fullName: string): boolean => {
-    if (explicitWinnerId) return explicitWinnerId === playerId;
-    // Compatibility only for pre-Chunk-1 payloads that did not carry IDs.
-    return category.winner?.full_name === fullName;
+  const nomineeIsWinner = (playerId: string | undefined): boolean => {
+    if (!explicitWinnerId || !playerId) return false;
+    return explicitWinnerId === playerId;
   };
 
   return (
@@ -82,7 +81,7 @@ const CategoryStage: React.FC<{
             short={n.short_name}
             stats={n.stats_line}
             ovr={n.ovr}
-            isWinner={revealed && nomineeIsWinner(n.player_id, n.full_name)}
+            isWinner={revealed && nomineeIsWinner(n.player_id)}
             dimmed={revealed}
             index={i}
           />

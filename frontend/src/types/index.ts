@@ -79,6 +79,23 @@ export interface ManagerInfo {
   history?: ManagerHistoryEntry[];
 }
 
+export interface ClubIdentity {
+  reputation: number;
+  historical_prestige: number;
+  financial_power: number;
+  board_patience: number;
+  academy_quality: number;
+  recruitment_ambition: number;
+  youth_preference: number;
+  transfer_aggressiveness: number;
+  selling_tendency: number;
+}
+
+export interface ClubFinances {
+  transfer_budget: number;
+  balance: number;
+}
+
 export interface Club {
   club_id: string;
   club_name: string;
@@ -104,6 +121,12 @@ export interface Club {
   morale?: number;
   manager: ManagerInfo | null;
   cup_status?: 'qualified' | 'eliminated' | 'must_win' | 'live' | null;
+  identity?: ClubIdentity;
+  finances?: ClubFinances;
+  reputation?: number;
+  transfer_warchest_eur?: number;
+  formatted_transfer_warchest?: string;
+  budget_eur?: number;
 }
 
 export interface CommentaryItem {
@@ -851,6 +874,7 @@ export interface SeasonAwards {
 }
 
 export interface AwardsNominee {
+  player_id?: string;
   full_name: string;
   position: string;
   ovr: number;
@@ -861,6 +885,7 @@ export interface AwardsNominee {
   short_name: string;
   is_wonderkid: boolean;
   stats_line: string;
+  award_score?: number;
 }
 
 export interface AwardsCategory {
@@ -869,6 +894,7 @@ export interface AwardsCategory {
   blurb: string;
   nominees: AwardsNominee[];
   winner: AwardsNominee | null;
+  winner_id?: string;
 }
 
 export interface AwardsCeremony {
