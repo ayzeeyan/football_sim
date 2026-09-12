@@ -2,6 +2,7 @@ package tournament
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -166,7 +167,11 @@ func (tm *TournamentManager) applySeasonalChangesUnlocked() {
 	}
 }
 
-func (tm *TournamentManager) processRetirementsUnlocked() {
+func (tm *TournamentManager) processRetirementsUnlocked() []string {
+	if tm.RetiredPlayerIDs == nil {
+		tm.RetiredPlayerIDs = make(map[string]bool)
+	}
+	var retiredIDs []string
 	for _, club := range tm.ClubsList {
 		kept := club.Squad[:0]
 		for _, p := range club.Squad {
@@ -190,6 +195,8 @@ func (tm *TournamentManager) processRetirementsUnlocked() {
 				roll = tm.RNG.Float64()
 			}
 			if roll < chance {
+				retiredIDs = append(retiredIDs, p.PlayerID)
+				tm.RetiredPlayerIDs[p.PlayerID] = true
 				tm.PushInbox("honour",
 					fmt.Sprintf("%s hangs up his boots", p.FullName),
 					fmt.Sprintf("After a career at %s, %s retires at %d.", club.ClubName, p.FullName, p.Age),
@@ -199,6 +206,25 @@ func (tm *TournamentManager) processRetirementsUnlocked() {
 			kept = append(kept, p)
 		}
 		club.Squad = kept
+	}
+	sort.Strings(retiredIDs)
+	return retiredIDs
+}
+
+// advanceGrowthBaselinesUnlocked commits each registered player's capped OVR
+// once at the new-season boundary. Weekly growth and repeated seasonal calls
+// must continue to share the same baseline until this point.
+func (tm *TournamentManager) advanceGrowthBaselinesUnlocked() {
+	if tm.GrowthEngine == nil {
+		return
+	}
+	for _, club := range tm.ClubsList {
+		for _, p := range club.Squad {
+			if p == nil {
+				continue
+			}
+			tm.GrowthEngine.AdvanceSeasonStartOVR(p.PlayerID, p.Category, p.OVR)
+		}
 	}
 }
 
@@ -277,7 +303,8 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 
 	tm.ageAllPlayersUnlocked()
 	tm.applySeasonalChangesUnlocked()
-	tm.processRetirementsUnlocked()
+	retiredIDs := tm.processRetirementsUnlocked()
+	tm.advanceGrowthBaselinesUnlocked()
 
 	for _, club := range tm.ClubsList {
 		for _, p := range club.Squad {
@@ -363,15 +390,16 @@ func (tm *TournamentManager) ResetNewSeason() map[string]interface{} {
 	tm.seedOpeningInbox()
 
 	return map[string]interface{}{
-		"status":            "success",
-		"message":           "New European Super League season initialized. Permanent transfers and current squads were preserved.",
-		"current_matchweek": 1,
-		"max_matchweeks":    tm.MaxMatchweeks,
+		"status":             "success",
+		"message":            "New European Super League season initialized. Permanent transfers and current squads were preserved.",
+		"current_matchweek":  1,
+		"max_matchweeks":     tm.MaxMatchweeks,
+		"retired_player_ids": retiredIDs,
 	}
 }
 
 // AdoptLongSeason migrates legacy short/long calendar saves onto the current
-// mathematically correct double round-robin schedule without wiping results
+// mathematically correct quadruple round-robin schedule without wiping results
 // that still map to a canonical fixture.
 func (tm *TournamentManager) AdoptLongSeason() bool {
 	tm.mu.Lock()
@@ -388,24 +416,102 @@ func (tm *TournamentManager) adoptLongSeasonUnlocked() bool {
 	changed := false
 	if len(tm.Fixtures) != target || tm.MaxMatchweeks != LeagueRounds {
 		generated := GenerateLeagueFixtures(tm.ClubsList, tm.RNG)
-		existing := make(map[string]Fixture, len(tm.Fixtures))
+
+		finishedOld := make([]Fixture, 0)
 		for _, f := range tm.Fixtures {
 			if f.Status == "finished" {
-				existing[f.FixtureID] = f
+				finishedOld = append(finishedOld, f)
 			}
 		}
+		sort.SliceStable(finishedOld, func(i, j int) bool {
+			if finishedOld[i].Matchweek != finishedOld[j].Matchweek {
+				return finishedOld[i].Matchweek < finishedOld[j].Matchweek
+			}
+			return finishedOld[i].FixtureID < finishedOld[j].FixtureID
+		})
+
+		claimedGenerated := make(map[int]bool)
+		claimedOld := make(map[string]bool)
+		remapping := make(map[string]string)
+
+		// 1. Match by exact FixtureID first
+		for j, gen := range generated {
+			for _, old := range finishedOld {
+				if !claimedOld[old.FixtureID] && gen.FixtureID == old.FixtureID {
+					claimedGenerated[j] = true
+					claimedOld[old.FixtureID] = true
+					break
+				}
+			}
+		}
+
+		isLeagueComp := func(comp string) bool {
+			c := strings.ToLower(strings.TrimSpace(comp))
+			return c == "" || c == "super-league" || c == "super_league" || c == "super league" || c == "league"
+		}
+
+		// 2. For unmapped finished fixtures, match by (Competition, HomeClubID, AwayClubID)
+		// sequentially in chronological matchweek order
+		for _, old := range finishedOld {
+			if claimedOld[old.FixtureID] {
+				continue
+			}
+			for j, gen := range generated {
+				if claimedGenerated[j] {
+					continue
+				}
+				if gen.HomeID == old.HomeID && gen.AwayID == old.AwayID &&
+					(gen.Competition == old.Competition || (isLeagueComp(gen.Competition) && isLeagueComp(old.Competition))) {
+					claimedGenerated[j] = true
+					claimedOld[old.FixtureID] = true
+					remapping[old.FixtureID] = gen.FixtureID
+					break
+				}
+			}
+		}
+
+		oldMap := make(map[string]Fixture, len(finishedOld))
+		for _, f := range finishedOld {
+			oldMap[f.FixtureID] = f
+		}
+		reverseRemap := make(map[string]string)
+		for oldID, genID := range remapping {
+			reverseRemap[genID] = oldID
+		}
+
 		merged := make([]Fixture, 0, len(generated))
-		for _, f := range generated {
-			if old, ok := existing[f.FixtureID]; ok {
+		for _, gen := range generated {
+			if old, ok := oldMap[gen.FixtureID]; ok && claimedOld[gen.FixtureID] && remapping[gen.FixtureID] == "" {
 				merged = append(merged, old)
-			} else {
+			} else if oldID, ok := reverseRemap[gen.FixtureID]; ok {
+				old := oldMap[oldID]
+				f := gen
+				f.Status = old.Status
+				f.HomeGoals = old.HomeGoals
+				f.AwayGoals = old.AwayGoals
+				f.Report = old.Report
+				f.DecidedBy = old.DecidedBy
+				f.Penalties = old.Penalties
+				f.Method = old.Method
 				merged = append(merged, f)
+			} else {
+				merged = append(merged, gen)
 			}
 		}
+
 		tm.Fixtures = merged
 		tm.MaxMatchweeks = LeagueRounds
 		if tm.CurrentMatchweek > LeagueRounds+1 {
 			tm.CurrentMatchweek = LeagueRounds + 1
+		}
+
+		// Remap InboxItem.FixtureID where applicable
+		if len(remapping) > 0 {
+			for i := range tm.Inbox {
+				if newID, ok := remapping[tm.Inbox[i].FixtureID]; ok {
+					tm.Inbox[i].FixtureID = newID
+				}
+			}
 		}
 		changed = true
 	}
@@ -446,6 +552,7 @@ func (tm *TournamentManager) RestartCurrentSeason() map[string]interface{} {
 	tm.PlayerOfTheWeek = nil
 	tm.MonthlyAwards = nil
 	tm.SeasonPhase = "season"
+	tm.ReputationAppliedSeason = ""
 	var keptInbox []InboxItem
 	for _, item := range tm.Inbox {
 		if item.SeasonName != tm.SeasonName {

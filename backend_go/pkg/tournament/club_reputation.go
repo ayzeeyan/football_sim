@@ -83,6 +83,7 @@ func (tm *TournamentManager) updateClubReputationsUnlocked() {
 	if len(standings) == 0 {
 		return
 	}
+	superCupWinnerID := tm.superCupWinnerIDUnlocked()
 	position := make(map[string]int, len(standings))
 	for i, club := range standings {
 		position[club.ClubID] = i + 1
@@ -99,17 +100,94 @@ func (tm *TournamentManager) updateClubReputationsUnlocked() {
 			LeagueChampion: position[club.ClubID] == 1,
 			ContinentalChampion: tm.UCLChampionID == club.ClubID,
 		}
-		for _, f := range tm.SuperCupFixtures {
-			if f.Stage == "final" && f.Status == "finished" && f.HomeGoals != nil && f.AwayGoals != nil {
-				winner := f.HomeID
-				if *f.AwayGoals > *f.HomeGoals {
-					winner = f.AwayID
-				}
-				if winner == club.ClubID {
-					in.SuperCupChampion = true
-				}
-			}
-		}
+		in.SuperCupChampion = superCupWinnerID == club.ClubID
 		club.Identity.Reputation = models.ClampClubRating(club.Identity.Reputation + CalculateClubReputationChange(in))
 	}
+}
+
+func (tm *TournamentManager) superCupWinnerIDUnlocked() string {
+	if tm.SuperCupChampionID != "" {
+		return tm.SuperCupChampionID
+	}
+	for _, f := range tm.SuperCupFixtures {
+		if (f.Stage != "final" && f.Stage != "Final") || f.Status != "finished" || f.HomeGoals == nil || f.AwayGoals == nil {
+			continue
+		}
+		winner := f.HomeID
+		if *f.AwayGoals > *f.HomeGoals || (*f.AwayGoals == *f.HomeGoals && len(f.Penalties) >= 2 && f.Penalties[1] > f.Penalties[0]) {
+			winner = f.AwayID
+		}
+		return winner
+	}
+	return ""
+}
+
+// completedSeasonInputsAvailableUnlocked reports whether the current
+// transfer-window state has all results needed for an annual reputation
+// update. In particular, the final league week can enter the transfer phase
+// before same-week cup fixtures are applied, so the phase alone is not enough.
+func (tm *TournamentManager) completedSeasonInputsAvailableUnlocked() bool {
+	if tm == nil || tm.SeasonName == "" || tm.SeasonPhase != "transfer_window" || len(tm.ClubsList) == 0 {
+		return false
+	}
+
+	leagueFixtures := 0
+	for _, f := range tm.Fixtures {
+		if f.Competition != "" && f.Competition != "super-league" {
+			continue
+		}
+		leagueFixtures++
+		if f.Status != "finished" || f.HomeGoals == nil || f.AwayGoals == nil {
+			return false
+		}
+	}
+	// A legacy/manual state may not retain its league fixture list. The
+	// calendar boundary is the only safe completion signal in that case.
+	if leagueFixtures == 0 && tm.CurrentMatchweek <= tm.MaxMatchweeks {
+		return false
+	}
+
+	if len(tm.UCLFixtures) > 0 {
+		for _, f := range tm.UCLFixtures {
+			if f.Status != "finished" || f.HomeGoals == nil || f.AwayGoals == nil {
+				return false
+			}
+		}
+		if tm.UCLChampionID == "" || tm.Clubs[tm.UCLChampionID] == nil {
+			return false
+		}
+	}
+	if len(tm.SuperCupFixtures) > 0 {
+		for _, f := range tm.SuperCupFixtures {
+			if f.Status != "finished" || f.HomeGoals == nil || f.AwayGoals == nil {
+				return false
+			}
+		}
+		winnerID := tm.superCupWinnerIDUnlocked()
+		if winnerID == "" || tm.Clubs[winnerID] == nil {
+			return false
+		}
+	}
+	return true
+}
+
+// ApplyCompletedSeasonReputation applies the completed campaign exactly once.
+// The public wrapper owns the manager lock; callers already holding it should
+// use applyCompletedSeasonReputationUnlocked instead.
+func (tm *TournamentManager) ApplyCompletedSeasonReputation() bool {
+	if tm == nil {
+		return false
+	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.applyCompletedSeasonReputationUnlocked()
+}
+
+func (tm *TournamentManager) applyCompletedSeasonReputationUnlocked() bool {
+	if tm == nil || tm.ReputationAppliedSeason == tm.SeasonName || !tm.completedSeasonInputsAvailableUnlocked() {
+		return false
+	}
+	tm.updateClubReputationsUnlocked()
+	tm.ReputationAppliedSeason = tm.SeasonName
+	return true
 }

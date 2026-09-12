@@ -31,11 +31,24 @@ func (tm *TournamentManager) FinalizeSeasonTransition() map[string]interface{} {
 		}
 	}
 
-	// Reputation changes once at the same guarded boundary that archives the
-	// completed campaign. ResetNewSeason switches SeasonPhase back to season, so
-	// a repeated finalization call cannot apply this mutation twice.
+	// The normal server path applies reputation before opening Week 1 so budgets
+	// use the completed campaign's stature. Keep this guarded fallback for
+	// legacy/manual callers that finalize after the window without going through
+	// that path. Incomplete result inputs must leave the campaign untouched.
 	tm.mu.Lock()
-	tm.updateClubReputationsUnlocked()
+	ready := tm.completedSeasonInputsAvailableUnlocked()
+	if ready && tm.ReputationAppliedSeason != tm.SeasonName {
+		ready = tm.applyCompletedSeasonReputationUnlocked()
+	}
+	markerReady := tm.ReputationAppliedSeason == tm.SeasonName
 	tm.mu.Unlock()
+	if !ready || !markerReady {
+		return map[string]interface{}{
+			"status":            "error",
+			"message":           "Season transition cannot finalize before all league and cup results are complete.",
+			"season_name":       tm.SeasonName,
+			"current_matchweek": tm.CurrentMatchweek,
+		}
+	}
 	return tm.ResetNewSeason()
 }

@@ -216,18 +216,17 @@ func TestChunk1CovSeasonalGrowthBranches(t *testing.T) {
 	if got := ge.ApplySeasonalGrowth("ghost", 18, 3, 90, "FWD"); got != 71 {
 		t.Errorf("ghost youth base = %d; want 71", got)
 	}
-	// currentOVR above computed base lifts the base.
+	// An inflated currentOVR remains inside the registered season ceiling.
 	high := ge.ApplySeasonalGrowth("yg1", 17, 10, 94, "FWD", 90)
-	if high < 90 || high > 94 {
-		t.Errorf("lifted-base growth = %d; want in [90,94]", high)
+	if high < 72 || high > 77 {
+		t.Errorf("capped-base growth = %d; want in [72,77]", high)
 	}
-	// Guarantee branch: inflated currentOVR with a big gap the 24-step nudge
-	// cannot close in one season -> exactly base+1 (capped by potential).
+	// A large currentOVR mismatch is still clamped to the fixed season ceiling.
 	ge2 := NewGrowthEngine(52)
 	ge2.RegisterProdigy("gap1", "Gap One", 18, 176, 69, "FWD", 70, 95, 19)
 	res := ge2.ApplySeasonalGrowth("gap1", 18, 25, 95, "FWD", 85)
-	if res < 85 || res > 95 {
-		t.Errorf("guarantee growth = %d; want in [85,95]", res)
+	if res < 70 || res > 75 {
+		t.Errorf("mismatched-base growth = %d; want in [70,75]", res)
 	}
 	// Static helper with nil engine (no default registered).
 	prev := GetDefaultGrowthEngine()

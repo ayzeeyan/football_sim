@@ -805,30 +805,50 @@ func (s *Server) serializeClubRecord(c *models.Club, rec *models.CompetitionReco
 		gf, ga, gd, pts = rec.GoalsFor, rec.GoalsAgainst, rec.GoalDifference, rec.Points
 		form = rec.Form
 	}
+	warchest := c.Finances.TransferBudget
 	return map[string]interface{}{
-		"club_id":             c.ClubID,
-		"club_name":           c.ClubName,
-		"short_name":          c.ShortName,
-		"league":              c.League,
-		"country":             c.Country,
-		"home_stadium":        c.HomeStadium,
-		"stadium_capacity":    c.StadiumCapacity,
-		"overall_team_rating": c.OverallTeamRating,
-		"squad_size":          c.SquadSize,
-		"squad_avg_ovr":       c.SquadAvgOVR,
-		"primary_color":       c.PrimaryColor,
-		"secondary_color":     c.SecondaryColor,
-		"p":                   p,
-		"w":                   w,
-		"d":                   d,
-		"l":                   l,
-		"gf":                  gf,
-		"ga":                  ga,
-		"gd":                  gd,
-		"pts":                 pts,
-		"form":                form,
-		"morale":              c.Morale,
-		"manager":             s.serializeManager(mgr),
+		"club_id":                     c.ClubID,
+		"club_name":                   c.ClubName,
+		"short_name":                  c.ShortName,
+		"league":                      c.League,
+		"country":                     c.Country,
+		"home_stadium":                c.HomeStadium,
+		"stadium_capacity":            c.StadiumCapacity,
+		"overall_team_rating":         c.OverallTeamRating,
+		"squad_size":                  c.SquadSize,
+		"squad_avg_ovr":               c.SquadAvgOVR,
+		"primary_color":               c.PrimaryColor,
+		"secondary_color":             c.SecondaryColor,
+		"p":                           p,
+		"w":                           w,
+		"d":                           d,
+		"l":                           l,
+		"gf":                          gf,
+		"ga":                          ga,
+		"gd":                          gd,
+		"pts":                         pts,
+		"form":                        form,
+		"morale":                      c.Morale,
+		"reputation":                  c.Identity.Reputation,
+		"budget_eur":                  warchest,
+		"transfer_warchest_eur":       warchest,
+		"formatted_transfer_warchest": models.FormatCurrency(warchest),
+		"identity": map[string]interface{}{
+			"reputation":              c.Identity.Reputation,
+			"historical_prestige":     c.Identity.HistoricalPrestige,
+			"financial_power":         c.Identity.FinancialPower,
+			"board_patience":          c.Identity.BoardPatience,
+			"academy_quality":         c.Identity.AcademyQuality,
+			"recruitment_ambition":    c.Identity.RecruitmentAmbition,
+			"youth_preference":        c.Identity.YouthPreference,
+			"transfer_aggressiveness": c.Identity.TransferAggressiveness,
+			"selling_tendency":        c.Identity.SellingTendency,
+		},
+		"finances": map[string]interface{}{
+			"transfer_budget": c.Finances.TransferBudget,
+			"balance":         c.Finances.Balance,
+		},
+		"manager":                     s.serializeManager(mgr),
 	}
 }
 
@@ -1529,7 +1549,7 @@ func (s *Server) handleTrainProdigy(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _ := s.findPlayer(pid)
 	if p != nil {
-		p.OVR = s.GrowthEngine.CalculateOVR(pid, p.Category)
+		p.OVR = s.GrowthEngine.EnforceSeasonOVRCap(pid, p.Category)
 		res["ovr"] = p.OVR
 	}
 	snap, gen := s.takeCareerSnapshotLocked()
@@ -2084,10 +2104,19 @@ func (s *Server) handleGetSeasonAwards(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetAwardsCeremony serves the gala contract: ranked categories with
-// nominees and winners, plus the Ballon d'Or shortlist. Team of the season
-// and manager of the year are null until computed; the client guards them.
+// nominees and winners, plus Ballon d'Or shortlist, Team of the Season, and Manager of the Year.
+// Guarded: returns HTTP 409 Conflict if called mid-season or after season rollover.
 func (s *Server) handleGetAwardsCeremony(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()
+	if !s.TournamentManager.AwardsCeremonyReady() {
+		s.worldMu.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error": "awards ceremony is only available at the conclusion of the season before rollover",
+		})
+		return
+	}
 	ceremony := s.TournamentManager.GetAwardsCeremony()
 	awards := s.TournamentManager.GetSeasonAwards()
 	s.worldMu.RUnlock()
@@ -2151,9 +2180,19 @@ func (s *Server) handleResetSeason(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	res := s.TournamentManager.FinalizeSeasonTransition()
+	if status, ok := res["status"].(string); !ok || status != "success" {
+		message := "Season transition could not be finalized."
+		if detail, ok := res["message"].(string); ok && detail != "" {
+			message = detail
+		}
+		s.worldMu.Unlock()
+		held = false
+		writeErrorJSON(w, http.StatusBadRequest, message)
+		return
+	}
 	s.clearLiveFixtureSelection()
 	s.lastCommittedLiveInstance = -1
-	res := s.TournamentManager.ResetNewSeason()
 	snap, gen := s.takeCareerSnapshotLocked()
 	s.worldMu.Unlock()
 	held = false
@@ -2339,14 +2378,15 @@ func (s *Server) transfersPayload() map[string]interface{} {
 		if mgr == nil {
 			continue
 		}
+		budget := club.Finances.TransferBudget
 		warchests = append(warchests, map[string]interface{}{
 			"club_name":        club.ClubName,
 			"club_short":       club.ShortName,
 			"manager_name":     mgr.Name,
 			"tactic":           mgr.Tactic(),
 			"focus":            mgr.FocusLabel(),
-			"budget_eur":       mgr.BudgetEur,
-			"formatted_budget": models.FormatCurrency(mgr.BudgetEur),
+			"budget_eur":       budget,
+			"formatted_budget": models.FormatCurrency(budget),
 			"wage_bill_eur":    mgr.WageBill(club),
 		})
 	}

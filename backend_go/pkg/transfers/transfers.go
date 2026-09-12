@@ -126,6 +126,20 @@ func (te *TransferEngine) syncManagerBudget(clubID string) {
 	}
 }
 
+// SyncAllManagerBudgets updates all manager budgets from authoritative club finances.
+func (te *TransferEngine) SyncAllManagerBudgets() {
+	if te == nil {
+		return
+	}
+	te.mu.Lock()
+	defer te.mu.Unlock()
+	for cid, club := range te.Clubs {
+		if mgr := te.Managers[cid]; mgr != nil && club != nil {
+			mgr.BudgetEur = club.Finances.TransferBudget
+		}
+	}
+}
+
 func canAfford(club *models.Club, fee int64) bool {
 	return club != nil && fee > 0 && club.Finances.TransferBudget >= fee && club.Finances.Balance >= fee
 }
@@ -376,6 +390,7 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 				}
 			}
 			if len(rivals) > 0 {
+				sort.Slice(rivals, func(i, j int) bool { return rivals[i].ClubID < rivals[j].ClubID })
 				hijacker := rivals[te.RNG.Intn(len(rivals))]
 				neg.OriginalBuyer, neg.Buyer, neg.IsHijacked, neg.CurrentBid = neg.Buyer, hijacker, true, hijackCost
 				te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("HIJACK TWIST! %s hijack %s deal for %s with late %s offer!", hijacker.ShortName, neg.OriginalBuyer.ShortName, neg.Player.FullName, models.FormatCurrency(hijackCost)), Category: "HIJACK", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
@@ -465,11 +480,14 @@ func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
 func (te *TransferEngine) aiInitiateBid() {
 	var clubs []*models.Club
 	for _, c := range te.Clubs {
-		clubs = append(clubs, c)
+		if c != nil {
+			clubs = append(clubs, c)
+		}
 	}
 	if len(clubs) < 2 {
 		return
 	}
+	sort.Slice(clubs, func(i, j int) bool { return clubs[i].ClubID < clubs[j].ClubID })
 	var solvent []*models.Club
 	for _, c := range clubs {
 		if canAfford(c, minimumActiveWarchest) {
@@ -479,6 +497,7 @@ func (te *TransferEngine) aiInitiateBid() {
 	if len(solvent) == 0 {
 		return
 	}
+	sort.Slice(solvent, func(i, j int) bool { return solvent[i].ClubID < solvent[j].ClubID })
 	buyer := solvent[te.RNG.Intn(len(solvent))]
 	var sellers []*models.Club
 	for _, c := range clubs {
@@ -489,6 +508,7 @@ func (te *TransferEngine) aiInitiateBid() {
 	if len(sellers) == 0 {
 		return
 	}
+	sort.Slice(sellers, func(i, j int) bool { return sellers[i].ClubID < sellers[j].ClubID })
 	seller := sellers[te.RNG.Intn(len(sellers))]
 
 	var validTargets []*models.Player
@@ -521,6 +541,7 @@ func (te *TransferEngine) aiInitiateBid() {
 	if len(validTargets) == 0 {
 		return
 	}
+	sort.Slice(validTargets, func(i, j int) bool { return validTargets[i].PlayerID < validTargets[j].PlayerID })
 	target := validTargets[te.RNG.Intn(len(validTargets))]
 	baseVal := models.BaselineValue(target.OVR, target.Age, target.UniverseWonderkid)
 	initialBid := int64(float64(baseVal) * (0.95 + te.RNG.Float64()*0.20))

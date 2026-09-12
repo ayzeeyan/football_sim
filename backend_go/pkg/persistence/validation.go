@@ -3,6 +3,7 @@ package persistence
 import (
 	"fmt"
 
+	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 )
 
@@ -33,6 +34,11 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 	}
 	if snap.Transfers.CurrentWeek > 13 {
 		return fmt.Errorf("career snapshot transfer week %d exceeds legal maximum 13", snap.Transfers.CurrentWeek)
+	}
+
+	// Super League invariant: exactly 12 clubs
+	if len(snap.Clubs) != 12 {
+		return fmt.Errorf("career snapshot must contain exactly 12 clubs, got %d", len(snap.Clubs))
 	}
 
 	clubIDs := make(map[string]struct{}, len(snap.Clubs))
@@ -91,8 +97,8 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 
 	fixtureIDs := make(map[string]struct{})
 	for scope, fixtures := range map[string][]tournamentFixtureView{
-		"league": fixtureViews(snap.Fixtures),
-		"ucl": fixtureViews(snap.UCLFixtures),
+		"league":    fixtureViews(snap.Fixtures),
+		"ucl":       fixtureViews(snap.UCLFixtures),
 		"super_cup": fixtureViews(snap.SuperCupFixtures),
 	} {
 		for _, fixture := range fixtures {
@@ -122,23 +128,70 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
+	// Knockout cup structure validation
+	if snap.UCLFinal.WinnerID != "" && snap.UCLFinal.WinnerID != snap.UCLFinal.HomeID && snap.UCLFinal.WinnerID != snap.UCLFinal.AwayID {
+		return fmt.Errorf("career snapshot ucl final winner %q must be one of finalists (%s, %s)", snap.UCLFinal.WinnerID, snap.UCLFinal.HomeID, snap.UCLFinal.AwayID)
+	}
+	if snap.SuperCupFinal.WinnerID != "" && snap.SuperCupFinal.WinnerID != snap.SuperCupFinal.HomeID && snap.SuperCupFinal.WinnerID != snap.SuperCupFinal.AwayID {
+		return fmt.Errorf("career snapshot super cup final winner %q must be one of finalists (%s, %s)", snap.SuperCupFinal.WinnerID, snap.SuperCupFinal.HomeID, snap.SuperCupFinal.AwayID)
+	}
+
+	// Growth & progression validations
+	if snap.Growth.TrainingEnergy < 0 {
+		return fmt.Errorf("career snapshot training energy is negative")
+	}
+	if snap.Growth.MaxTrainingEnergy > 0 && snap.Growth.TrainingEnergy > snap.Growth.MaxTrainingEnergy {
+		return fmt.Errorf("career snapshot training energy %d exceeds maximum %d", snap.Growth.TrainingEnergy, snap.Growth.MaxTrainingEnergy)
+	}
+	for pid, bio := range snap.Growth.Biometrics {
+		if bio == nil {
+			continue
+		}
+		if bio.Potential < 50 || bio.Potential > 99 {
+			return fmt.Errorf("career snapshot player %q has invalid potential %d", pid, bio.Potential)
+		}
+		canonical := pid
+		if c, ok := ProdigyMap[pid]; ok {
+			canonical = c
+		}
+		if models.IsCanonicalWonderkidID(canonical) {
+			if bio.Potential < 93 || bio.Potential > 96 {
+				return fmt.Errorf("career snapshot canonical wonderkid %q potential %d outside [93, 96]", pid, bio.Potential)
+			}
+		}
+		if bio.CurrentHeightCM < 0 || bio.BaselineHeightCM < 0 || bio.CurrentWeightKG < 0 {
+			return fmt.Errorf("career snapshot player %q has negative biometrics", pid)
+		}
+	}
+
+	// Transfer validation: current-window deals & negotiations
 	for _, transfer := range snap.Transfers.Completed {
 		if transfer.FeeEUR < 0 {
 			return fmt.Errorf("career snapshot completed transfer for player %q has negative fee", transfer.PlayerID)
 		}
-		if len(clubIDs) > 0 {
-			if transfer.SellerID != "" {
-				if _, ok := clubIDs[transfer.SellerID]; !ok {
-					return fmt.Errorf("career snapshot completed transfer references unknown seller %q", transfer.SellerID)
-				}
-			}
-			if transfer.BuyerID != "" {
-				if _, ok := clubIDs[transfer.BuyerID]; !ok {
-					return fmt.Errorf("career snapshot completed transfer references unknown buyer %q", transfer.BuyerID)
-				}
-			}
+		if transfer.PlayerID == "" {
+			return fmt.Errorf("career snapshot completed transfer has empty player id")
+		}
+		// Historical buyers/sellers outside the active 12 clubs are explicitly permitted
+		// to prevent false rejections of multi-season saves or foreign signings.
+	}
+
+	for _, neg := range snap.Transfers.ActiveNegotiations {
+		if neg == nil {
+			continue
+		}
+		if neg.NegotiationID == "" {
+			return fmt.Errorf("career snapshot negotiation has empty id")
+		}
+		if neg.CurrentBid < 0 || neg.AskingPrice < 0 {
+			return fmt.Errorf("career snapshot negotiation %q has negative bid or asking price", neg.NegotiationID)
+		}
+		// Expired or rejected negotiations must never be rejected
+		if neg.StageName == "expired" || neg.StageName == "rejected" {
+			continue
 		}
 	}
+
 	return nil
 }
 

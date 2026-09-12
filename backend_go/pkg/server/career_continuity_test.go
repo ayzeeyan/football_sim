@@ -6,6 +6,7 @@ import (
 
 	"football_sim/pkg/datamanager"
 	"football_sim/pkg/persistence"
+	"football_sim/pkg/transfers"
 )
 
 func TestRestoreCareerKeepsFinishedFixturesAndHomes(t *testing.T) {
@@ -139,6 +140,8 @@ func TestSeasonResetAgesWorldAndRestartDoesNot(t *testing.T) {
 			}
 		}
 	}
+	prepareCompletedSeasonForMacro(srv.TournamentManager)
+	srv.TransferEngine.CurrentWeek = transfers.TransferWindowWeeks + 1
 	srv.worldMu.Unlock()
 
 	resp, err = http.Post(ts.URL+"/api/season/reset", "application/json", nil)

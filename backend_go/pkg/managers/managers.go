@@ -3,6 +3,7 @@ package managers
 import (
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 
 	"football_sim/pkg/models"
@@ -340,6 +341,7 @@ func AppointManager(managers map[string]*ManagerProfile, club *models.Club, rng 
 			}
 		}
 	}
+	sort.Strings(availablePool)
 
 	chosenName := "Interim Head Coach"
 	if len(availablePool) > 0 {
@@ -358,6 +360,7 @@ func AppointManager(managers map[string]*ManagerProfile, club *models.Club, rng 
 	if len(styles) == 0 {
 		styles = []string{"possession", "high_press", "low_block", "free_flowing"}
 	}
+	sort.Strings(styles)
 
 	var focuses []string
 	for f := range FocusLabels {
@@ -368,6 +371,7 @@ func AppointManager(managers map[string]*ManagerProfile, club *models.Club, rng 
 	if len(focuses) == 0 {
 		focuses = []string{"youth", "stars", "balance"}
 	}
+	sort.Strings(focuses)
 
 	newMgr := &ManagerProfile{
 		ClubID:       club.ClubID,

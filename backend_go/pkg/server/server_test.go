@@ -496,3 +496,79 @@ func TestServer_WebSocketLiveMatch(t *testing.T) {
 	_ = conn.WriteJSON(map[string]interface{}{"action": "pause"})
 	_ = conn.WriteJSON(map[string]interface{}{"action": "reset"})
 }
+
+func TestServer_ClubSerializationAndWarchestFinances(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer srv.Stop()
+	defer ts.Close()
+
+	// 1. Verify /api/clubs serialization includes identity, finances, and warchest
+	resp, err := http.Get(ts.URL + "/api/clubs")
+	if err != nil {
+		t.Fatalf("GET /api/clubs failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	var clubs []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&clubs); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(clubs) == 0 {
+		t.Fatalf("expected clubs in /api/clubs response")
+	}
+	clubData := clubs[0]
+
+	identity, ok := clubData["identity"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected identity object in club payload: %v", clubData["identity"])
+	}
+	for _, field := range []string{
+		"reputation", "historical_prestige", "financial_power", "board_patience",
+		"academy_quality", "recruitment_ambition", "youth_preference",
+		"transfer_aggressiveness", "selling_tendency",
+	} {
+		if _, exists := identity[field]; !exists {
+			t.Errorf("identity missing field %s", field)
+		}
+	}
+
+	finances, ok := clubData["finances"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected finances object in club payload: %v", clubData["finances"])
+	}
+	for _, field := range []string{"transfer_budget", "balance"} {
+		if _, exists := finances[field]; !exists {
+			t.Errorf("finances missing field %s", field)
+		}
+	}
+
+	for _, key := range []string{"reputation", "budget_eur", "transfer_warchest_eur", "formatted_transfer_warchest"} {
+		if _, exists := clubData[key]; !exists {
+			t.Errorf("club payload missing %s", key)
+		}
+	}
+
+	// 2. Verify /api/transfers warchests reads club finances
+	respTransfers, err := http.Get(ts.URL + "/api/transfers")
+	if err != nil {
+		t.Fatalf("GET /api/transfers failed: %v", err)
+	}
+	defer respTransfers.Body.Close()
+	var transfersPayload map[string]interface{}
+	if err := json.NewDecoder(respTransfers.Body).Decode(&transfersPayload); err != nil {
+		t.Fatalf("decode transfers: %v", err)
+	}
+	warchests, ok := transfersPayload["warchests"].([]interface{})
+	if !ok || len(warchests) == 0 {
+		t.Fatalf("expected non-empty warchests in transfers payload")
+	}
+	firstWarchest := warchests[0].(map[string]interface{})
+	if _, ok := firstWarchest["budget_eur"]; !ok {
+		t.Errorf("warchest entry missing budget_eur")
+	}
+	if _, ok := firstWarchest["formatted_budget"]; !ok {
+		t.Errorf("warchest entry missing formatted_budget")
+	}
+}

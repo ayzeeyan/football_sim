@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
-const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 function macroHandlerSource(): string {
   const start = appSource.indexOf("const handleMacroSim = useCallback(async (mode: 'week' | 'month' | 'season') => {");

@@ -3,6 +3,9 @@ package persistence
 import (
 	"path/filepath"
 	"testing"
+
+	"football_sim/pkg/models"
+	"football_sim/pkg/transfers"
 )
 
 func TestValidateCareerSnapshotAllowsLegacyMissingAdditiveFields(t *testing.T) {
@@ -126,5 +129,72 @@ func TestCareerRoundTripPreservesLogicalContinuityAndValidates(t *testing.T) {
 	}
 	if !restoredTE.TransferredThisWindow[tm.ClubsList[0].Squad[0].PlayerID] {
 		t.Fatal("transferred-this-window continuity was lost")
+	}
+}
+
+func TestValidateCareerSnapshotExact12Clubs(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+
+	for k := range snap.Clubs {
+		delete(snap.Clubs, k)
+		break
+	}
+	if err := ValidateCareerSnapshot(snap); err == nil {
+		t.Fatal("expected validation error for 11 clubs")
+	}
+}
+
+func TestValidateCareerSnapshotWonderkidPotentialBounds(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+
+	for pid, bio := range snap.Growth.Biometrics {
+		if models.IsCanonicalWonderkidID(pid) {
+			bio.Potential = 99
+			if err := ValidateCareerSnapshot(snap); err == nil {
+				t.Fatal("expected validation error for wonderkid potential 99")
+			}
+			bio.Potential = 92
+			if err := ValidateCareerSnapshot(snap); err == nil {
+				t.Fatal("expected validation error for wonderkid potential 92")
+			}
+			bio.Potential = 95
+			if err := ValidateCareerSnapshot(snap); err != nil {
+				t.Fatalf("unexpected error for wonderkid potential 95: %v", err)
+			}
+			break
+		}
+	}
+}
+
+func TestValidateCareerSnapshotAllowsExpiredNegotiationsAndHistoricalBuyers(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+
+	snap.Transfers.Completed = append(snap.Transfers.Completed, transfers.CompletedTransfer{
+		PlayerID: "P_FOREIGN_1",
+		FeeEUR:   15000000,
+		SellerID: "BUN-BVB",
+		BuyerID:  tm.ClubsList[0].ClubID,
+	})
+
+	snap.Transfers.ActiveNegotiations = append(snap.Transfers.ActiveNegotiations,
+		&transfers.TransferNegotiation{
+			NegotiationID: "NEG_EXP_1",
+			StageName:     "expired",
+			CurrentBid:    5000000,
+			AskingPrice:   10000000,
+		},
+		&transfers.TransferNegotiation{
+			NegotiationID: "NEG_REJ_1",
+			StageName:     "rejected",
+			CurrentBid:    3000000,
+			AskingPrice:   8000000,
+		},
+	)
+
+	if err := ValidateCareerSnapshot(snap); err != nil {
+		t.Fatalf("expected valid snapshot with historical buyer and expired negotiations, got: %v", err)
 	}
 }

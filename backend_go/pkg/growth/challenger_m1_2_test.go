@@ -493,6 +493,7 @@ func TestChallenger2_CanonicalWonderkids_10SeasonCareer_EndToEnd(t *testing.T) {
 			for age := 14; age <= 23; age++ {
 				startSeasonOVR := ge.CalculateOVR(wk.id, "FWD")
 				_, endSeasonOVR := simulateSeasonMatches(ge, wk.id, wk.name, wk.potential, age, rng)
+				ge.AdvanceSeasonStartOVR(wk.id, "FWD")
 				seasonGain := endSeasonOVR - startSeasonOVR
 
 				// Invariant: Never exceed +5 in a single season
@@ -553,4 +554,3 @@ func TestChallenger2_CanonicalWonderkids_10SeasonCareer_EndToEnd(t *testing.T) {
 		}
 	}
 }
-

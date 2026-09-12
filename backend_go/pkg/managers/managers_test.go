@@ -96,6 +96,36 @@ func TestAppointManager(t *testing.T) {
 	}
 }
 
+func TestAppointManager_DeterministicSelectionAcrossRuns(t *testing.T) {
+	clubs := []*models.Club{
+		{ClubID: "LAL-RMA", OverallTeamRating: 86},
+	}
+
+	var firstNew *ManagerProfile
+	for trial := 0; trial < 100; trial++ {
+		mgrs := BuildManagers(clubs)
+		rng := rand.New(rand.NewSource(99999))
+		_, newMgr := AppointManager(mgrs, clubs[0], rng)
+
+		if firstNew == nil {
+			firstNew = newMgr
+		} else {
+			if newMgr.Name != firstNew.Name {
+				t.Fatalf("trial %d name mismatch: got %s, want %s", trial, newMgr.Name, firstNew.Name)
+			}
+			if newMgr.Style != firstNew.Style {
+				t.Fatalf("trial %d style mismatch: got %s, want %s", trial, newMgr.Style, firstNew.Style)
+			}
+			if newMgr.Focus != firstNew.Focus {
+				t.Fatalf("trial %d focus mismatch: got %s, want %s", trial, newMgr.Focus, firstNew.Focus)
+			}
+			if newMgr.Adaptability != firstNew.Adaptability {
+				t.Fatalf("trial %d adaptability mismatch: got %d, want %d", trial, newMgr.Adaptability, firstNew.Adaptability)
+			}
+		}
+	}
+}
+
 func TestManagerAffordabilityAndWeakestLine(t *testing.T) {
 	club := &models.Club{
 		ClubID:            "TEST-FC",

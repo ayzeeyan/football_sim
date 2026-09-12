@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"football_sim/pkg/growth"
@@ -112,6 +113,9 @@ type CareerSnapshot struct {
 	SuperCupFinal         tournament.CupTie                    `json:"super_cup_final,omitempty"`
 	FavouriteClubID       string                               `json:"favourite_club_id,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
+
+	ReputationAppliedSeason string   `json:"reputation_applied_season,omitempty"`
+	RetiredPlayerIDs        []string `json:"retired_player_ids,omitempty"`
 }
 
 // SavePath returns the resolved file path for saving career snapshots,
@@ -136,6 +140,16 @@ func BuildSnapshot(
 	ge *growth.GrowthEngine,
 	te *transfers.TransferEngine,
 ) *CareerSnapshot {
+	if te != nil {
+		te.SyncAllManagerBudgets()
+	}
+	var retiredIDs []string
+	if tm != nil && tm.RetiredPlayerIDs != nil {
+		for id := range tm.RetiredPlayerIDs {
+			retiredIDs = append(retiredIDs, id)
+		}
+		sort.Strings(retiredIDs)
+	}
 	snap := &CareerSnapshot{
 		Version:               SaveVersion,
 		SeasonName:            tm.SeasonName,
@@ -179,6 +193,9 @@ func BuildSnapshot(
 		SuperCupFinal:         tm.SuperCupFinal,
 		FavouriteClubID:       tm.FavouriteClubID,
 		LastCareerShuffle:     tm.LastCareerShuffle,
+
+		ReputationAppliedSeason: tm.ReputationAppliedSeason,
+		RetiredPlayerIDs:        retiredIDs,
 	}
 
 	// Snapshot all clubs and rosters
@@ -451,6 +468,11 @@ func RestoreCareer(
 	if snap.SeasonPhase != "" {
 		tm.SeasonPhase = snap.SeasonPhase
 	}
+	tm.ReputationAppliedSeason = snap.ReputationAppliedSeason
+	tm.RetiredPlayerIDs = make(map[string]bool)
+	for _, id := range snap.RetiredPlayerIDs {
+		tm.RetiredPlayerIDs[id] = true
+	}
 	if snap.SeasonHistory != nil {
 		tm.SeasonHistory = snap.SeasonHistory
 	}
@@ -547,6 +569,21 @@ func RestoreCareer(
 			continue
 		}
 
+		// Identity is part of the persisted club state. A presence-aware zero
+		// means an older/in-memory snapshot omitted identity, so retain the live
+		// club's preset; explicit persisted zero values still restore as zero.
+		if !savedClub.Identity.IsZero() {
+			club.Identity = savedClub.Identity.Clamp()
+		}
+		if !savedClub.Identity.IsZero() || savedClub.Finances.TransferBudget > 0 || savedClub.Finances.Balance > 0 {
+			club.Finances = savedClub.Finances
+		}
+		if tm.Managers != nil {
+			if mgr := tm.Managers[clubID]; mgr != nil {
+				mgr.BudgetEur = club.Finances.TransferBudget
+			}
+		}
+
 		// Standings & Form
 		club.Played = savedClub.Played
 		club.Won = savedClub.Won
@@ -602,6 +639,9 @@ func RestoreCareer(
 				} else {
 					// New regen or academy player
 					savedPlayer.ClubID = clubID
+					if savedPlayer.OriginalClubID == "" {
+						savedPlayer.OriginalClubID = clubID
+					}
 					club.Squad = append(club.Squad, savedPlayer)
 					existingPlayers[savedPlayer.PlayerID] = savedPlayer
 					existingByName[nameKey] = savedPlayer
@@ -713,9 +753,13 @@ func RestoreCareer(
 
 	// 7. Restore Transfer Engine
 	if te != nil {
+		if tm.Clubs != nil {
+			te.Clubs = tm.Clubs
+		}
 		if tm.Managers != nil {
 			te.Managers = tm.Managers
 		}
+		te.SyncAllManagerBudgets()
 		if snap.Transfers.CurrentDay > 0 {
 			te.CurrentDay = snap.Transfers.CurrentDay
 		}
@@ -884,6 +928,21 @@ func updatePlayerFromSaved(dest, src *models.Player) {
 	dest.MentorOVR = src.MentorOVR
 	dest.Composure = src.Composure
 	dest.ConsecutiveStarts = src.ConsecutiveStarts
+	if src.OriginalClubID != "" {
+		dest.OriginalClubID = src.OriginalClubID
+	}
+	if dest.OriginalClubID == "" && dest.ClubID != "" {
+		dest.OriginalClubID = dest.ClubID
+	}
+	if src.PlayerSource != "" {
+		dest.PlayerSource = src.PlayerSource
+	}
+	if src.UniverseWonderkid {
+		dest.UniverseWonderkid = true
+	}
+	if src.Season != "" {
+		dest.Season = src.Season
+	}
 	if src.Category != "" {
 		dest.Category = src.Category
 	}

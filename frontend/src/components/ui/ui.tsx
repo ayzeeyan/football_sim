@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { cx, rgbCss, contrastText } from '../../lib/format';
 import { getClubCrestUrl } from '../../lib/clubLogos';
-import type { Club } from '../../types';
+import { getPlayerPortraitUrl, getPlayerFallbackColors, getPlayerInitials } from '../../lib/playerPortraits';
+import type { Club, Player } from '../../types';
 
 /* ---------- Layout primitives ---------- */
 
@@ -240,6 +241,68 @@ export const ClubDot: React.FC<{ club: Club | null; size?: number; className?: s
       style={{ width: size, height: size, backgroundColor: rgbCss(club.primary_color) }}
       title={club.club_name}
     />
+  );
+};
+
+/* ---------- Player portrait (artwork, honest deterministic initials fallback) ---------- */
+
+export const PlayerPortrait: React.FC<{
+  player: Pick<Player, 'player_id' | 'full_name'> | null | undefined;
+  size?: number;
+  className?: string;
+}> = ({ player, size = 40, className }) => {
+  const [failed, setFailed] = useState(false);
+  const url = getPlayerPortraitUrl(player?.player_id);
+  useEffect(() => setFailed(false), [url]);
+
+  if (!player) {
+    return (
+      <div
+        className={cx('rounded-lg bg-cardLight shrink-0 border border-line', className)}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
+  if (url && !failed) {
+    return (
+      <div
+        className={cx('rounded-lg overflow-hidden shrink-0 border border-bone/25 bg-bone', className)}
+        style={{ width: size, height: size }}
+        title={player.full_name}
+      >
+        <img
+          src={url}
+          alt={player.full_name}
+          width={size}
+          height={size}
+          loading="lazy"
+          draggable={false}
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  const colors = getPlayerFallbackColors(player.player_id);
+  const initials = getPlayerInitials(player.full_name);
+
+  return (
+    <div
+      className={cx('rounded-lg shrink-0 flex items-center justify-center font-bold font-mono select-none border', className)}
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: colors.bg,
+        color: colors.text,
+        borderColor: colors.border,
+        fontSize: Math.max(9, size * 0.35),
+      }}
+      title={player.full_name}
+    >
+      {initials}
+    </div>
   );
 };
 

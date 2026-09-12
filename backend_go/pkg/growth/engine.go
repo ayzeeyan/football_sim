@@ -122,6 +122,7 @@ func (ge *GrowthEngine) RegisterProdigy(
 		AdultHeightAge:    adultAgeResolved,
 		BaselineOVR:       baseOvr,
 		SeasonStartOVR:    baseOvr,
+		PositionCategory:  posCat,
 		YearlyHeightTaken: 0.0,
 	}
 
@@ -221,7 +222,11 @@ func (ge *GrowthEngine) internalNudgeToOVR(playerID string, posCat string, targe
 			val := getAttr(attrs, k)
 			nxt := maxInt(30, minInt(99, val+step))
 			if nxt != val {
-				setAttr(attrs, k, nxt)
+				if step > 0 {
+					ge.tryIncrementAttributeUnlocked(playerID, posCat, k)
+				} else {
+					setAttr(attrs, k, nxt)
+				}
 				break
 			}
 		}
@@ -257,6 +262,9 @@ func (ge *GrowthEngine) internalCalculateOVR(playerID string, posCat string) int
 	cap := 99
 	if bio := ge.Biometrics[playerID]; bio != nil {
 		cap = bio.Potential
+		if bio.Age >= 30 && bio.SeasonStartOVR > 0 && bio.SeasonStartOVR < cap {
+			cap = bio.SeasonStartOVR
+		}
 	}
 
 	rounded := int(math.Round(ovr))
@@ -293,6 +301,40 @@ func (ge *GrowthEngine) SetSeasonStartOVR(playerID string, ovr int) {
 	if bio := ge.Biometrics[playerID]; bio != nil {
 		bio.SeasonStartOVR = ovr
 	}
+}
+
+// AdvanceSeasonStartOVR records the current capped OVR as the next season's
+// development baseline. It is intended for the single new-season boundary,
+// after seasonal growth and aging have been applied. An optional modelOVR
+// preserves a caller's authoritative displayed OVR when rounded attribute
+// aging produces a slightly different calculated value. The boolean reports
+// whether the player has a registered growth profile.
+func (ge *GrowthEngine) AdvanceSeasonStartOVR(playerID, posCat string, modelOVR ...int) (int, bool) {
+	ge.mu.Lock()
+	defer ge.mu.Unlock()
+
+	bio := ge.Biometrics[playerID]
+	if bio == nil {
+		if len(modelOVR) > 0 {
+			return modelOVR[0], false
+		}
+		return ge.internalCalculateOVR(playerID, posCat), false
+	}
+	if posCat == "" {
+		posCat = bio.PositionCategory
+	}
+	if posCat == "" {
+		posCat = "FWD"
+	}
+
+	var current int
+	if len(modelOVR) > 0 {
+		current = modelOVR[0]
+	} else {
+		current = ge.enforceSeasonOVRCapUnlocked(playerID, posCat)
+	}
+	bio.SeasonStartOVR = current
+	return current, true
 }
 
 // StillGrowing returns true if the player has not completed their physical height curve.

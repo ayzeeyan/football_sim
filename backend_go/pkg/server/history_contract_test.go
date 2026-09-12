@@ -48,6 +48,23 @@ func TestServer_HistoryStatsContracts(t *testing.T) {
 	rec := getObj("/api/records")
 	if _, ok := rec["records"].(map[string]interface{}); !ok { t.Errorf("/api/records should wrap a records object, got %v", rec["records"]) }
 
+	// Mid-season ceremony request must return HTTP 409 Conflict
+	respCeremonyMid, err := http.Get(ts.URL + "/api/season/awards/ceremony")
+	if err != nil { t.Fatalf("GET ceremony mid-season: %v", err) }
+	if respCeremonyMid.StatusCode != http.StatusConflict {
+		t.Fatalf("expected HTTP 409 Conflict mid-season for /api/season/awards/ceremony, got %d", respCeremonyMid.StatusCode)
+	}
+	var errBody map[string]interface{}
+	decodeJSONBody(t, respCeremonyMid, &errBody)
+	if _, ok := errBody["error"]; !ok {
+		t.Fatalf("expected error key in 409 body, got %#v", errBody)
+	}
+
+	// Advance season to completion so ceremony is ready
+	srv.worldMu.Lock()
+	srv.TournamentManager.CurrentMatchweek = srv.TournamentManager.MaxMatchweeks + 1
+	srv.worldMu.Unlock()
+
 	gala := getObj("/api/season/awards/ceremony")
 	cats, ok := gala["categories"].([]interface{})
 	if !ok || len(cats) != 5 { t.Fatalf("/api/season/awards/ceremony needs 5 ranked categories, got %v", gala["categories"]) }
@@ -61,6 +78,34 @@ func TestServer_HistoryStatsContracts(t *testing.T) {
 		winnerID, ok := cm["winner_id"].(string)
 		if !ok || winnerID == "" { t.Errorf("category %v needs explicit winner_id", cm["title"]); continue }
 		if winner["player_id"] != winnerID { t.Errorf("category %v winner object/id mismatch: %v vs %v", cm["title"], winner["player_id"], winnerID) }
+	}
+
+	// Verify team_of_the_season and manager_of_the_year in gala
+	tots, ok := gala["team_of_the_season"].(map[string]interface{})
+	if !ok || tots == nil {
+		t.Fatalf("gala missing team_of_the_season: %#v", gala["team_of_the_season"])
+	}
+	xi, ok := tots["xi"].([]interface{})
+	if !ok || len(xi) != 11 {
+		t.Fatalf("tots xi needs 11 players, got %v", tots["xi"])
+	}
+	moty, ok := gala["manager_of_the_year"].(map[string]interface{})
+	if !ok || moty == nil {
+		t.Fatalf("gala missing manager_of_the_year: %#v", gala["manager_of_the_year"])
+	}
+	if moty["name"] == "" || moty["club_id"] == "" {
+		t.Fatalf("invalid moty: %#v", moty)
+	}
+
+	// Post-rollover ceremony request must return HTTP 409 Conflict
+	srv.worldMu.Lock()
+	srv.TournamentManager.ResetNewSeason()
+	srv.worldMu.Unlock()
+
+	respCeremonyPost, err := http.Get(ts.URL + "/api/season/awards/ceremony")
+	if err != nil { t.Fatalf("GET ceremony post-rollover: %v", err) }
+	if respCeremonyPost.StatusCode != http.StatusConflict {
+		t.Fatalf("expected HTTP 409 Conflict post-rollover for /api/season/awards/ceremony, got %d", respCeremonyPost.StatusCode)
 	}
 
 	var kidID string

@@ -60,6 +60,7 @@ func TestRestartCurrentSeasonResetsTransferStateAndPreservesCareerData(t *testin
 	}
 	ge.Biometrics[growthID].AccumulatedXP = 12.5
 	growthXP = ge.Biometrics[growthID].AccumulatedXP
+	tm.ReputationAppliedSeason = tm.SeasonName
 
 	te.ActiveNegotiations = []*transfers.TransferNegotiation{{NegotiationID: "active"}}
 	te.CompletedTransfers = []transfers.CompletedTransfer{{PlayerID: "completed"}}
@@ -74,6 +75,9 @@ func TestRestartCurrentSeasonResetsTransferStateAndPreservesCareerData(t *testin
 	res := tm.RestartCurrentSeason()
 	if res["status"] != "success" {
 		t.Fatalf("restart response: %v", res)
+	}
+	if tm.ReputationAppliedSeason != "" {
+		t.Fatalf("restart retained completed-season reputation marker %q", tm.ReputationAppliedSeason)
 	}
 	if te.CurrentDay != 1 || te.CurrentMatchweek != 1 {
 		t.Fatalf("transfer calendar after restart = day %d, week %d", te.CurrentDay, te.CurrentMatchweek)
