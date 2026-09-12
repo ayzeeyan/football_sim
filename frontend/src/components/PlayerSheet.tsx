@@ -4,7 +4,7 @@ import { fetchPlayerProfile } from '../services/api';
 import { ovrTone } from '../lib/constants';
 import { cx, loyaltyLabel } from '../lib/format';
 import { soundManager } from '../audio/webAudio';
-import { ClubCrest, LoadingState, Modal, ModalHeader } from './ui/ui';
+import { ClubCrest, LoadingState, Modal, ModalHeader, PlayerPortrait } from './ui/ui';
 
 interface PlayerSheetApi {
   openPlayer: (playerId: string) => void;
@@ -96,6 +96,7 @@ export const PlayerSheetModal: React.FC<{
           <div className="p-6 space-y-4 overflow-y-auto">
             <div className="flex items-end justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
+                <PlayerPortrait player={player} size={48} />
                 {profile?.club && <ClubCrest club={profile.club} size={48} />}
                 <div>
                   <p className="eyebrow">Overall</p>
