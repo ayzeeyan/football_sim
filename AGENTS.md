@@ -52,8 +52,16 @@ football_sim/
    - Exactly 0 duplicate players across and within club squads at all times.
    - Player valuations adhere strictly to valuation clamping (€300k minimum floor, €500M maximum ceiling; dynamic corridor [0.35 * anchor, 3.0 * anchor]).
    - Career save files and sharded club save files are runtime state and must never be committed.
-4. **Development & Verification**:
+   - Starting XIs use rigid, unique tactical slots (`GK`, `LB`, `LCB`, `RCB`, `RB`, `LCM`, `CM`, `RCM`, `LW`, `ST`, `RW`). Keep the backend slot assignment and frontend formation-pitch coordinates in sync; never infer pitch placement solely from a repeated natural-position label.
+   - Match events must retain player and club identifiers in addition to display text. Attribution must use the side responsible at the time of the event, particularly when possession changes during resolution.
+   - Transfer-window budgets must not exceed the club's available balance. Season and macro simulation paths must preserve the same window lifecycle boundaries.
+4. **Gameplay Contracts**:
+   - The Super League season has 38 matchweeks. Fixture labels, macro simulation, watch-live routing, standings, and historical views must use the scheduled fixture identity rather than an assumed opponent.
+   - When resolving a same-week slate, calculate each non-conflicting fixture wave before applying it. A club must not play two fixtures from the same wave using state already mutated by the first result.
+   - The Ballon d'Or score includes an explicit +10 bonus for players at the Super League champion.
+   - Club crests are real assets mapped for all 96 dataset clubs in `frontend/src/lib/clubLogos.ts`; do not replace them with placeholders or introduce a fallback that masks missing mappings.
+5. **Development & Verification**:
    - Run backend tests with: `cd backend_go && go test ./...`
    - Run backend static checks with: `cd backend_go && go vet ./...`
-   - Run frontend verification with: `cd frontend && bun install && bun run build`
+   - Run frontend verification with: `cd frontend && bun test && bun run build`
    - Pull requests must pass `.github/workflows/ci.yml` before merge.
