@@ -610,6 +610,9 @@ func (tm *TournamentManager) managerSecurityUnlocked(club *models.Club, throughM
 		}
 		return "Hot Seat", reason, true
 	}
+	if club.MediaPressure >= 80 && miss >= 2 {
+		return "Under Pressure", fmt.Sprintf("Media heat %d; %dth vs target %d", club.MediaPressure, pos, expected), false
+	}
 	if miss >= 3 || winless >= 4 {
 		return "Under Pressure", fmt.Sprintf("%dth place vs board target %d; %.2f PPG over the last %d", pos, expected, ppg, len(outcomes)), false
 	}

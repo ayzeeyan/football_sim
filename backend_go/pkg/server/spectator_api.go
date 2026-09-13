@@ -253,3 +253,113 @@ func (s *Server) handleSimMonth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSimSeason(w http.ResponseWriter, r *http.Request) {
 	s.handleMacroSimulation(w, "season")
 }
+
+func (s *Server) handleGetWorldDashboard(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	payload := s.TournamentManager.WorldDashboard()
+	s.worldMu.RUnlock()
+	writeJSON(w, payload)
+}
+
+type continueResult struct {
+	tournament.BatchSimResult
+	StopReason      string                 `json:"stop_reason"`
+	ContinueHint    string                 `json:"continue_hint,omitempty"`
+	NextFixture     map[string]interface{} `json:"next_fixture,omitempty"`
+	FavouriteClubID string                 `json:"favourite_club_id,omitempty"`
+}
+
+func (s *Server) handleSimContinue(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	defer func() { recordMacroSimulationDuration(s, time.Since(started)) }()
+
+	s.worldMu.Lock()
+	if msg, statusCode := s.validateMacroSimAllowedLocked(); statusCode != 0 {
+		s.worldMu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": msg})
+		return
+	}
+
+	tm := s.TournamentManager
+	if tm.SeasonPhase == "season" {
+		favID, fav, _, _ := tm.WeekWatch()
+		if fav != nil && fav.Status == "scheduled" {
+			res := tm.SimulateRemainingExcluding(fav.FixtureID)
+			played, _ := res["played"].(int)
+			skipped, _ := res["skipped"].(int)
+			hint := "Your club is ready to play. Watch live or simulate the fixture."
+			out := continueResult{
+				BatchSimResult: tournament.BatchSimResult{
+					Status:           "success",
+					Mode:             "continue",
+					SeasonName:       tm.SeasonName,
+					SeasonPhase:      tm.SeasonPhase,
+					CurrentMatchweek: tm.CurrentMatchweek,
+					Played:           played,
+					Skipped:          skipped,
+					Digests:          []tournament.MatchweekDigest{},
+					Message:          hint,
+					CalendarLabel:    tm.SeasonName,
+				},
+				StopReason:      "watched_club_match",
+				ContinueHint:    hint,
+				NextFixture:     s.serializeFixture(fav),
+				FavouriteClubID: favID,
+			}
+			snap, gen := s.takeCareerSnapshotLocked()
+			s.worldMu.Unlock()
+			s.commitCareerSnapshot(snap, gen)
+			writeJSON(w, out)
+			return
+		}
+	}
+
+	batch, statusCode := s.runMacroSimulationLocked("week")
+	batch.Mode = "continue"
+	stop := "week"
+	hint := batch.Message
+	if batch.AwardsReady {
+		stop = "season_event"
+		if hint == "" {
+			hint = "Season complete. The awards ceremony is ready."
+		}
+	} else if tm.SeasonPhase == "transfer_window" && s.TransferEngine != nil {
+		if !s.TransferEngine.IsWindowOpen() {
+			stop = "transfer_deadline"
+			if hint == "" {
+				hint = "The transfer window has closed."
+			}
+		} else if s.TransferEngine.CurrentWeek >= s.TransferEngine.WindowWeeks() {
+			stop = "transfer_deadline"
+			if hint == "" {
+				hint = "Deadline day has arrived."
+			}
+		} else {
+			stop = "transfer_week"
+			if hint == "" {
+				hint = fmt.Sprintf("Transfer week %d of %d processed.", s.TransferEngine.CurrentWeek, s.TransferEngine.WindowWeeks())
+			}
+		}
+	} else if hint == "" {
+		hint = "Advanced to the next matchweek."
+	}
+	out := continueResult{
+		BatchSimResult:  batch,
+		StopReason:      stop,
+		ContinueHint:    hint,
+		FavouriteClubID: tm.FavouriteClubID,
+	}
+	if statusCode == http.StatusOK {
+		snap, gen := s.takeCareerSnapshotLocked()
+		s.worldMu.Unlock()
+		s.commitCareerSnapshot(snap, gen)
+		writeJSON(w, out)
+		return
+	}
+	s.worldMu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{"message": batch.Message})
+}

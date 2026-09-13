@@ -353,10 +353,19 @@ func SimulateInstantMatch(
 			if color == "red" {
 				label = "Red Card"
 			}
+			club := homeClub
+			if side == "away" {
+				club = awayClub
+			}
+			clubID, clubName := "", ""
+			if club != nil {
+				clubID, clubName = club.ClubID, club.ClubName
+			}
 			emit(matchreport.MatchEventItem{
 				Minute: m, Display: fmt.Sprintf("%s: %s %s", label, booked.FullName, disp(m)),
 				Type: color, Side: side, Player: &bMini, SentOff: sentOff,
 				HomeScore: gh, AwayScore: ga, Detail: detail,
+				PlayerID: booked.PlayerID, PlayerName: booked.FullName, ClubID: clubID, ClubName: clubName,
 			})
 			continue
 		}
@@ -415,11 +424,13 @@ func SimulateInstantMatch(
 				emit(matchreport.MatchEventItem{
 					Minute: m, Display: fmt.Sprintf("Penalty: %s %s", taker.FullName, disp(m)),
 					Type: "penalty", Side: side, Scorer: &tMini,
+					PlayerID: taker.PlayerID, PlayerName: taker.FullName,
 				})
 			} else {
 				emit(matchreport.MatchEventItem{
 					Minute: m, Display: fmt.Sprintf("Penalty Miss: %s %s", taker.FullName, disp(m)),
 					Type: "penalty_miss", Side: side, Scorer: &tMini,
+					PlayerID: taker.PlayerID, PlayerName: taker.FullName,
 				})
 			}
 			continue
@@ -445,6 +456,7 @@ func SimulateInstantMatch(
 			emit(matchreport.MatchEventItem{
 				Minute: m, Display: fmt.Sprintf("Own Goal: %s %s", culprit.FullName, disp(m)),
 				Type: "own_goal", Side: defSide, Beneficiary: side, Scorer: &cMini,
+				PlayerID: culprit.PlayerID, PlayerName: culprit.FullName,
 			})
 			if side == "home" {
 				gh++

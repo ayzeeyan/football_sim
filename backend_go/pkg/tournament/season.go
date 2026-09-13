@@ -727,7 +727,9 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	tm.rebuildEuropeanWorldCalendarUnlocked(qualification)
 	tm.AssignSquadRolesUnlocked()
 	tm.AssignBoardExpectationsUnlocked()
+	tm.RefreshClubCultureUnlocked()
 	tm.ArrangeLoansUnlocked()
+	tm.pushSeasonPreviewUnlocked()
 	tm.MatchweekWeather = map[int]string{}
 	for mw := 1; mw <= tm.MaxMatchweeks; mw++ {
 		tm.MatchweekWeather[mw] = tm.weatherUnlocked(mw)

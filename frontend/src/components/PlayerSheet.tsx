@@ -142,12 +142,23 @@ export const PlayerSheetModal: React.FC<{
               </div>
             </div>
 
+            {player.transfer_requested && (
+              <div className="border border-ember/40 bg-ember/10 px-3 py-2 text-[13px] text-[#D89A84]">
+                Transfer request lodged. Selling clubs are more willing; a move is not guaranteed.
+              </div>
+            )}
+            {player.promise_kind && (
+              <div className="border border-brass/40 bg-brass/[0.07] px-3 py-2 text-[13px] text-brass">
+                Promise outstanding: {player.promise_kind}{player.promise_season ? ` · ${player.promise_season}` : ''}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               <div className="border border-line bg-ink/40 p-3">
                 <p className="eyebrow">This season</p>
                 <p className="font-mono font-bold text-bone mt-1">{player.appearances} apps</p>
                 <p className="font-mono text-[13px] text-sage">
-                  {player.goals} G · {player.assists} A
+                  {player.starts ?? 0} starts · {player.minutes ?? 0}' · {player.goals} G · {player.assists} A
                 </p>
                 {profile?.avg_rating != null && (
                   <p className="font-mono text-[12px] text-brass mt-1">{profile.avg_rating.toFixed(2)} avg rating</p>
@@ -163,6 +174,13 @@ export const PlayerSheetModal: React.FC<{
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="border border-line bg-ink/40 p-3">
+                <p className="eyebrow">Armband</p>
+                <p className="font-semibold text-bone mt-1">
+                  {player.is_captain ? 'Captain' : player.is_vice_captain ? 'Vice-captain' : '—'}
+                </p>
+                <p className="font-mono text-[12px] text-sage">Lead {player.leadership ?? '—'}</p>
+              </div>
               <div className="border border-line bg-ink/40 p-3">
                 <p className="eyebrow">Role</p>
                 <p className="font-semibold text-bone mt-1">{player.squad_role || 'Squad'}</p>
@@ -240,8 +258,26 @@ export const PlayerSheetModal: React.FC<{
                   <span className="text-sage">Positions</span>
                   {' · '}
                   <span className="text-bone font-semibold">{player.position} / {player.secondary_position}</span>
+                  {player.versatility ? <span className="text-sage"> · versatility {player.versatility}</span> : null}
                 </p>
               )}
+              {(player.homegrown || player.registered_europe) && (
+                <p>
+                  <span className="text-sage">Registration</span>
+                  {' · '}
+                  <span className="text-bone font-semibold">
+                    {player.homegrown ? 'Homegrown' : player.association_trained ? 'Association-trained' : 'Non-homegrown'}
+                    {player.registered_europe ? ' · UEFA list' : ''}
+                  </span>
+                </p>
+              )}
+              {(player.clean_sheets || player.career_clean_sheets) ? (
+                <p>
+                  <span className="text-sage">Clean sheets</span>
+                  {' · '}
+                  <span className="text-bone font-semibold">{player.clean_sheets ?? 0} this season · {player.career_clean_sheets ?? 0} career</span>
+                </p>
+              ) : null}
             </div>
 
             <div>

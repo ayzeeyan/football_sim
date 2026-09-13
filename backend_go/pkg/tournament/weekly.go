@@ -69,6 +69,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 	tm.pickPlayerOfTheWeek(completedMW)
 	tm.maybeCrownMonth(completedMW)
 	tm.evaluateManagerTenureWithPatience(completedMW)
+	tm.runCultureWeeklyUnlocked(completedMW)
 	tm.maybePlayerConversationsUnlocked(completedMW)
 	tm.decayDerbyHeat(completedMW)
 	tm.maybeExamWeekInbox(completedMW)

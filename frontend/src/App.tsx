@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { BatchSimResult, Club, Fixture, SeasonAwards } from './types';
-import { fetchCalendar, fetchFavourite, fetchInbox, fetchSeasonAwards, setFavourite, simulateMonth, simulateRemaining, simulateSeason, simulateWeek, type CalendarState } from './services/api';
+import { fetchCalendar, fetchFavourite, fetchInbox, fetchSeasonAwards, setFavourite, simulateContinue, simulateMonth, simulateRemaining, simulateSeason, simulateWeek, type CalendarState } from './services/api';
 import { slugFromTab, tabFromSlug, type TabId } from './lib/constants';
 import { stripEmojis } from './lib/format';
 import { useClubs, useMatchEngine } from './hooks/useMatch';
@@ -19,6 +19,7 @@ import { HistoryTab } from './components/HistoryTab';
 import { ClubPickerModal } from './components/ClubPickerModal';
 import { NewCareerModal } from './components/NewCareerModal';
 import { InboxTab } from './components/InboxTab';
+import { HomeDashboardTab } from './components/HomeDashboardTab';
 import { PlayerSheetProvider } from './components/PlayerSheet';
 import { MatchweekDigestModal } from './components/MatchweekDigestModal';
 import { soundManager } from './audio/webAudio';
@@ -27,7 +28,7 @@ import { matchWs } from './services/matchSocket';
 export const App: React.FC = () => {
   // Career home screen: the league table.
   const [activeTab, setActiveTab] = useState<TabId>(() =>
-    typeof window === 'undefined' ? 2 : tabFromSlug(window.location.hash.replace(/^#/, '')),
+    typeof window === 'undefined' ? 8 : tabFromSlug(window.location.hash.replace(/^#/, '')),
   );
   const { clubs, homeClub, awayClub, setHome, setAway, swap, applyClubs, reloadClubs } = useClubs();
   const { matchData, status, kickoff, pause, setSpeed, reset, seek70, seekChance } = useMatchEngine();
@@ -64,33 +65,39 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  const handleMacroSim = useCallback(async (mode: 'week' | 'month' | 'season') => {
+  const handleMacroSim = useCallback(async (mode: 'continue' | 'week' | 'month' | 'season') => {
     if (simLockRef.current) return;
     simLockRef.current = true;
     setSimulating(true);
     soundManager.playClick();
-    showToast(`Simulating ${mode}…`);
+    showToast(mode === 'continue' ? 'Continuing…' : `Simulating ${mode}…`);
     try {
-      const action = mode === 'week' ? simulateWeek : mode === 'month' ? simulateMonth : simulateSeason;
+      const action = mode === 'week' ? simulateWeek : mode === 'month' ? simulateMonth : mode === 'continue' ? simulateContinue : simulateSeason;
       const result = await action();
       if (result.status !== 'success') {
         showToast(result.message || 'Simulation failed.');
         return;
       }
-      setDigestData(result);
       setCareerKey((k) => k + 1);
       await Promise.all([
         reloadClubs(),
         fetchCalendar().then(setCalendar),
         fetchInbox(1).then((feed) => setInboxUnread(feed.unread)),
       ]);
-      if (mode === 'season' && result.awards_ready) {
+      if (result.stop_reason === 'watched_club_match' && result.next_fixture?.home && result.next_fixture?.away) {
+        applyClubs(result.next_fixture.home, result.next_fixture.away, result.next_fixture.id);
+        setActiveTab(0);
+        showToast(result.continue_hint || result.message || 'Your club is ready to play.');
+        return;
+      }
+      setDigestData(result);
+      if ((mode === 'season' || result.stop_reason === 'season_event') && result.awards_ready) {
         setDigestOpen(false);
         setCeremonyOpen(true);
         showToast(result.champion ? `${result.champion} are champions. Awards ceremony.` : 'Season complete. Awards ceremony.');
       } else {
         setDigestOpen(true);
-        showToast(result.message || `Advanced ${result.weeks_advanced} week${result.weeks_advanced === 1 ? '' : 's'}.`);
+        showToast(result.continue_hint || result.message || `Advanced ${result.weeks_advanced} week${result.weeks_advanced === 1 ? '' : 's'}.`);
       }
     } catch (err: unknown) {
       showToast(err instanceof Error && err.message ? err.message : 'Simulation failed.');
@@ -98,7 +105,7 @@ export const App: React.FC = () => {
       simLockRef.current = false;
       setSimulating(false);
     }
-  }, [reloadClubs, showToast]);
+  }, [reloadClubs, showToast, applyClubs]);
 
   const watchClub = useCallback(
     (c: Club) => {
@@ -111,7 +118,7 @@ export const App: React.FC = () => {
 
   const watchFixture = useCallback(
     (f: Fixture) => {
-      applyClubs(f.home, f.away);
+      applyClubs(f.home, f.away, f.id);
       setActiveTab(0);
       showToast(`Now showing ${f.home.short_name} against ${f.away.short_name}.`);
     },
@@ -204,6 +211,11 @@ export const App: React.FC = () => {
       }
 
       if (e.repeat) return;
+      if (!simulating && !e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        void handleMacroSim('continue');
+        return;
+      }
       if (!simulating && !e.shiftKey && e.key.toLowerCase() === 'w') {
         e.preventDefault();
         void handleMacroSim('week');
@@ -295,6 +307,7 @@ export const App: React.FC = () => {
           soundManager.playClick();
           setNewCareerOpen(true);
         }}
+        onContinue={() => void handleMacroSim('continue')}
         onSimWeek={() => void handleMacroSim('week')}
         onSimMonth={() => void handleMacroSim('month')}
         onSimSeason={() => void handleMacroSim('season')}
@@ -306,6 +319,28 @@ export const App: React.FC = () => {
       />
 
       <main id="main" className="flex-1 page-shell py-5 sm:py-6 lg:py-8 scroll-mt-28">
+        {activeTab === 8 && (
+          <HomeDashboardTab
+            key={`home-${careerKey}`}
+            careerKey={careerKey}
+            onWatchFixture={(fixture) => {
+              const home = clubs.find((c) => c.club_id === fixture.home_id);
+              const away = clubs.find((c) => c.club_id === fixture.away_id);
+              if (!home || !away) return;
+              applyClubs(home, away, fixture.fixture_id || fixture.id);
+              setActiveTab(0);
+              showToast(`Now showing ${home.short_name} against ${away.short_name}.`);
+            }}
+            onViewSquad={(clubId) => {
+              const club = clubs.find((c) => c.club_id === clubId);
+              if (club) viewSquadOf(club);
+            }}
+            onOpenInbox={() => setActiveTab(6)}
+            onOpenTransfers={() => setActiveTab(4)}
+            onOpenLeague={() => setActiveTab(2)}
+            onOpenCompetitions={() => setActiveTab(7)}
+          />
+        )}
         {activeTab === 0 && (
           <MatchdayTab
             homeClub={homeClub}
@@ -381,6 +416,10 @@ export const App: React.FC = () => {
             className="flex items-center gap-2 text-[11px] font-mono text-sage bg-cardLight/70 border border-line px-3 py-1.5 rounded-full shadow-sm select-none"
             title="Global Spectator Shortcuts"
           >
+            <span className="flex items-center gap-1.5">
+              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">C</kbd> Continue
+            </span>
+            <span className="text-line">•</span>
             <span className="flex items-center gap-1.5">
               <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">W</kbd> Week
             </span>

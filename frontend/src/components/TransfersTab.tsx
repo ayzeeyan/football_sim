@@ -177,6 +177,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
               <Landmark size={16} className="text-brass" /> Club transfer warchests
             </h3>
             <Badge tone="gold">Week {windowWeek}/{data.max_window_weeks ?? 12}</Badge>
+            {data.deadline_day && <Badge tone="red">Deadline day</Badge>}
           </div>
           <p className="text-[12px] text-sage mb-3">Current club-owned spending limits. Purchases reduce them and sales replenish them according to the backend finance rules.</p>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">

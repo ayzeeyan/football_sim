@@ -3,6 +3,7 @@ package tournament
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"football_sim/pkg/models"
 )
@@ -213,21 +214,64 @@ func (tm *TournamentManager) ReplyInboxUnlocked(itemID, choiceID string) map[str
 		item.Resolved = true
 		item.Unread = false
 		item.Choices = nil
-		msg := applyConversationChoice(player, choiceID)
+		kind := promiseKindFromHeadline(item.Headline, choiceID)
+		msg := applyConversationChoice(player, choiceID, tm.SeasonName, completedMatchweekOr(item.Matchweek, tm.CurrentMatchweek), kind)
 		item.Body = item.Body + " " + msg
 		return map[string]interface{}{"status": "success", "message": msg, "item": item}
 	}
 	return map[string]interface{}{"status": "error", "message": "Conversation not found."}
 }
 
-func applyConversationChoice(p *models.Player, choice string) string {
+func completedMatchweekOr(itemMW, current int) int {
+	if itemMW > 0 {
+		return itemMW
+	}
+	return current
+}
+
+func promiseKindFromHeadline(headline, choice string) string {
+	h := strings.ToLower(headline)
+	switch choice {
+	case "loan":
+		return "loan"
+	case "extend":
+		return "contract"
+	case "promise":
+		if strings.Contains(h, "leave") {
+			return "role"
+		}
+		if strings.Contains(h, "playing time") || strings.Contains(h, "starts") {
+			return "minutes"
+		}
+		if strings.Contains(h, "stage") || strings.Contains(h, "bigger games") {
+			return "europe"
+		}
+		return "minutes"
+	default:
+		return ""
+	}
+}
+
+func applyConversationChoice(p *models.Player, choice, season string, matchweek int, kind string) string {
 	if p == nil {
 		return "The staff noted it."
+	}
+	stamp := func(k string) {
+		if k == "" {
+			return
+		}
+		p.PromiseKind = k
+		p.PromiseSeason = season
+		p.PromiseMatchweek = matchweek
 	}
 	switch choice {
 	case "promise":
 		p.AdjustMorale(6)
 		p.TransferRequested = false
+		if kind == "" {
+			kind = "minutes"
+		}
+		stamp(kind)
 		return p.FullName + " accepts the promise — for now."
 	case "extend":
 		p.AdjustMorale(6)
@@ -236,10 +280,12 @@ func applyConversationChoice(p *models.Player, choice string) string {
 		if p.Loyalty > 95 {
 			p.Loyalty = 95
 		}
+		stamp("contract")
 		return p.FullName + " welcomes the contract signal."
 	case "loan":
 		p.AdjustMorale(5)
 		p.TransferRequested = false
+		stamp("loan")
 		return p.FullName + " will wait for a loan opening."
 	case "sell":
 		p.TransferRequested = true

@@ -12,6 +12,7 @@ func (tm *TournamentManager) AssignSquadRolesUnlocked() {
 	for _, club := range tm.ClubsList {
 		assignClubSquadRoles(club)
 	}
+	tm.RefreshClubCultureUnlocked()
 }
 
 func assignClubSquadRoles(club *models.Club) {

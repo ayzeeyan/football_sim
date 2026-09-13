@@ -10,6 +10,7 @@ import (
 	"football_sim/pkg/matchengine"
 	"football_sim/pkg/matchreport"
 	"football_sim/pkg/models"
+	"football_sim/pkg/transfers"
 )
 
 func (tm *TournamentManager) findFixtureUnlocked(id string) *Fixture {
@@ -606,6 +607,7 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	if tm.CurrentMatchweek > tm.MaxMatchweeks {
 		tm.SeasonPhase = "transfer_window"
 		tm.applyCompletedSeasonReputationUnlocked()
+		tm.openSummerWindowOnceUnlocked()
 		return map[string]interface{}{"rolled": false, "is_finished": true, "champion": tm.championNameUnlocked()}
 	}
 	pending := false
@@ -631,6 +633,7 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 		// fixture. The helper is guarded and will wait for those results before
 		// marking this season's reputation update complete.
 		tm.applyCompletedSeasonReputationUnlocked()
+		tm.openSummerWindowOnceUnlocked()
 	}
 	champ := tm.championNameUnlocked()
 	if isFinished && champ != "" {
@@ -649,6 +652,16 @@ func champIf(ok bool, name string) interface{} {
 		return nil
 	}
 	return name
+}
+
+func (tm *TournamentManager) openSummerWindowOnceUnlocked() {
+	if tm == nil || tm.TransferEngine == nil {
+		return
+	}
+	if tm.TransferEngine.IsOffSeason && tm.TransferEngine.WindowType == transfers.WindowSummer {
+		return
+	}
+	tm.TransferEngine.BeginOffSeasonWindow()
 }
 
 func (tm *TournamentManager) championNameUnlocked() string {

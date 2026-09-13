@@ -4,6 +4,7 @@ import type { Fixture, MatchEventItem, MatchPlayerRow } from '../types';
 import { cx, stripEmojis, rgbCss } from '../lib/format';
 import { ClubCrest, Modal, ModalHeader } from './ui/ui';
 import { PlayerNameButton } from './PlayerSheet';
+import { eventPlayerId, eventPlayerLabel } from '../lib/eventIdentity';
 import { soundManager } from '../audio/webAudio';
 
 // XI order from the backend is always [GK, DEF x4, MID x3, FWD x3] (4-3-3).
@@ -18,7 +19,7 @@ const FULL_PITCH_SLOTS: Array<[number, number]> = [
 ];
 
 /** Max name-lane width in viewBox units, per slot (centred on the dot). */
-const NAME_LANE_W = [28, 18, 18, 18, 18, 20, 20, 20, 20, 20, 20];
+const NAME_LANE_W = [30, 22, 20, 20, 22, 22, 22, 22, 22, 22, 22];
 
 const DOT_R = 5.4;
 const BUBBLE_R = 2.35;
@@ -69,7 +70,7 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
         <div className="bg-ink/60 px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="font-semibold text-[15px] text-bone truncate">
-              <PlayerNameButton playerId={event.scorer?.player_id}>{event.scorer?.full_name}</PlayerNameButton>
+              <PlayerNameButton playerId={event.scorer?.player_id || event.player_id}>{eventPlayerLabel(event, fixture)}</PlayerNameButton>
             </p>
             <p className="text-[12.5px] text-sage mt-0.5">
               {club.club_name} · {event.scorer?.position}
@@ -125,7 +126,7 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
         </div>
         <div className="mt-1.5">
           <p className="font-semibold text-[14px] text-bone truncate">
-            <PlayerNameButton playerId={event.scorer?.player_id}>{event.scorer?.full_name}</PlayerNameButton>
+            <PlayerNameButton playerId={event.scorer?.player_id || event.player_id}>{eventPlayerLabel(event, fixture)}</PlayerNameButton>
           </p>
           <p className="text-[12px] text-sage">{club.club_name} · dragged it wide</p>
         </div>
@@ -177,7 +178,7 @@ const TimelineRow: React.FC<{ event: MatchEventItem; fixture: Fixture }> = ({ ev
         <span className={cx('w-3 h-4 rounded-[3px] shrink-0 inline-block', red ? 'bg-ember' : 'bg-brass')} />
         <div className="min-w-0">
           <p className="font-semibold text-[14px] text-bone truncate">
-            <PlayerNameButton playerId={event.player?.player_id}>{stripEmojis(event.player?.full_name ?? 'Unknown')}</PlayerNameButton>
+            <PlayerNameButton playerId={eventPlayerId(event)}>{stripEmojis(eventPlayerLabel(event, fixture))}</PlayerNameButton>
           </p>
           <p className="text-[12px] text-sage">{club.club_name} · {event.player?.position}{redDetail ? ` · ${redDetail}` : ''}</p>
         </div>

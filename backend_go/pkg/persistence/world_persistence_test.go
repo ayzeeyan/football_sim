@@ -21,6 +21,58 @@ func europeanPersistenceWorld(t *testing.T) (*tournament.TournamentManager, *gro
 	return tm, ge, te
 }
 
+func TestRestoreCareerReconcilesCaptainFlagsWithClubIDs(t *testing.T) {
+	tm, ge, te := europeanPersistenceWorld(t)
+	club := tm.Clubs["EPL-ARS"]
+	if club == nil || len(club.Squad) < 2 {
+		t.Fatal("need Arsenal squad")
+	}
+	a, b := club.Squad[0], club.Squad[1]
+	club.CaptainID = a.PlayerID
+	club.ViceCaptainID = b.PlayerID
+	club.Chemistry = 77
+	club.MediaPressure = 41
+	club.FanExpectation = 80
+	a.IsCaptain = false
+	b.IsCaptain = true // stale flag, disagrees with captain_id
+	b.IsViceCaptain = false
+
+	path := filepath.Join(t.TempDir(), "career.json")
+	if _, err := SaveCareer(tm, ge, te, path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	snap, err := LoadCareer(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	fresh, freshGE, freshTE := europeanPersistenceWorld(t)
+	if err := RestoreCareer(fresh, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	got := fresh.Clubs["EPL-ARS"]
+	if got.CaptainID != a.PlayerID {
+		t.Fatalf("captain_id=%s want %s", got.CaptainID, a.PlayerID)
+	}
+	if got.Chemistry != 77 || got.MediaPressure != 41 || got.FanExpectation != 80 {
+		t.Fatalf("culture fields not restored: chem=%d media=%d fans=%d", got.Chemistry, got.MediaPressure, got.FanExpectation)
+	}
+	var flagged string
+	for _, p := range got.Squad {
+		if p.IsCaptain {
+			if flagged != "" {
+				t.Fatalf("multiple captains: %s and %s", flagged, p.PlayerID)
+			}
+			flagged = p.PlayerID
+		}
+	}
+	if flagged != a.PlayerID {
+		t.Fatalf("is_captain on %s want %s", flagged, a.PlayerID)
+	}
+	if err := fresh.ValidateWorldState(); err != nil {
+		t.Fatalf("restored world invalid: %v", err)
+	}
+}
+
 func TestEuropeanWorldSnapshotRestoresSharedCompetitionState(t *testing.T) {
 	tm, ge, te := europeanPersistenceWorld(t)
 	_ = tm.SimulateRemaining()

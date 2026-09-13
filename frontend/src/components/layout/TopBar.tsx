@@ -16,6 +16,7 @@ interface TopBarProps {
   onSimWeek: () => void;
   onSimMonth: () => void;
   onSimSeason: () => void;
+  onContinue?: () => void;
   simulating?: boolean;
   seasonName?: string;
   calendarLabel?: string;
@@ -29,13 +30,19 @@ function statusCopy(s: ConnectionStatus): { live: boolean; label: string } {
   return { live: false, label: 'Offline' };
 }
 
-const MacroControls: React.FC<Pick<TopBarProps, 'onSimWeek' | 'onSimMonth' | 'onSimSeason' | 'simulating'>> = ({
+const MacroControls: React.FC<Pick<TopBarProps, 'onContinue' | 'onSimWeek' | 'onSimMonth' | 'onSimSeason' | 'simulating'>> = ({
+  onContinue,
   onSimWeek,
   onSimMonth,
   onSimSeason,
   simulating = false,
 }) => (
   <div className="hidden lg:flex items-center gap-1 border border-line bg-cardLight/50 p-1" aria-label="Commissioner simulation controls">
+    {onContinue && (
+      <button disabled={simulating} onClick={onContinue} className="px-2.5 py-1.5 text-[12px] font-semibold bg-bone text-ink hover:bg-[#fff6dc] disabled:opacity-40">
+        <span className="font-mono mr-1">C</span>Continue
+      </button>
+    )}
     <button disabled={simulating} onClick={onSimWeek} className="px-2.5 py-1.5 text-[12px] font-semibold text-bone hover:bg-cardHover disabled:opacity-40">
       <span className="font-mono text-brass mr-1">W</span>Week
     </button>
@@ -50,7 +57,7 @@ const MacroControls: React.FC<Pick<TopBarProps, 'onSimWeek' | 'onSimMonth' | 'on
 
 export const TopBar: React.FC<TopBarProps> = ({
   activeTab, onTab, wsStatus, muted, onToggleMute, onOpenAwards, onNewCareer,
-  onSimWeek, onSimMonth, onSimSeason, simulating = false, seasonName = '2026-27',
+  onSimWeek, onSimMonth, onSimSeason, onContinue, simulating = false, seasonName = '2026-27',
   calendarLabel, inboxUnread = 0, world = false,
 }) => {
   const status = statusCopy(wsStatus);
@@ -91,6 +98,7 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         <div className="flex items-center gap-2 shrink-0">
           <MacroControls
+            onContinue={onContinue}
             onSimWeek={onSimWeek}
             onSimMonth={onSimMonth}
             onSimSeason={onSimSeason}
@@ -113,7 +121,8 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       <div className="lg:hidden page-shell pb-2">
-        <div className="grid grid-cols-3 border border-line bg-cardLight/50 p-1">
+        <div className="grid grid-cols-4 border border-line bg-cardLight/50 p-1">
+          <button disabled={simulating} onClick={onContinue} className="py-1.5 text-[12px] font-semibold text-ink bg-bone disabled:opacity-40">C · Continue</button>
           <button disabled={simulating} onClick={onSimWeek} className="py-1.5 text-[12px] font-semibold text-bone disabled:opacity-40"><span className="font-mono text-brass">W</span> · Week</button>
           <button disabled={simulating} onClick={onSimMonth} className="py-1.5 text-[12px] font-semibold text-bone disabled:opacity-40"><span className="font-mono text-brass">M</span> · Month</button>
           <button disabled={simulating} onClick={onSimSeason} className="py-1.5 text-[12px] font-semibold text-bone disabled:opacity-40"><span className="font-mono text-brass">⇧S</span> · Season</button>

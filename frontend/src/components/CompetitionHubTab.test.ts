@@ -10,6 +10,7 @@ const apiSource = readFileSync(new URL('../services/api.ts', import.meta.url), '
 describe('competition hub navigation', () => {
   test('adds a competitions tab without replacing league compatibility', () => {
     const slugs = TABS.map((t) => t.slug);
+    expect(slugs).toContain('home');
     expect(slugs).toContain('league');
     expect(slugs).toContain('competitions');
     expect(tabFromSlug('competitions')).toBe(7);
@@ -18,6 +19,8 @@ describe('competition hub navigation', () => {
   });
 
   test('app mounts the hub and clients call the competition APIs', () => {
+    expect(appSource).toContain('HomeDashboardTab');
+    expect(appSource).toContain('activeTab === 8');
     expect(appSource).toContain('CompetitionHubTab');
     expect(appSource).toContain('activeTab === 7');
     expect(apiSource).toContain("apiFetch<CompetitionsResponse>('/competitions'");

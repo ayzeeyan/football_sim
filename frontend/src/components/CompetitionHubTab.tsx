@@ -13,6 +13,7 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { formatGd, cx } from '../lib/format';
 import { soundManager } from '../audio/webAudio';
 import { Card, ClubDot, LoadingState, PanelHeader } from './ui/ui';
+import { usePlayerSheet } from './PlayerSheet';
 import type { Club } from '../types';
 
 interface CompetitionHubTabProps {
@@ -75,6 +76,8 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
   const [detail, setDetail] = useState<CompetitionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [fixtureFilter, setFixtureFilter] = useState<'all' | 'results' | 'upcoming'>('all');
+  const [pane, setPane] = useState<'overview' | 'table' | 'fixtures' | 'results' | 'stats' | 'history'>('overview');
+  const { openPlayer } = usePlayerSheet();
 
   const competitions = hub?.competitions ?? [];
   const grouped = useMemo(() => {
@@ -159,7 +162,15 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
 
   const upcoming = (detail?.fixtures ?? []).filter((f) => f.status !== 'finished');
   const results = (detail?.fixtures ?? []).filter((f) => f.status === 'finished');
-  const shownFixtures = fixtureFilter === 'results' ? results : fixtureFilter === 'upcoming' ? upcoming : (detail?.fixtures ?? []);
+  const shownFixtures = pane === 'fixtures'
+    ? upcoming
+    : pane === 'results'
+      ? results
+      : fixtureFilter === 'results'
+        ? results
+        : fixtureFilter === 'upcoming'
+          ? upcoming
+          : (detail?.fixtures ?? []);
 
   return (
     <div className="space-y-5">
@@ -184,6 +195,7 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
                       soundManager.playClick();
                       setSelectedId(c.id);
                       setFixtureFilter('all');
+                      setPane('overview');
                     }}
                     className={cx(
                       'w-full text-left px-3 py-2.5 hover:bg-cardLight/60 transition-colors',
@@ -249,7 +261,30 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
                 </div>
               </Card>
 
-              {detail.pots && detail.pots.length > 0 && (
+              <div className="flex flex-wrap gap-1 border border-line bg-cardLight/40 p-1">
+                {([
+                  ['overview', 'Overview'],
+                  ['table', detail.kind === 'DOMESTIC_CUP' ? 'Bracket' : 'Table'],
+                  ['fixtures', 'Fixtures'],
+                  ['results', 'Results'],
+                  ['stats', 'Stats'],
+                  ['history', 'History'],
+                ] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { soundManager.playClick(); setPane(key); }}
+                    className={cx(
+                      'px-3 py-1.5 text-[12px] font-semibold',
+                      pane === key ? 'bg-bone text-ink' : 'text-sage hover:text-bone',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {(pane === 'overview' || pane === 'table') && detail.pots && detail.pots.length > 0 && (
                 <div className="panel-tight overflow-hidden">
                   <div className="px-4 py-3 border-b border-line bg-cardLight/50">
                     <h4 className="text-[14px] font-semibold text-bone">League-phase pots</h4>
@@ -275,7 +310,7 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
                 </div>
               )}
 
-              {detail.qualification_sources && Object.keys(detail.qualification_sources).length > 0 && (
+              {pane === 'overview' && detail.qualification_sources && Object.keys(detail.qualification_sources).length > 0 && (
                 <div className="panel-tight overflow-hidden">
                   <div className="px-4 py-3 border-b border-line bg-cardLight/50">
                     <h4 className="text-[14px] font-semibold text-bone">Qualification source</h4>
@@ -296,7 +331,7 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
                 </div>
               )}
 
-              {detail.table.length > 0 && (
+              {(pane === 'overview' || pane === 'table') && detail.table.length > 0 && (
                 <CompetitionTable
                   rows={detail.table}
                   european={detail.kind === 'EUROPEAN'}
@@ -304,11 +339,63 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
                 />
               )}
 
-              {detail.rounds.length > 0 && (
+              {(pane === 'overview' || pane === 'table') && detail.rounds.length > 0 && (
                 <KnockoutBoard rounds={detail.rounds} participants={detail.participants} onWatchFixture={onWatchFixture} currentMatchweek={currentMatchweek} onViewSquad={onViewSquad} />
               )}
 
-              <div className="panel-tight overflow-hidden">
+              {pane === 'stats' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="panel-tight overflow-hidden">
+                    <div className="px-4 py-3 border-b border-line bg-cardLight/50"><h4 className="text-[14px] font-semibold text-bone">Top scorers</h4></div>
+                    <ul className="divide-y divide-line/70">
+                      {(detail.scorers ?? []).length === 0 && <li className="px-4 py-6 text-[13px] text-sage">No competition goals yet.</li>}
+                      {(detail.scorers ?? []).map((row) => (
+                        <li key={row.player_id}>
+                          <button type="button" onClick={() => openPlayer(row.player_id)} className="w-full px-4 py-2 flex items-center justify-between gap-2 text-left hover:bg-cardLight/60">
+                            <span className="text-[13px] text-bone truncate">{row.full_name}<span className="text-sage font-mono text-[11px]"> · {row.club_short}</span></span>
+                            <span className="font-mono text-[13px] text-bone">{row.goals} G</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="panel-tight overflow-hidden">
+                    <div className="px-4 py-3 border-b border-line bg-cardLight/50"><h4 className="text-[14px] font-semibold text-bone">Assists</h4></div>
+                    <ul className="divide-y divide-line/70">
+                      {(detail.assisters ?? []).length === 0 && <li className="px-4 py-6 text-[13px] text-sage">No competition assists yet.</li>}
+                      {(detail.assisters ?? []).map((row) => (
+                        <li key={row.player_id}>
+                          <button type="button" onClick={() => openPlayer(row.player_id)} className="w-full px-4 py-2 flex items-center justify-between gap-2 text-left hover:bg-cardLight/60">
+                            <span className="text-[13px] text-bone truncate">{row.full_name}<span className="text-sage font-mono text-[11px]"> · {row.club_short}</span></span>
+                            <span className="font-mono text-[13px] text-bone">{row.assists} A</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {pane === 'history' && (
+                <div className="panel-tight overflow-hidden">
+                  <div className="px-4 py-3 border-b border-line bg-cardLight/50"><h4 className="text-[14px] font-semibold text-bone">Archive</h4></div>
+                  <ul className="divide-y divide-line/70">
+                    {(detail.history ?? []).length === 0 && (
+                      <li className="px-4 py-6 text-[13px] text-sage">
+                        {detail.champion ? `${detail.champion.club_name} hold the current title. Previous seasons appear after rollover.` : 'No completed seasons archived yet.'}
+                      </li>
+                    )}
+                    {(detail.history ?? []).map((h) => (
+                      <li key={h.season_name} className="px-4 py-2.5 flex items-center justify-between gap-2">
+                        <span className="font-mono text-brass text-[13px]">{h.season_name}</span>
+                        <span className="text-[13px] text-bone">{h.champion?.club_name ?? h.champion_id ?? '—'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(pane === 'overview' || pane === 'fixtures' || pane === 'results') && <div className="panel-tight overflow-hidden">
                 <div className="px-4 py-3 border-b border-line bg-cardLight/50 flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-[14px] font-semibold text-bone">Fixtures and results</h4>
                   <div className="flex gap-1">
@@ -356,7 +443,7 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
                     </li>
                   ))}
                 </ul>
-              </div>
+              </div>}
             </>
           )}
         </section>

@@ -63,6 +63,14 @@ export const ClubIdentityPanel: React.FC<ClubIdentityPanelProps> = ({ club }) =>
               {club.expected_finish ? <span className="font-mono text-sage"> · target #{club.expected_finish}</span> : null}
             </p>
           )}
+          {(club.chemistry || club.media_pressure || club.fan_expectation || club.power_rank) ? (
+            <p className="mt-1 font-mono text-[12px] text-sage">
+              {club.power_rank ? `#${club.power_rank} Europe` : ''}
+              {typeof club.chemistry === 'number' ? ` · chemistry ${club.chemistry}` : ''}
+              {typeof club.media_pressure === 'number' ? ` · media ${club.media_pressure}` : ''}
+              {typeof club.fan_expectation === 'number' ? ` · fans ${club.fan_expectation}` : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <div className="rounded-xl border border-brass/40 bg-brass/[0.08] px-4 py-2 text-right">

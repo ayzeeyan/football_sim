@@ -68,6 +68,16 @@ describe('formation pitch slot assignment', () => {
     expect(second.position).toBe('CB');
   });
 
+  test('two right-backs with assigned slots do not occupy the same coordinates', () => {
+    const slots = assignFormationSlots([
+      { ...player('Cancelo', 'RB', 'DEF'), starting_slot: 'LB' },
+      { ...player('Kounde', 'RB', 'DEF'), starting_slot: 'RB' },
+    ]);
+    expect(slots[0].x).not.toBe(slots[1].x);
+    expect(slots.find((s) => s.player.player_id === 'Cancelo')!.x).toBeLessThan(50);
+    expect(slots.find((s) => s.player.player_id === 'Kounde')!.x).toBeGreaterThan(50);
+  });
+
   test('uses the backend tactical slot rather than duplicating a natural position', () => {
     const slots = assignFormationSlots([
       { ...player('CB-left', 'CB', 'DEF'), starting_slot: 'LCB' },

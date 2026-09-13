@@ -149,6 +149,35 @@ func ApplyPlayerMatchStatsInCompetition(homeClub, awayClub *models.Club, report 
 		}
 	}
 
+	homeClean := report.AwayGoals == 0
+	awayClean := report.HomeGoals == 0
+	applyRowExtras := func(rows []matchreport.MatchPlayerRow, clean bool) {
+		for _, row := range rows {
+			if !row.Played {
+				continue
+			}
+			player := find(row.PlayerID)
+			if player == nil {
+				continue
+			}
+			if clean && (player.Category == "GK" || player.Category == "DEF") {
+				player.CleanSheets++
+			}
+			if row.Position != "" && !strings.EqualFold(row.Position, player.Position) {
+				player.PositionXP++
+				player.MaybeLearnSecondary(row.Position)
+			} else {
+				player.RefreshVersatility()
+			}
+		}
+	}
+	applyRowExtras(append(append([]matchreport.MatchPlayerRow{}, report.HomeXI...), report.HomeBench...), homeClean)
+	applyRowExtras(append(append([]matchreport.MatchPlayerRow{}, report.AwayXI...), report.AwayBench...), awayClean)
+	if homeClub != nil && report.Attendance > 0 {
+		homeClub.SeasonAttendance += report.Attendance
+		homeClub.AttendanceMatches++
+	}
+
 	homeWin := report.HomeGoals > report.AwayGoals
 	awayWin := report.AwayGoals > report.HomeGoals
 	for _, p := range usedPlayers(homeClub) {

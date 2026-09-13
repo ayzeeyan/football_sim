@@ -191,6 +191,73 @@ func TestGetStartingElevenSlotsPrefersNaturalFullbacksOverExtraCentreBacks(t *te
 	}
 }
 
+func TestGetStartingElevenSlotsTwoRightBacksDoNotShareRB(t *testing.T) {
+	club := &Club{ClubID: "TWORB", ClubName: "Two RB FC"}
+	for _, p := range []*Player{
+		{PlayerID: "GK", Position: "GK", Category: "GK", OVR: 80},
+		{PlayerID: "CB1", Position: "CB", Category: "DEF", OVR: 82},
+		{PlayerID: "CB2", Position: "CB", Category: "DEF", OVR: 81},
+		{PlayerID: "LB", Position: "LB", Category: "DEF", OVR: 78},
+		{PlayerID: "RB1", Position: "RB", Category: "DEF", OVR: 88},
+		{PlayerID: "RB2", Position: "RB", Category: "DEF", OVR: 87},
+		{PlayerID: "M1", Position: "CM", Category: "MID", OVR: 80}, {PlayerID: "M2", Position: "CM", Category: "MID", OVR: 79}, {PlayerID: "M3", Position: "CDM", Category: "MID", OVR: 78},
+		{PlayerID: "LW", Position: "LW", Category: "FWD", OVR: 80}, {PlayerID: "ST", Position: "ST", Category: "FWD", OVR: 84}, {PlayerID: "ST2", Position: "ST", Category: "FWD", OVR: 83},
+	} {
+		club.Squad = append(club.Squad, p)
+	}
+	slots := club.GetStartingElevenSlots()
+	bySlot := map[string]string{}
+	ids := map[string]bool{}
+	for _, slot := range slots {
+		bySlot[slot.Slot] = slot.PlayerID
+		if ids[slot.PlayerID] {
+			t.Fatalf("duplicate player %s", slot.PlayerID)
+		}
+		ids[slot.PlayerID] = true
+	}
+	if bySlot["RB"] != "RB1" {
+		t.Fatalf("RB slot=%s want RB1", bySlot["RB"])
+	}
+	if bySlot["LCB"] == "RB2" || bySlot["RCB"] == "RB2" {
+		t.Fatalf("second RB should not occupy a CB slot: %+v", bySlot)
+	}
+	if bySlot["RW"] == "" || bySlot["LW"] != "LW" || bySlot["ST"] != "ST" {
+		t.Fatalf("attack slots = %+v", bySlot)
+	}
+}
+
+func TestGetStartingElevenSlotsMissingRightWingerFallsBackDeterministically(t *testing.T) {
+	club := &Club{ClubID: "NORW", ClubName: "No RW FC"}
+	for _, p := range []*Player{
+		{PlayerID: "GK", Position: "GK", Category: "GK", OVR: 80},
+		{PlayerID: "LB", Position: "LB", Category: "DEF", OVR: 78},
+		{PlayerID: "CB1", Position: "CB", Category: "DEF", OVR: 82},
+		{PlayerID: "CB2", Position: "CB", Category: "DEF", OVR: 81},
+		{PlayerID: "RB", Position: "RB", Category: "DEF", OVR: 78},
+		{PlayerID: "M1", Position: "CM", Category: "MID", OVR: 80}, {PlayerID: "M2", Position: "CM", Category: "MID", OVR: 79}, {PlayerID: "M3", Position: "CDM", Category: "MID", OVR: 78},
+		{PlayerID: "LW", Position: "LW", Category: "FWD", OVR: 80}, {PlayerID: "ST", Position: "ST", Category: "FWD", OVR: 84}, {PlayerID: "RM", Position: "RM", Category: "MID", OVR: 77},
+	} {
+		club.Squad = append(club.Squad, p)
+	}
+	slots := club.GetStartingElevenSlots()
+	var rw StartingSlot
+	for _, slot := range slots {
+		if slot.Slot == "RW" {
+			rw = slot
+		}
+	}
+	if rw.Player == nil {
+		t.Fatal("RW slot empty")
+	}
+	if rw.PlayerID != "RM" && rw.Category != "FWD" && rw.Category != "MID" {
+		t.Fatalf("RW fallback=%s cat=%s", rw.PlayerID, rw.Category)
+	}
+	again := club.GetStartingElevenSlots()
+	if again[len(again)-1].PlayerID != rw.PlayerID {
+		t.Fatalf("missing-RW fallback is not deterministic: %s vs %s", again[len(again)-1].PlayerID, rw.PlayerID)
+	}
+}
+
 func TestClubFatigueAndRotation(t *testing.T) {
 	club := &Club{
 		ClubID: "FATIGUE_TEST",

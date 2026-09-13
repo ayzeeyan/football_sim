@@ -159,3 +159,58 @@ func TestLegacyCareerCompetitionHubIsEmpty(t *testing.T) {
 		t.Fatalf("legacy test server clubs=%d want 12", len(clubs))
 	}
 }
+
+func TestWorldDashboardAndContinueAPI(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer ts.Close()
+	defer srv.Stop()
+
+	payload := postNewCareer(t, ts.URL, false, nil)
+	if payload["status"] != "success" {
+		t.Fatalf("new career: %v", payload)
+	}
+
+	resp, err := http.Get(ts.URL + "/api/world/dashboard")
+	if err != nil {
+		t.Fatalf("GET dashboard: %v", err)
+	}
+	var dash map[string]interface{}
+	decodeJSONBody(t, resp, &dash)
+	if resp.StatusCode != http.StatusOK || dash["world"] != true {
+		t.Fatalf("dashboard status=%d payload=%v", resp.StatusCode, dash)
+	}
+	leaders, _ := dash["league_leaders"].([]interface{})
+	if len(leaders) != 5 {
+		t.Fatalf("dashboard leaders=%d want 5", len(leaders))
+	}
+
+	resp, err = http.Get(ts.URL + "/api/competitions/premier-league")
+	if err != nil {
+		t.Fatalf("GET premier-league: %v", err)
+	}
+	var premier map[string]interface{}
+	decodeJSONBody(t, resp, &premier)
+	if _, ok := premier["scorers"]; !ok {
+		t.Fatalf("premier-league missing scorers: %v", premier)
+	}
+	if _, ok := premier["history"]; !ok {
+		t.Fatalf("premier-league missing history")
+	}
+
+	resp, err = http.Post(ts.URL+"/api/sim/continue", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST continue: %v", err)
+	}
+	var cont map[string]interface{}
+	decodeJSONBody(t, resp, &cont)
+	if resp.StatusCode != http.StatusOK || cont["status"] != "success" {
+		t.Fatalf("continue status=%d payload=%v", resp.StatusCode, cont)
+	}
+	if cont["mode"] != "continue" {
+		t.Fatalf("continue mode=%v", cont["mode"])
+	}
+	reason, _ := cont["stop_reason"].(string)
+	if reason == "" {
+		t.Fatalf("continue missing stop_reason: %v", cont)
+	}
+}

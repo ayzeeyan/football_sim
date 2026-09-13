@@ -87,6 +87,7 @@ func (tm *TournamentManager) GetCompetition(id string) map[string]interface{} {
 	for _, club := range clubsForIDs(tm.Clubs, comp.ParticipantIDs) {
 		participants = append(participants, compactClub(club))
 	}
+	scorers, assisters := tm.competitionLeadersUnlocked(comp.ID)
 	return map[string]interface{}{
 		"id": comp.ID, "name": comp.Name, "country": comp.Country, "kind": comp.Kind,
 		"prestige": comp.Prestige, "stage": comp.Stage, "participants": participants,
@@ -94,6 +95,8 @@ func (tm *TournamentManager) GetCompetition(id string) map[string]interface{} {
 		"table": rows, "rounds": rounds,
 		"fixtures": compactFixtures, "champion": compactClub(tm.Clubs[comp.ChampionID]),
 		"champion_id": comp.ChampionID,
+		"scorers":     scorers, "assisters": assisters,
+		"history": tm.competitionHistoryUnlocked(comp.ID),
 	}
 }
 

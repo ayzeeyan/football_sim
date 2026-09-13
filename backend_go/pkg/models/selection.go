@@ -41,3 +41,9 @@ func CompetitionImportance(competition string, matchweek int) int {
 		return 66
 	}
 }
+
+// IsEuropeanCompetition is true for the three UEFA tournaments and the legacy cup.
+func IsEuropeanCompetition(competition string) bool {
+	c := strings.ToLower(strings.TrimSpace(competition))
+	return c == "champions-league" || c == "europa-league" || c == "conference-league" || c == "ucl"
+}

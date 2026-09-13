@@ -11,6 +11,7 @@ import { PlayerNameButton } from './PlayerSheet';
 import { PreMatchModal } from './PreMatchModal';
 import { getWeatherDetails } from './MatchCard';
 import { HalfTimeDugout } from './HalfTimeDugout';
+import { eventPlayerLabel } from '../lib/eventIdentity';
 
 interface MatchdayTabProps {
   homeClub: Club | null;
@@ -38,7 +39,7 @@ function statusLabel(state: MatchTickPayload['state'], minute: number): string {
 }
 
 function eventLabel(e: MatchEventItem): string {
-  const name = e.scorer?.full_name || e.player?.full_name || 'Unknown';
+  const name = eventPlayerLabel(e);
   const minute = e.display || `${e.minute}'`;
   if (e.type === 'own_goal') return `${minute} ${name} (og)`;
   if (e.type === 'penalty') return `${minute} ${name} (pen)`;

@@ -199,6 +199,8 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("POST /api/sim/week", s.handleSimWeek)
 	s.mux.HandleFunc("POST /api/sim/month", s.handleSimMonth)
 	s.mux.HandleFunc("POST /api/sim/season", s.handleSimSeason)
+	s.mux.HandleFunc("POST /api/sim/continue", s.handleSimContinue)
+	s.mux.HandleFunc("GET /api/world/dashboard", s.handleGetWorldDashboard)
 	s.mux.HandleFunc("GET /api/scoring-race", s.handleGetScoringRace)
 	s.mux.HandleFunc("GET /api/trophies", s.handleGetTrophies)
 	s.mux.HandleFunc("GET /api/records", s.handleGetRecords)
@@ -746,6 +748,14 @@ func (s *Server) serializePlayer(p *models.Player) map[string]interface{} {
 	careerGoals := p.Goals + p.CareerGoals
 	careerAssists := p.Assists + p.CareerAssists
 	careerApps := p.Appearances + p.CareerApps
+	starts, minutes := 0, 0
+	for _, st := range p.CompetitionStats {
+		if st == nil {
+			continue
+		}
+		starts += st.Starts
+		minutes += st.Minutes
+	}
 
 	return map[string]interface{}{
 		"player_id":           p.PlayerID,
@@ -814,7 +824,20 @@ func (s *Server) serializePlayer(p *models.Player) map[string]interface{} {
 			}
 			return models.FormatCurrency(p.LoanBuyClauseEUR)
 		}(),
-		"competition_stats": p.CompetitionStats,
+		"competition_stats":   p.CompetitionStats,
+		"starts":              starts,
+		"minutes":             minutes,
+		"is_captain":          p.IsCaptain,
+		"is_vice_captain":     p.IsViceCaptain,
+		"leadership":          p.Leadership,
+		"homegrown":           p.Homegrown,
+		"association_trained": p.AssociationTrained,
+		"registered_europe":   p.RegisteredEurope,
+		"clean_sheets":        p.CleanSheets,
+		"career_clean_sheets": p.CareerCleanSheets,
+		"versatility":         p.Versatility,
+		"promise_kind":        p.PromiseKind,
+		"promise_season":      p.PromiseSeason,
 	}
 }
 
@@ -883,10 +906,18 @@ func (s *Server) serializeClubRecord(c *models.Club, rec *models.CompetitionReco
 			"wage_bill":        c.WageBill(),
 			"european_revenue": c.Finances.EuropeanRevenue,
 		},
-		"coefficient":     c.Coefficient,
-		"board_objective": c.BoardObjective,
-		"expected_finish": c.ExpectedFinish,
-		"manager":         s.serializeManager(mgr),
+		"coefficient":        c.Coefficient,
+		"board_objective":    c.BoardObjective,
+		"expected_finish":    c.ExpectedFinish,
+		"captain_id":         c.CaptainID,
+		"vice_captain_id":    c.ViceCaptainID,
+		"fan_expectation":    c.FanExpectation,
+		"media_pressure":     c.MediaPressure,
+		"chemistry":          c.Chemistry,
+		"power_rank":         c.PowerRank,
+		"season_attendance":  c.SeasonAttendance,
+		"attendance_matches": c.AttendanceMatches,
+		"manager":            s.serializeManager(mgr),
 	}
 }
 
@@ -2551,6 +2582,7 @@ func (s *Server) transfersPayload() map[string]interface{} {
 		"completed_transfers": completed,
 		"expiring_contracts":  expiring,
 		"warchests":           warchests,
+		"deadline_day":        open && maxWeeks > 0 && s.TransferEngine != nil && s.TransferEngine.CurrentWeek >= maxWeeks-1,
 	}
 }
 
@@ -2608,12 +2640,25 @@ func (s *Server) handleTransferAdvance(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	openedNow := false
+	if s.TournamentManager != nil && s.TournamentManager.SeasonPhase == "transfer_window" && s.TransferEngine != nil {
+		if !s.TransferEngine.IsOffSeason {
+			if !s.TournamentManager.ApplyCompletedSeasonReputation() && s.TournamentManager.ReputationAppliedSeason != s.TournamentManager.SeasonName {
+				writeErrorJSON(w, http.StatusConflict, "The completed season is not ready for the transfer window; finish all league and cup results first.")
+				return
+			}
+			s.TransferEngine.BeginOffSeasonWindow()
+			openedNow = true
+		}
+	}
 	if !s.careerWindowOpen() {
 		writeErrorJSON(w, http.StatusBadRequest, "The window opens when the season ends.")
 		return
 	}
 
-	s.TransferEngine.AdvanceOpenWindow()
+	if !openedNow {
+		s.TransferEngine.AdvanceOpenWindow()
+	}
 	// Mentor-leaves drama before re-pairing clears the old MentorIDs.
 	// Idempotent per season: re-paired kids no longer match, and flags guard
 	// the rest, so replaying completed history is safe.

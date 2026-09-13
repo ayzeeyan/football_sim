@@ -33,6 +33,15 @@ type Club struct {
 	// applies until points are earned).
 	Coefficient int `json:"coefficient,omitempty"`
 
+	CaptainID         string `json:"captain_id,omitempty"`
+	ViceCaptainID     string `json:"vice_captain_id,omitempty"`
+	FanExpectation    int    `json:"fan_expectation,omitempty"`
+	MediaPressure     int    `json:"media_pressure,omitempty"`
+	Chemistry         int    `json:"chemistry,omitempty"`
+	SeasonAttendance  int    `json:"season_attendance,omitempty"`
+	AttendanceMatches int    `json:"attendance_matches,omitempty"`
+	PowerRank         int    `json:"power_rank,omitempty"`
+
 	// Standings & Form
 	Played         int      `json:"p"`
 	Won            int      `json:"w"`
@@ -264,6 +273,23 @@ func (c *Club) AvailableSquad(fixture ...string) []*Player {
 			ready = append(ready, p)
 		}
 	}
+	if IsEuropeanCompetition(comp) {
+		registered := 0
+		for _, p := range ready {
+			if p.RegisteredEurope {
+				registered++
+			}
+		}
+		if registered >= 11 {
+			filtered := ready[:0]
+			for _, p := range ready {
+				if p.RegisteredEurope {
+					filtered = append(filtered, p)
+				}
+			}
+			ready = filtered
+		}
+	}
 	return ready
 }
 
@@ -302,6 +328,14 @@ func sortKey(p *Player, competition string, matchweek int) (wkPriority int, adju
 	}
 	if p.SquadRole == RoleCrucial && importance >= 70 {
 		adjustedOVR += 2
+	}
+	if p.IsCaptain && importance >= 75 {
+		adjustedOVR += 2
+	} else if p.Leadership >= 82 && importance >= 70 {
+		adjustedOVR += 1
+	}
+	if p.Homegrown && importance <= 55 {
+		adjustedOVR += 1
 	}
 	return wkPriority, adjustedOVR
 }
@@ -387,97 +421,13 @@ func (c *Club) GetStartingEleven(fixture ...string) []*Player {
 // GetStartingElevenWithBias applies a manager's style and recruitment focus
 // on top of fitness, form, and match importance.
 func (c *Club) GetStartingElevenWithBias(style, focus string, fixture ...string) []*Player {
-	pool := c.AvailableSquad(fixture...)
-
-	var gks, defs, mids, fwds []*Player
-	for _, p := range pool {
-		switch p.Category {
-		case "GK":
-			gks = append(gks, p)
-		case "DEF":
-			defs = append(defs, p)
-		case "MID":
-			mids = append(mids, p)
-		case "FWD":
-			fwds = append(fwds, p)
-		default:
-			fwds = append(fwds, p)
+	slots := c.GetStartingElevenSlotsWithBias(style, focus, fixture...)
+	startingXI := make([]*Player, 0, len(slots))
+	for _, slot := range slots {
+		if slot.Player != nil {
+			startingXI = append(startingXI, slot.Player)
 		}
 	}
-
-	comp, week := parseFixtureArgs(fixture)
-	sortPlayersForXI(gks, comp, week, style, focus)
-	sortPlayersForXI(defs, comp, week, style, focus)
-	sortPlayersForXI(mids, comp, week, style, focus)
-	sortPlayersForXI(fwds, comp, week, style, focus)
-
-	var startingXI []*Player
-
-	// 1 GK
-	if len(gks) > 0 {
-		startingXI = append(startingXI, gks[0])
-	} else if len(pool) > 0 {
-		startingXI = append(startingXI, pool[0])
-	}
-
-	// 4 DEF
-	takeDEF := len(defs)
-	if takeDEF > 4 {
-		takeDEF = 4
-	}
-	startingXI = append(startingXI, defs[:takeDEF]...)
-
-	// 3 MID
-	takeMID := len(mids)
-	if takeMID > 3 {
-		takeMID = 3
-	}
-	startingXI = append(startingXI, mids[:takeMID]...)
-
-	// 3 FWD
-	takeFWD := len(fwds)
-	if takeFWD > 3 {
-		takeFWD = 3
-	}
-	startingXI = append(startingXI, fwds[:takeFWD]...)
-
-	// Dedupe: the no-GK fallback (pool[0]) may coincide with a positional
-	// pick in short squads. A starting XI must never name a player twice.
-	seenXI := make(map[*Player]bool, len(startingXI))
-	uniqueXI := make([]*Player, 0, len(startingXI))
-	for _, p := range startingXI {
-		if p == nil || seenXI[p] {
-			continue
-		}
-		seenXI[p] = true
-		uniqueXI = append(uniqueXI, p)
-	}
-	startingXI = uniqueXI
-
-	// Fill to 11 if position counts are insufficient
-	if len(startingXI) < 11 && len(pool) > len(startingXI) {
-		used := make(map[string]bool)
-		for _, p := range startingXI {
-			used[p.PlayerID] = true
-		}
-
-		var remain []*Player
-		for _, p := range pool {
-			if !used[p.PlayerID] {
-				remain = append(remain, p)
-			}
-		}
-
-		sortPlayersForXI(remain, comp, week, style, focus)
-		needed := 11 - len(startingXI)
-		if needed > len(remain) {
-			needed = len(remain)
-		}
-		startingXI = append(startingXI, remain[:needed]...)
-	}
-
-	// Assembly is capped at exactly 11 (1 GK + 4 DEF + 3 MID + 3 FWD) and the
-	// fill above tops up to precisely 11, so no truncation is needed.
 	return startingXI
 }
 
@@ -504,58 +454,117 @@ func (c *Club) GetStartingElevenSlotsWithBias(style, focus string, fixture ...st
 	sortPlayersForXI(pool, comp, week, style, focus)
 
 	type slotRule struct {
-		slot      string
-		category  string
-		positions map[string]bool
+		slot     string
+		category string
+		exact    map[string]bool
+		compat   map[string]bool
+	}
+	set := func(vals ...string) map[string]bool {
+		m := make(map[string]bool, len(vals))
+		for _, v := range vals {
+			m[v] = true
+		}
+		return m
 	}
 	rules := []slotRule{
-		{"GK", "GK", map[string]bool{"GK": true}},
-		{"LB", "DEF", map[string]bool{"LB": true, "LWB": true}},
-		{"LCB", "DEF", map[string]bool{"CB": true}},
-		{"RCB", "DEF", map[string]bool{"CB": true}},
-		{"RB", "DEF", map[string]bool{"RB": true, "RWB": true}},
-		{"LCM", "MID", map[string]bool{"CM": true, "CAM": true, "CDM": true}},
-		{"CM", "MID", map[string]bool{"CDM": true, "CM": true, "CAM": true}},
-		{"RCM", "MID", map[string]bool{"CM": true, "CAM": true, "CDM": true}},
-		{"LW", "FWD", map[string]bool{"LW": true}},
-		{"ST", "FWD", map[string]bool{"ST": true, "CF": true}},
-		{"RW", "FWD", map[string]bool{"RW": true}},
+		{"GK", "GK", set("GK"), nil},
+		{"LB", "DEF", set("LB"), set("LWB")},
+		{"LCB", "DEF", set("CB"), nil},
+		{"RCB", "DEF", set("CB"), nil},
+		{"RB", "DEF", set("RB"), set("RWB")},
+		{"LCM", "MID", set("CM", "CAM"), set("LM")},
+		{"CM", "MID", set("CDM", "CM"), set("CAM")},
+		{"RCM", "MID", set("CM", "CAM"), set("RM")},
+		{"LW", "FWD", set("LW"), set("LM", "LF")},
+		{"ST", "FWD", set("ST", "CF"), set("CAM")},
+		{"RW", "FWD", set("RW"), set("RM", "RF")},
 	}
 
 	used := make(map[string]bool, len(pool))
-	pick := func(rule slotRule, naturalOnly bool) *Player {
-		for _, p := range pool {
-			if p == nil || used[p.PlayerID] {
+	filled := make([]*Player, len(rules))
+	hasGK := false
+	for _, p := range pool {
+		if p != nil && p.Category == "GK" {
+			hasGK = true
+			break
+		}
+	}
+	if !hasGK && firstAvailable != nil {
+		filled[0] = firstAvailable
+		used[firstAvailable.PlayerID] = true
+	}
+	posOf := func(p *Player) (string, string) {
+		return strings.ToUpper(strings.TrimSpace(p.Position)), strings.ToUpper(strings.TrimSpace(p.SecondaryPosition))
+	}
+	tier := func(p *Player, rule slotRule) int {
+		pos, sec := posOf(p)
+		switch {
+		case rule.exact[pos]:
+			return 4
+		case sec != "" && rule.exact[sec]:
+			return 3
+		case rule.compat[pos]:
+			return 2
+		case sec != "" && rule.compat[sec]:
+			return 1
+		default:
+			return 0
+		}
+	}
+	pick := func(minTier int, categoryOnly bool) {
+		for i, rule := range rules {
+			if filled[i] != nil {
 				continue
 			}
-			if naturalOnly {
-				if rule.positions[strings.ToUpper(strings.TrimSpace(p.Position))] {
-					return p
+			var best *Player
+			bestTier, bestWK, bestAdj := -2, -1, -1000
+			for _, p := range pool {
+				if p == nil || used[p.PlayerID] {
+					continue
 				}
-				continue
+				t := tier(p, rule)
+				if minTier > 0 && t < minTier {
+					continue
+				}
+				if minTier == 0 && categoryOnly && t == 0 && p.Category != rule.category {
+					continue
+				}
+				if minTier == 0 && !categoryOnly && t == 0 && p.Category != rule.category {
+					t = -1
+				}
+				wk, adj := sortKey(p, comp, week)
+				adj += applyManagerBias(p, style, focus)
+				better := best == nil || t > bestTier ||
+					(t == bestTier && wk > bestWK) ||
+					(t == bestTier && wk == bestWK && adj > bestAdj) ||
+					(t == bestTier && wk == bestWK && adj == bestAdj && p.PlayerID < best.PlayerID)
+				if better {
+					best, bestTier, bestWK, bestAdj = p, t, wk, adj
+				}
 			}
-			if p.Category == rule.category {
-				return p
+			if best != nil {
+				filled[i] = best
+				used[best.PlayerID] = true
 			}
 		}
-		return nil
 	}
+	pick(3, false) // exact primary/secondary
+	pick(1, false) // compatible wide/secondary roles
+	pick(0, true)  // same category
+	pick(0, false) // emergency leftover
 
 	slots := make([]StartingSlot, 0, 11)
-	for _, rule := range rules {
-		p := pick(rule, true)
-		if p == nil {
-			p = pick(rule, false)
-		}
+	for i, rule := range rules {
+		p := filled[i]
 		if p == nil && rule.slot == "GK" && firstAvailable != nil && !used[firstAvailable.PlayerID] {
 			p = firstAvailable
+			used[p.PlayerID] = true
 		}
 		if p == nil {
-			// A short or malformed squad can be missing an entire category.
-			// Still give every selected player one unique visible slot.
 			for _, fallback := range pool {
 				if fallback != nil && !used[fallback.PlayerID] {
 					p = fallback
+					used[p.PlayerID] = true
 					break
 				}
 			}
@@ -563,7 +572,6 @@ func (c *Club) GetStartingElevenSlotsWithBias(style, focus string, fixture ...st
 		if p == nil {
 			continue
 		}
-		used[p.PlayerID] = true
 		slots = append(slots, StartingSlot{Slot: rule.slot, Player: p})
 	}
 	return slots

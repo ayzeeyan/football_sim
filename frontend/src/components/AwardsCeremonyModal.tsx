@@ -173,53 +173,21 @@ const BallonDorPodiumView: React.FC<{ rankings: BallonDorRankItem[]; onNext: () 
         <p className="text-[13px] text-sage mt-1">Continental jury ranking based on performance, production and team achievement.</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end pt-4 pb-2">
-        {top2 && (
-          <div className="flex flex-col items-center">
-            <div className="mb-2 text-center">
-              <span className="text-xl">🥈</span>
-              <p className="font-bold text-[14px] text-bone truncate max-w-[120px]">{top2.full_name}</p>
-              <p className="text-[11px] text-sage font-mono">{top2.club_short} · {top2.ovr} OVR</p>
-              <p className="text-[11px] text-bone/80 font-mono mt-0.5">{top2.goals}G · {top2.assists}A</p>
-            </div>
-            <div className="w-full h-32 rounded-t-xl bg-gradient-to-t from-ink/80 to-slate-400/20 border-t-2 border-x border-slate-300/40 flex flex-col items-center justify-center p-2">
-              <span className="font-mono text-[10px] text-slate-300 font-bold uppercase">2nd Place</span>
-              <span className="font-mono font-bold text-[16px] text-bone mt-1">{top2.score} pts</span>
-            </div>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 items-stretch">
+        {[
+          { item: top2, place: '2nd', medal: '🥈', height: 'min-h-[7.5rem]', tone: 'border-slate-300/40 bg-ink/50' },
+          { item: top1, place: '1st', medal: '🥇', height: 'min-h-[9rem]', tone: 'border-brass bg-brass/[0.08]' },
+          { item: top3, place: '3rd', medal: '🥉', height: 'min-h-[6.5rem]', tone: 'border-amber-600/40 bg-ink/50' },
+        ].map((col) => col.item && (
+          <div key={col.item.player_id} className={cx('flex flex-col rounded-xl border p-3 text-center', col.tone, col.height)}>
+            <p className="text-lg leading-none">{col.medal}</p>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-sage">{col.place}</p>
+            <p className={cx('mt-1 font-semibold text-[13px] leading-tight', col.place === '1st' ? 'text-brass' : 'text-bone')} title={col.item.full_name}>{col.item.full_name}</p>
+            <p className="mt-1 font-mono text-[11px] text-sage">{col.item.club_short} · {col.item.ovr} OVR</p>
+            <p className="font-mono text-[11px] text-bone/80">{col.item.goals}G · {col.item.assists}A</p>
+            <p className="mt-auto pt-2 font-mono text-[15px] font-bold text-brass">{col.item.score} pts</p>
           </div>
-        )}
-
-        {top1 && (
-          <div className="flex flex-col items-center">
-            <div className="mb-2 text-center animate-bounce"><span className="text-3xl">🥇</span></div>
-            <div className="mb-2 text-center">
-              <span className="inline-block px-2.5 py-0.5 rounded-full bg-brass/20 text-brass border border-brass/50 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">Winner</span>
-              <p className="font-bold text-[16px] text-brass truncate max-w-[140px]">{top1.full_name}</p>
-              <p className="text-[12px] text-bone/85 font-mono">{top1.club_name} ({top1.club_short})</p>
-              <p className="text-[12px] text-brass font-mono font-semibold mt-0.5">{top1.goals}G · {top1.assists}A · {top1.ovr} OVR</p>
-            </div>
-            <div className="w-full h-44 rounded-t-xl bg-gradient-to-t from-brass/25 to-brass/10 border-t-4 border-x border-brass flex flex-col items-center justify-center p-2 shadow-[0_-4px_20px_rgba(199,162,58,0.25)]">
-              <Trophy size={28} className="text-brass animate-pulse" />
-              <span className="font-mono text-[11px] text-brass font-bold uppercase mt-1">1st Place</span>
-              <span className="font-mono font-bold text-[20px] text-bone mt-0.5">{top1.score} pts</span>
-            </div>
-          </div>
-        )}
-
-        {top3 && (
-          <div className="flex flex-col items-center">
-            <div className="mb-2 text-center">
-              <span className="text-xl">🥉</span>
-              <p className="font-bold text-[14px] text-bone truncate max-w-[120px]">{top3.full_name}</p>
-              <p className="text-[11px] text-sage font-mono">{top3.club_short} · {top3.ovr} OVR</p>
-              <p className="text-[11px] text-bone/80 font-mono mt-0.5">{top3.goals}G · {top3.assists}A</p>
-            </div>
-            <div className="w-full h-24 rounded-t-xl bg-gradient-to-t from-ink/80 to-amber-700/20 border-t-2 border-x border-amber-600/40 flex flex-col items-center justify-center p-2">
-              <span className="font-mono text-[10px] text-amber-500 font-bold uppercase">3rd Place</span>
-              <span className="font-mono font-bold text-[14px] text-bone mt-1">{top3.score} pts</span>
-            </div>
-          </div>
-        )}
+        ))}
       </div>
 
       {rest.length > 0 && (

@@ -322,6 +322,9 @@ func TestChunk2EventEcosystem(t *testing.T) {
 				if e.Player == nil {
 					t.Fatalf("seed %d: card without player: %+v", seed, e)
 				}
+				if e.Player.FullName == "" || e.Player.PlayerID == "" || e.PlayerID == "" || e.PlayerName == "" {
+					t.Fatalf("seed %d: card identity unresolved: %+v", seed, e)
+				}
 			case "sub":
 				if e.PlayerOut == nil || e.PlayerIn == nil {
 					t.Fatalf("seed %d: malformed sub: %+v", seed, e)

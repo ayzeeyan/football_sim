@@ -7,6 +7,7 @@ import { Trophy, RotateCcw, Users, Zap, CalendarDays } from 'lucide-react';
 import { soundManager } from '../audio/webAudio';
 import { formatGd, cx, stripEmojis } from '../lib/format';
 import { Card, ClubDot, ConfirmBar, LoadingState, PanelHeader, PrimaryButton, ProgressBar } from './ui/ui';
+import { qualificationBand, qualificationBarClass } from '../lib/qualification';
 import { MatchCard } from './MatchCard';
 import { MatchDetailModal } from './MatchDetailModal';
 import { PreMatchModal } from './PreMatchModal';
@@ -446,11 +447,13 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
             <tbody className="divide-y divide-line/70">
               {league.clubs.map((c, idx) => {
                 const pos = idx + 1;
+                const band = league.world ? qualificationBand(c.league, pos, league.clubs.length) : null;
+                const bar = league.world ? qualificationBarClass(band) : positionMarker(pos);
                 return (
                   <tr key={c.club_id} className={cx('hover:bg-cardLight/60 transition-colors', pos === 1 && 'bg-brass/[0.06]')}>
                     <td className="py-4 px-4 font-bold">
                       <span className="flex items-center gap-2.5">
-                        <span className={cx('w-1.5 h-5 rounded-full', positionMarker(pos))} />
+                        <span className={cx('w-1.5 h-5 rounded-full', bar)} title={band === 'ucl' ? 'Champions League' : band === 'el' ? 'Europa League' : band === 'ecl' ? 'Conference League' : band === 'rel' ? 'Relegation' : undefined} />
                         <span className="font-mono text-[15px] text-bone/85">{pos}</span>
                       </span>
                     </td>
@@ -504,7 +507,12 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
         <div className="px-5 py-3.5 bg-ink/40 border-t border-line flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-mono text-sage">
           <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-brass" /> 1st takes the title</span>
           {league.world ? (
-            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#8AB4C8]" /> Top sides reach Europe — see the Competition Hub</span>
+            <>
+              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-brass" /> Champions League</span>
+              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#8AB4C8]" /> Europa League</span>
+              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pitchtone" /> Conference League</span>
+              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-ember" /> Relegation</span>
+            </>
           ) : (
             <>
               <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#8AB4C8]" /> 2nd–4th reach the Champions Cup</span>

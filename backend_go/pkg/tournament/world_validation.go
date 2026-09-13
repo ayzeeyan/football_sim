@@ -142,24 +142,24 @@ func (tm *TournamentManager) ValidateWorldState() error {
 			if transfer.FeeEUR < 0 {
 				return fmt.Errorf("world validation: completed transfer for player %q has negative fee %d", transfer.PlayerID, transfer.FeeEUR)
 			}
-		// Historical/foreign counterparties outside the active map are
-		// explicitly permitted: snapshot validation allows them for
-		// multi-season saves (pinned by TestValidateCareerSnapshotAllows-
-		// ExpiredNegotiationsAndHistoricalBuyers), so rejecting them here
-		// would fatal saves that passed snapshot validation at boot.
-		// Marker checks are likewise scoped to fully-local deals, but the
-		// duplicate-player check stays universal: CompletedTransfers is
-		// window-local by construction (cleared every ResetForNewSeason).
-		_, sellerKnown := clubIDs[transfer.SellerID]
-		_, buyerKnown := clubIDs[transfer.BuyerID]
-		historical := (transfer.SellerID != "" && !sellerKnown) || (transfer.BuyerID != "" && !buyerKnown)
-		if seenCompleted[transfer.PlayerID] {
-			return fmt.Errorf("world validation: player %q completed more than one transfer in the active window", transfer.PlayerID)
-		}
-		seenCompleted[transfer.PlayerID] = true
-		if !historical && !te.TransferredThisWindow[transfer.PlayerID] {
-			return fmt.Errorf("world validation: completed transfer player %q lacks transferred-this-window marker", transfer.PlayerID)
-		}
+			// Historical/foreign counterparties outside the active map are
+			// explicitly permitted: snapshot validation allows them for
+			// multi-season saves (pinned by TestValidateCareerSnapshotAllows-
+			// ExpiredNegotiationsAndHistoricalBuyers), so rejecting them here
+			// would fatal saves that passed snapshot validation at boot.
+			// Marker checks are likewise scoped to fully-local deals, but the
+			// duplicate-player check stays universal: CompletedTransfers is
+			// window-local by construction (cleared every ResetForNewSeason).
+			_, sellerKnown := clubIDs[transfer.SellerID]
+			_, buyerKnown := clubIDs[transfer.BuyerID]
+			historical := (transfer.SellerID != "" && !sellerKnown) || (transfer.BuyerID != "" && !buyerKnown)
+			if seenCompleted[transfer.PlayerID] {
+				return fmt.Errorf("world validation: player %q completed more than one transfer in the active window", transfer.PlayerID)
+			}
+			seenCompleted[transfer.PlayerID] = true
+			if !historical && !te.TransferredThisWindow[transfer.PlayerID] {
+				return fmt.Errorf("world validation: completed transfer player %q lacks transferred-this-window marker", transfer.PlayerID)
+			}
 		}
 		for _, negotiation := range te.ActiveNegotiations {
 			if negotiation == nil {
@@ -275,6 +275,48 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 		}
 		if player.UniverseWonderkid && player.OnLoan {
 			return fmt.Errorf("world validation: canonical wonderkid %q must not be on loan", player.PlayerID)
+		}
+		if player.Leadership < 0 || player.Leadership > 100 {
+			return fmt.Errorf("world validation: player %q leadership %d outside 0..100", player.PlayerID, player.Leadership)
+		}
+		if player.Versatility < 0 || player.Versatility > 100 {
+			return fmt.Errorf("world validation: player %q versatility %d outside 0..100", player.PlayerID, player.Versatility)
+		}
+		if player.CleanSheets < 0 || player.CareerCleanSheets < 0 {
+			return fmt.Errorf("world validation: player %q has negative clean sheets", player.PlayerID)
+		}
+	}
+	if club.Chemistry < 0 || club.Chemistry > 100 {
+		return fmt.Errorf("world validation: club %q chemistry %d outside 0..100", club.ClubID, club.Chemistry)
+	}
+	if club.MediaPressure < 0 || club.MediaPressure > 100 {
+		return fmt.Errorf("world validation: club %q media pressure %d outside 0..100", club.ClubID, club.MediaPressure)
+	}
+	if club.FanExpectation < 0 || club.FanExpectation > 100 {
+		return fmt.Errorf("world validation: club %q fan expectation %d outside 0..100", club.ClubID, club.FanExpectation)
+	}
+	captains := 0
+	for _, player := range club.Squad {
+		if player != nil && player.IsCaptain {
+			captains++
+			if club.CaptainID != "" && player.PlayerID != club.CaptainID {
+				return fmt.Errorf("world validation: club %q captain flag on %q but captain_id=%q", club.ClubID, player.PlayerID, club.CaptainID)
+			}
+		}
+	}
+	if captains > 1 {
+		return fmt.Errorf("world validation: club %q has %d captains", club.ClubID, captains)
+	}
+	if club.CaptainID != "" {
+		found := false
+		for _, player := range club.Squad {
+			if player != nil && player.PlayerID == club.CaptainID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("world validation: club %q captain %q is not in the squad", club.ClubID, club.CaptainID)
 		}
 	}
 	return nil

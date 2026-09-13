@@ -68,6 +68,19 @@ export interface Player {
     goals: number;
     assists: number;
   }>;
+  starts?: number;
+  minutes?: number;
+  is_captain?: boolean;
+  is_vice_captain?: boolean;
+  leadership?: number;
+  homegrown?: boolean;
+  association_trained?: boolean;
+  registered_europe?: boolean;
+  clean_sheets?: number;
+  career_clean_sheets?: number;
+  versatility?: number;
+  promise_kind?: string;
+  promise_season?: string;
 }
 
 export interface ManagerHistoryEntry {
@@ -153,6 +166,14 @@ export interface Club {
   expected_finish?: number;
   reputation?: number;
   coefficient?: number;
+  captain_id?: string;
+  vice_captain_id?: string;
+  fan_expectation?: number;
+  media_pressure?: number;
+  chemistry?: number;
+  power_rank?: number;
+  season_attendance?: number;
+  attendance_matches?: number;
   transfer_warchest_eur?: number;
   formatted_transfer_warchest?: string;
   budget_eur?: number;
@@ -827,6 +848,10 @@ export interface BatchSimResult {
   champion?: string;
   calendar_label?: string;
   message?: string;
+  stop_reason?: string;
+  continue_hint?: string;
+  favourite_club_id?: string;
+  next_fixture?: Fixture | null;
 }
 
 export interface ProdigyWatchRow {
@@ -1087,6 +1112,160 @@ export interface CompetitionDetail {
   fixtures: CompetitionFixtureRow[];
   champion?: CompetitionClub | null;
   champion_id?: string;
+  scorers?: Array<{
+    player_id: string;
+    full_name: string;
+    position: string;
+    goals: number;
+    assists: number;
+    appearances: number;
+    club_id: string;
+    club_name: string;
+    club_short: string;
+  }>;
+  assisters?: Array<{
+    player_id: string;
+    full_name: string;
+    position: string;
+    goals: number;
+    assists: number;
+    appearances: number;
+    club_id: string;
+    club_name: string;
+    club_short: string;
+  }>;
+  history?: Array<{
+    season_name: string;
+    champion_id?: string;
+    champion?: CompetitionClub | null;
+  }>;
+}
+
+export interface WorldDashboard {
+  world: boolean;
+  season_name: string;
+  season_phase: string;
+  current_matchweek: number;
+  max_matchweeks: number;
+  favourite_club_id?: string;
+  favourite_club?: CompetitionClub | null;
+  next_fixture?: CompetitionFixtureRow | null;
+  league_leaders: Array<CompetitionClub & {
+    competition_id: string;
+    competition_name: string;
+    position: number;
+    pts_gap?: number;
+    second?: string;
+  }>;
+  europe: {
+    stage: string;
+    name: string;
+    competition_id: string;
+    leader?: CompetitionClub | null;
+    champion?: CompetitionClub | null;
+  };
+  top_scorer: {
+    player_id: string;
+    full_name: string;
+    position: string;
+    ovr: number;
+    goals: number;
+    assists: number;
+    appearances: number;
+    club_id: string;
+    club_name?: string;
+    club_short?: string;
+    is_wonderkid?: boolean;
+  } | null;
+  biggest_transfers: Array<{
+    player_id: string;
+    player_name: string;
+    player_pos: string;
+    player_ovr: number;
+    seller_short: string;
+    buyer_short: string;
+    formatted_fee: string;
+    matchweek: number;
+  }>;
+  injuries: Array<{
+    player_id: string;
+    full_name: string;
+    position: string;
+    ovr: number;
+    injury: string;
+    injured_matches: number;
+    club_id: string;
+    club_name: string;
+    club_short: string;
+  }>;
+  sackings: Array<{
+    season_name: string;
+    matchweek: number;
+    club_id: string;
+    club_name: string;
+    action: string;
+    old_manager: string;
+    new_manager: string;
+    reason: string;
+  }>;
+  wonderkids: Array<{
+    rank: number;
+    player_id: string;
+    full_name: string;
+    club_id: string;
+    club_name?: string;
+    club_short?: string;
+    age: number;
+    position: string;
+    ovr: number;
+    goals: number;
+    assists: number;
+  }>;
+  upcoming_fixtures: CompetitionFixtureRow[];
+  headlines: Array<{
+    id: string;
+    category: string;
+    headline: string;
+    body: string;
+    matchweek: number;
+    unread: boolean;
+    player_id?: string;
+    fixture_id?: string;
+  }>;
+  transfer_window: {
+    open: boolean;
+    type: string;
+    week: number;
+    weeks: number;
+  };
+  unread_inbox: number;
+  power_rankings?: Array<{
+    rank: number;
+    club_id: string;
+    club_name: string;
+    short_name: string;
+    league: string;
+    ovr: number;
+    pts: number;
+    coefficient: number;
+    chemistry: number;
+    media_pressure: number;
+    captain_id?: string;
+    primary_color?: [number, number, number];
+  }>;
+  loan_watch?: Array<{
+    player_id: string;
+    full_name: string;
+    position: string;
+    ovr: number;
+    club_id: string;
+    club_short: string;
+    parent_club_id: string;
+    appearances: number;
+    goals: number;
+    assists: number;
+    form_band: string;
+  }>;
 }
 
 export interface CompetitionsResponse {

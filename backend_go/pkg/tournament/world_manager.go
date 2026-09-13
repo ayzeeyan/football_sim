@@ -93,8 +93,10 @@ func NewEuropeanWorldManager(clubs []*models.Club, ge *growth.GrowthEngine, seed
 	tm.InboxSeq = 0
 	tm.AssignSquadRolesUnlocked()
 	tm.AssignBoardExpectationsUnlocked()
+	tm.RefreshClubCultureUnlocked()
 	tm.ArrangeLoansUnlocked()
 	tm.PushInbox("system", tm.SeasonName+" European world opens", "Five domestic leagues, national cups, and three European competitions now share one calendar.", 1, nil, "", "")
+	tm.pushSeasonPreviewUnlocked()
 	return tm
 }
 

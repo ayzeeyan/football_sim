@@ -302,6 +302,22 @@ export const PitchCanvas: React.FC<PitchCanvasProps> = ({ matchData, homeClub, a
       ctx.textBaseline = 'middle';
       ctx.fillStyle = player.universe_wonderkid ? BRASS : '#EAE4D6';
       ctx.fillText(player.position.slice(0, 3), sx, sy + 0.5);
+
+      const parts = (player.full_name || '').trim().split(/\s+/).filter(Boolean);
+      let surname = parts.length ? parts[parts.length - 1] : '';
+      const edgePad = 28;
+      const maxW = Math.max(36, Math.min(sx - 8, w - sx - 8, 72));
+      ctx.font = '600 10px "Inter", sans-serif';
+      while (surname.length > 3 && ctx.measureText(surname).width > maxW) {
+        surname = `${surname.slice(0, Math.max(2, surname.length - 2))}…`;
+      }
+      const labelX = Math.max(edgePad, Math.min(w - edgePad, sx));
+      ctx.fillStyle = 'rgba(8, 16, 12, 0.72)';
+      const tw = Math.min(maxW, Math.max(28, ctx.measureText(surname).width + 8));
+      ctx.fillRect(labelX - tw / 2, sy + 16, tw, 13);
+      ctx.fillStyle = '#F3E6C4';
+      ctx.fillText(surname, labelX, sy + 23);
+
       if (sentOff) {
         ctx.strokeStyle = '#BE5A38';
         ctx.lineWidth = 2;

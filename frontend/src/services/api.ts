@@ -25,6 +25,7 @@ import type {
   TransferRecordsData,
   BatchSimResult,
   ProdigyWatchRow,
+  WorldDashboard,
 } from '../types';
 
 const API_BASE = '/api';
@@ -287,7 +288,7 @@ export function simulateRemaining(excludeFixtureId?: string): Promise<{ status: 
   );
 }
 
-const macroFallback = (mode: 'week' | 'month' | 'season'): BatchSimResult => ({
+const macroFallback = (mode: 'week' | 'month' | 'season' | 'continue'): BatchSimResult => ({
   status: 'error',
   mode,
   season_name: '2026-27',
@@ -327,6 +328,38 @@ export async function simulateSeason(): Promise<BatchSimResult> {
     const msg = err instanceof Error ? err.message : 'Macro simulation failed.';
     return { ...macroFallback('season'), message: msg };
   }
+}
+
+export async function simulateContinue(): Promise<BatchSimResult> {
+  try {
+    return await apiFetch<BatchSimResult>('/sim/continue', { method: 'POST' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Continue failed.';
+    return { ...macroFallback('continue'), message: msg };
+  }
+}
+
+export function fetchWorldDashboard(): Promise<WorldDashboard> {
+  return apiFetch<WorldDashboard>('/world/dashboard', undefined, {
+    world: false,
+    season_name: '2026-27',
+    season_phase: 'season',
+    current_matchweek: 1,
+    max_matchweeks: 38,
+    league_leaders: [],
+    europe: { stage: '', name: 'UEFA Champions League', competition_id: 'champions-league' },
+    top_scorer: null,
+    biggest_transfers: [],
+    injuries: [],
+    sackings: [],
+    wonderkids: [],
+    upcoming_fixtures: [],
+    headlines: [],
+    transfer_window: { open: false, type: 'CLOSED', week: 0, weeks: 0 },
+    unread_inbox: 0,
+    power_rankings: [],
+    loan_watch: [],
+  });
 }
 
 export interface WeekWatch {
@@ -522,6 +555,7 @@ export interface TransfersResponse {
   completed_transfers: CompletedTransfer[];
   expiring_contracts: ExpiringContract[];
   warchests: WarchestRow[];
+  deadline_day?: boolean;
 }
 
 const EMPTY_TRANSFERS: TransfersResponse = {

@@ -430,6 +430,16 @@ func (te *TransferEngine) advanceWeeklyMarketUnlocked() {
 	}
 	te.ActiveNegotiations = surviving
 	numBids := 2 + te.RNG.Intn(3)
+	deadline := te.windowWeeks() > 0 && te.CurrentWeek >= te.windowWeeks()-1
+	if deadline {
+		numBids += 3
+		te.TransferFeed = append([]TransferFeedItem{{
+			Headline:  "Deadline day: clubs scramble for last-minute deals",
+			Category:  "EXCLUSIVE",
+			Matchweek: te.CurrentWeek,
+			Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek),
+		}}, te.TransferFeed...)
+	}
 	for i := 0; i < numBids; i++ {
 		te.aiInitiateBid()
 	}

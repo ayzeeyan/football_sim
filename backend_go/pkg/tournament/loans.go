@@ -181,6 +181,7 @@ func (tm *TournamentManager) ReturnLoansUnlocked() int {
 			club.RecalculateRatings()
 		}
 	}
+	tm.RefreshClubCultureUnlocked()
 	return returned
 }
 
@@ -229,7 +230,7 @@ func (tm *TournamentManager) arrangeLoansUnlocked(maxOut, maxIn, maxApps int) in
 			avg = club.SquadAvgOVR
 		}
 		for _, p := range club.Squad {
-			if p == nil || p.UniverseWonderkid || p.OnLoan || p.Age > 21 {
+			if p == nil || p.UniverseWonderkid || p.OnLoan || p.Age > 21 || p.IsCaptain {
 				continue
 			}
 			if p.OriginalClubID != "" && p.OriginalClubID != club.ClubID {
@@ -325,5 +326,6 @@ func (tm *TournamentManager) arrangeLoansUnlocked(maxOut, maxIn, maxApps int) in
 			club.RecalculateRatings()
 		}
 	}
+	tm.RefreshClubCultureUnlocked()
 	return moved
 }

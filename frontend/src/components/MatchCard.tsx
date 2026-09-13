@@ -16,8 +16,9 @@ function sideLines(f: Fixture, side: 'home' | 'away'): ScorerLine[] {
   // Display string, which embeds verbose text ("Yellow Card: …", assists)
   // that would duplicate names and leak specifics into the feed.
   const minuteOf = (m: number) => `${m}'`;
-  const nameOf = (id: string | undefined, fallback: string): string => {
+  const nameOf = (id: string | undefined, fallback: string, event?: { player_name?: string | null }): string => {
     if (fallback && fallback.trim() !== '') return fallback;
+    if (event?.player_name && event.player_name.trim() !== '') return event.player_name.trim();
     if (!id) return 'Unknown';
     const pools = [f.home_xi, f.away_xi, f.home_bench ?? [], f.away_bench ?? []];
     for (const pool of pools) {
@@ -39,7 +40,7 @@ function sideLines(f: Fixture, side: 'home' | 'away'): ScorerLine[] {
       if (e.disallowed) continue;
       if (e.side !== side || !e.scorer) continue;
       const kind = e.type === 'penalty' ? 'penalty' : 'goal';
-      const g = goals.get(e.scorer.player_id) ?? { name: nameOf(e.scorer.player_id, e.scorer.full_name), minutes: [], first: e.minute, kind };
+      const g = goals.get(e.scorer.player_id) ?? { name: nameOf(e.scorer.player_id, e.scorer.full_name, e), minutes: [], first: e.minute, kind };
       g.minutes.push(minuteOf(e.minute));
       if (e.minute < g.first) g.first = e.minute;
       goals.set(e.scorer.player_id, g);
@@ -49,12 +50,12 @@ function sideLines(f: Fixture, side: 'home' | 'away'): ScorerLine[] {
       const benefiting = e.beneficiary ?? (e.side === 'home' ? 'away' : 'home');
       if (benefiting !== side) continue;
       const key = `og-${e.scorer.player_id}-${e.seq}`;
-      goals.set(key, { name: nameOf(e.scorer.player_id, e.scorer.full_name), minutes: [minuteOf(e.minute)], first: e.minute, kind: 'own_goal' });
-    } else if ((e.type === 'yellow' || e.type === 'red') && e.player) {
+      goals.set(key, { name: nameOf(e.scorer.player_id, e.scorer.full_name, e), minutes: [minuteOf(e.minute)], first: e.minute, kind: 'own_goal' });
+    } else if (e.type === 'yellow' || e.type === 'red') {
       if (e.side !== side) continue;
-      // A second yellow is folded into the sending-off line
-      if (e.type === 'yellow' && sentOff.has(e.player.player_id)) continue;
-      cards.push({ minute: e.minute, label: `${nameOf(e.player.player_id, e.player.full_name)} ${minuteOf(e.minute)}`, kind: e.type });
+      const pid = e.player?.player_id || e.player_id || '';
+      if (e.type === 'yellow' && pid && sentOff.has(pid)) continue;
+      cards.push({ minute: e.minute, label: `${nameOf(pid || undefined, e.player?.full_name || '', e)} ${minuteOf(e.minute)}`, kind: e.type });
     }
   }
   const lines: ScorerLine[] = [...goals.values()].map((g) => ({

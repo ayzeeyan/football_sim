@@ -641,6 +641,20 @@ func RestoreCareer(
 		if savedClub.Morale > 0 {
 			club.Morale = savedClub.Morale
 		}
+		if savedClub.BoardObjective != "" {
+			club.BoardObjective = savedClub.BoardObjective
+		}
+		if savedClub.ExpectedFinish > 0 {
+			club.ExpectedFinish = savedClub.ExpectedFinish
+		}
+		club.CaptainID = savedClub.CaptainID
+		club.ViceCaptainID = savedClub.ViceCaptainID
+		club.FanExpectation = savedClub.FanExpectation
+		club.MediaPressure = savedClub.MediaPressure
+		club.Chemistry = savedClub.Chemistry
+		club.SeasonAttendance = savedClub.SeasonAttendance
+		club.AttendanceMatches = savedClub.AttendanceMatches
+		club.PowerRank = savedClub.PowerRank
 
 		// Squad synchronization
 		if len(savedClub.Squad) > 0 {
@@ -716,6 +730,7 @@ func RestoreCareer(
 		club.SquadSize = len(club.Squad)
 		club.RecalculateRatings()
 	}
+	tm.SyncCaptainFlagsUnlocked()
 
 	// 5. Restore calendars wholesale so a freshly generated Berger table
 	// cannot drop finished results when fixture IDs or cycle-3 pairings differ.
@@ -1098,6 +1113,22 @@ func updatePlayerFromSaved(dest, src *models.Player) {
 		dest.Sharpness = src.Sharpness
 	}
 	dest.TransferRequested = src.TransferRequested
+	dest.IsCaptain = src.IsCaptain
+	dest.IsViceCaptain = src.IsViceCaptain
+	if src.Leadership > 0 {
+		dest.Leadership = src.Leadership
+	}
+	dest.Homegrown = src.Homegrown
+	dest.AssociationTrained = src.AssociationTrained
+	dest.RegisteredEurope = src.RegisteredEurope
+	dest.CleanSheets = src.CleanSheets
+	dest.CareerCleanSheets = src.CareerCleanSheets
+	if src.Versatility > 0 {
+		dest.Versatility = src.Versatility
+	}
+	dest.PromiseKind = src.PromiseKind
+	dest.PromiseSeason = src.PromiseSeason
+	dest.PromiseMatchweek = src.PromiseMatchweek
 	dest.UniverseWonderkid = src.UniverseWonderkid
 	if src.Season != "" {
 		dest.Season = src.Season

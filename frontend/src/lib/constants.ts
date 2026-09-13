@@ -23,14 +23,15 @@ export const TRAINING_FOCUSES = [
 export type TrainingFocus = (typeof TRAINING_FOCUSES)[number]['value'];
 
 export const TABS = [
+  { id: 8, slug: 'home', label: 'Home' },
   { id: 0, slug: 'match', label: 'Match' },
-  { id: 1, slug: 'lab', label: 'Wonderkids' },
   { id: 2, slug: 'league', label: 'League' },
   { id: 7, slug: 'competitions', label: 'Competitions' },
-  { id: 6, slug: 'inbox', label: 'Inbox' },
-  { id: 5, slug: 'history', label: 'History' },
   { id: 3, slug: 'squads', label: 'Squads' },
   { id: 4, slug: 'transfers', label: 'Transfers' },
+  { id: 6, slug: 'inbox', label: 'Inbox' },
+  { id: 5, slug: 'history', label: 'History' },
+  { id: 1, slug: 'lab', label: 'Wonderkids' },
 ] as const;
 
 export type TabId = (typeof TABS)[number]['id'];
@@ -39,11 +40,11 @@ export type TabSlug = (typeof TABS)[number]['slug'];
 export function tabFromSlug(slug: string | null | undefined): TabId {
   if (slug === 'cup') return 2;
   const found = TABS.find((t) => t.slug === slug);
-  return (found?.id ?? 2) as TabId;
+  return (found?.id ?? 8) as TabId;
 }
 
 export function slugFromTab(id: TabId): TabSlug {
-  return TABS.find((t) => t.id === id)?.slug ?? 'league';
+  return TABS.find((t) => t.id === id)?.slug ?? 'home';
 }
 
 export function clubById(clubs: Club[], id: string | null | undefined): Club | null {

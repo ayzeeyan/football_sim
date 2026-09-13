@@ -50,7 +50,7 @@ func TestContractAndLoanRepliesNudgeWithoutDialogueGame(t *testing.T) {
 	if got := conversationKindWithClub(contractor, 12, false); got != "contract" {
 		t.Fatalf("expiring regular kind=%q want contract", got)
 	}
-	msg := applyConversationChoice(contractor, "extend")
+	msg := applyConversationChoice(contractor, "extend", "2026-27", 6, "contract")
 	if contractor.Morale != 66 || contractor.TransferRequested {
 		t.Fatalf("extend should lift morale and clear requests: morale=%d requested=%v msg=%q", contractor.Morale, contractor.TransferRequested, msg)
 	}
@@ -58,7 +58,7 @@ func TestContractAndLoanRepliesNudgeWithoutDialogueGame(t *testing.T) {
 	if got := conversationKindWithClub(loanee, 12, false); got != "loan" {
 		t.Fatalf("unused prospect kind=%q want loan", got)
 	}
-	applyConversationChoice(loanee, "loan")
+	applyConversationChoice(loanee, "loan", "2026-27", 6, "loan")
 	if loanee.Morale != 65 || loanee.TransferRequested {
 		t.Fatalf("loan promise should nudge morale only: morale=%d requested=%v", loanee.Morale, loanee.TransferRequested)
 	}

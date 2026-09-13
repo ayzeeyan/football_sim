@@ -148,7 +148,23 @@ func (tm *TournamentManager) ballonScoreUnlocked(p *models.Player) float64 {
 			break
 		}
 	}
-	return round2(float64(p.OVR)*1.5 + float64(p.Goals)*4 + float64(p.Assists)*2.5 + float64(p.Appearances)*0.35 + teamBonus)
+	avg := 6.5
+	if n := len(p.RecentRatings); n > 0 {
+		sum := 0.0
+		for _, r := range p.RecentRatings {
+			sum += r
+		}
+		avg = sum / float64(n)
+	}
+	if tm.World != nil {
+		if club := tm.Clubs[p.ClubID]; club != nil {
+			table := tm.worldLeagueStandingsUnlocked(leagueIDForName(club.League))
+			if len(table) > 0 && table[0].ClubID == p.ClubID {
+				teamBonus += 10
+			}
+		}
+	}
+	return round2(float64(p.OVR)*1.2 + float64(p.Goals)*3.5 + float64(p.Assists)*2.5 + float64(p.Appearances)*0.4 + (avg-6.5)*8 + teamBonus)
 }
 
 func (tm *TournamentManager) allPlayersUnlocked() []*models.Player {

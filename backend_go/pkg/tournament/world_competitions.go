@@ -69,17 +69,17 @@ type KnockoutRound struct {
 // Domestic league tables deliberately reuse a club's single domestic record;
 // European league phases own independent CompetitionRecords.
 type Competition struct {
-	ID                    string                               `json:"id"`
-	Name                  string                               `json:"name"`
-	Country               string                               `json:"country"`
-	Kind                  CompetitionKind                      `json:"kind"`
-	Prestige              int                                  `json:"prestige"`
-	ParticipantIDs        []string                             `json:"participant_ids"`
-	QualificationSources  map[string]string                    `json:"qualification_sources,omitempty"`
+	ID                   string            `json:"id"`
+	Name                 string            `json:"name"`
+	Country              string            `json:"country"`
+	Kind                 CompetitionKind   `json:"kind"`
+	Prestige             int               `json:"prestige"`
+	ParticipantIDs       []string          `json:"participant_ids"`
+	QualificationSources map[string]string `json:"qualification_sources,omitempty"`
 	// Pots snapshots the seeded league-phase pot draw (pot index -> club IDs
 	// in ClubID order) so draws stay verifiable after later rating drift.
 	// Only set for pot-based phases (36-team Champions League).
-	Pots                  [][]string                            `json:"pots,omitempty"`
+	Pots                  [][]string                           `json:"pots,omitempty"`
 	Records               map[string]*models.CompetitionRecord `json:"records,omitempty"`
 	LeaguePhaseFixtureIDs []string                             `json:"league_phase_fixture_ids,omitempty"`
 	Rounds                []KnockoutRound                      `json:"rounds,omitempty"`
@@ -100,12 +100,16 @@ type EuropeanWorld struct {
 }
 
 func isTopFiveLeague(name string) bool {
+	return leagueIDForName(name) != ""
+}
+
+func leagueIDForName(name string) string {
 	for _, def := range domesticLeagueDefinitions {
 		if def.League == name {
-			return true
+			return def.ID
 		}
 	}
-	return false
+	return ""
 }
 
 func worldSeedFor(seed int64, key string) int64 {

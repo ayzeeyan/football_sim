@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const appSource = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 function macroHandlerSource(): string {
-  const start = appSource.indexOf("const handleMacroSim = useCallback(async (mode: 'week' | 'month' | 'season') => {");
+  const start = appSource.indexOf("const handleMacroSim = useCallback(async (mode: 'continue' | 'week' | 'month' | 'season') => {");
   const end = appSource.indexOf('\n\n  const watchClub', start);
   if (start < 0 || end < 0) throw new Error('handleMacroSim source not found');
   return appSource.slice(start, end);
@@ -29,6 +29,7 @@ describe('macro simulation execution lock', () => {
   });
 
   test('buttons and keyboard shortcuts share the same guarded handler', () => {
+    expect(appSource).toContain("onContinue={() => void handleMacroSim('continue')}");
     expect(appSource).toContain("onSimWeek={() => void handleMacroSim('week')}");
     expect(appSource).toContain("onSimMonth={() => void handleMacroSim('month')}");
     expect(appSource).toContain("onSimSeason={() => void handleMacroSim('season')}");

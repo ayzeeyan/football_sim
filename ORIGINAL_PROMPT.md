@@ -1,585 +1,169 @@
-You are continuing development on:
+You are continuing work on:
 
-Repository:
-ayzeeyan/football_sim
+Repository: ayzeeyan/football_sim
 
-Work from the CURRENT `main` branch.
+Work from the CURRENT `main` branch. The previous Chunk 1 PR has already been merged.
 
-The project has already evolved beyond a 12-club simulator. The long-term direction is now:
+Your job is to perform a focused post-merge correction pass for Chunk 1 based on the attached screenshots and the transfer-window progression bug.
 
-BUILD A DEEP, LIVING EUROPEAN FOOTBALL MANAGEMENT SIMULATOR INSPIRED BY THE DEPTH AND FEELING OF EA FC CAREER MODE / FOOTBALL MANAGEMENT GAMES, WHILE KEEPING ITS OWN ORIGINAL UI, SYSTEMS, AND IDENTITY.
+Do NOT begin Chunk 2.
 
-This is not a request to copy EA FC’s assets, UI, branding, or proprietary presentation.
-
-The objective is to create a polished, deterministic, persistent football universe where leagues, cups, players, managers, transfers, morale, development, injuries, finances, form, tactical decisions, and long-term careers all interact naturally.
-
-You have broad creative freedom.
-
-You are allowed to:
-- redesign weak frontend areas
-- improve backend architecture
-- introduce new football systems
-- replace obsolete assumptions
-- create better abstractions
-- improve simulation realism
-- improve UX substantially
-- add supporting data/state/models
-- remove dead or contradictory systems
-- add tests and validation
-
-But do NOT:
-- randomly rewrite working systems without first understanding them
-- add shallow gimmicks that do not affect the simulation
-- make frontend state authoritative over backend state
-- break deterministic simulation
-- weaken tests to make failing features pass
-- silently discard save data
+The screenshots expose several real UI/data/state bugs. Reproduce each issue before fixing it, find the backend/frontend root cause, add regression coverage where practical, then verify the whole application again.
 
 ============================================================
-0. START WITH A FULL PRODUCT + ARCHITECTURE AUDIT
+0. START BY REPRODUCING THE CURRENT STATE
 ============================================================
 
-Before implementing features:
+Start clean:
 
-1. Checkout latest main.
-2. Read AGENTS.md.
-3. Inspect:
-   - backend models
-   - tournament architecture
-   - competition scheduling
-   - transfer engine
-   - save format
-   - player stats
-   - manager logic
-   - match engine
-   - frontend navigation
-   - league UI
-   - squad UI
-   - transfer UI
-   - matchday UI
-   - awards
-   - inbox/news
-4. Run:
-   backend:
-   go test ./...
-   go vet ./...
-   go test -race ./...
+git checkout main
+git pull
+git status
 
-   frontend:
-   run the actual test command from package.json / CI
-   npm run build
+Backend:
 
-Then create an internal implementation plan.
+cd backend_go
+go test ./...
+go vet ./...
+go test -race ./...
 
-Do not assume previous features are correct merely because they exist.
+Frontend:
+
+cd ../frontend
+
+Inspect package.json and CI workflow, then run the same frontend tests/build that CI uses, for example:
+
+bun test
+npm run build
+
+Do not assume the previous implementation is correct just because it merged.
+
+Read AGENTS.md and inspect the current implementations before changing architecture.
 
 ============================================================
-PRIMARY PRODUCT DIRECTION
+1. CRITICAL BUG: SUMMER TRANSFER WINDOW STUCK AT WEEK 1
 ============================================================
 
-The finished product should feel like an interconnected football world rather than a set of disconnected screens.
-
-The player should be able to:
-
-- follow all major leagues
-- inspect clubs and squads
-- watch the transfer market evolve
-- see player careers develop
-- understand why a player is unhappy
-- see why a manager picked a lineup
-- follow league title races
-- follow relegation battles
-- watch European qualification evolve
-- see cup runs
-- track player form
-- observe injuries and fatigue
-- see managers fired
-- see clubs rise and decline over years
-- follow awards and records
-- simulate weeks/months/seasons while the world remains coherent
-
-Think:
-
-"career-mode football universe"
-
-not:
-
-"fixture generator with some menus"
-
-============================================================
-1. WORLD STRUCTURE — TOP FIVE LEAGUES
-============================================================
-
-Support these domestic leagues as first-class competitions:
-
-England:
-Premier League
-
-Spain:
-La Liga
-
-Germany:
-Bundesliga
-
-Italy:
-Serie A
-
-France:
-Ligue 1
-
-Use actual league-specific club counts and formats.
-
-Premier League:
-20 clubs
-38 league matches
-
-La Liga:
-20 clubs
-38 league matches
-
-Serie A:
-20 clubs
-38 league matches
-
-Bundesliga:
-18 clubs
-34 league matches
-
-Ligue 1:
-18 clubs
-34 league matches
-
-League schedules must be deterministic home-and-away double round robins.
-
-Do not artificially repeat league cycles to inflate appearance totals.
-
-A club should naturally reach 50–60 matches through:
-
-league
-domestic cups
-European competitions
-
-============================================================
-2. DOMESTIC CUPS
-============================================================
-
-Implement proper domestic cup systems.
-
-England:
-FA Cup
-EFL Cup
-
-Spain:
-Copa del Rey
-
-Germany:
-DFB-Pokal
-
-Italy:
-Coppa Italia
-
-France:
-Coupe de France
-
-Support:
-
-knockout draws
-round progression
-penalties
-extra time where appropriate
-cup histories
-competition stats
-winner tracking
-prize/prestige effects
-qualification consequences
-
-Create reusable cup infrastructure rather than hardcoding every cup independently.
-
-============================================================
-3. EUROPEAN COMPETITIONS
-============================================================
-
-Build a proper cross-league European competition architecture.
-
-Support:
-
-UEFA Champions League
-UEFA Europa League
-UEFA Conference League
-
-These should be reusable instances of a shared competition system.
-
-Possible model:
-
-EuropeanCompetition {
-  id
-  name
-  participants
-  league_phase
-  table
-  knockout_rounds
-  qualification_rules
-  prestige
-  prize_money
-}
-
-Domestic results should determine next-season qualification.
-
-European results should affect:
-
-club reputation
-finances
-manager evaluation
-player morale
-transfer attraction
-awards
-
-============================================================
-4. SHARED SEASON CALENDAR
-============================================================
-
-Replace any assumptions that one matchweek equals one match.
-
-A club may play:
-
-Saturday — league
-Wednesday — Champions League
-Sunday — league
-Wednesday — domestic cup
-
-Build a calendar capable of handling:
-
-league fixtures
-domestic cup fixtures
-European fixtures
-transfer windows
-winter break where applicable
-international-break placeholders if added later
-
-Use actual dates or a coherent week/date abstraction.
-
-The UI should eventually show a calendar resembling:
-
-AUG
-League
-League
-UCL
-League
-Cup
-
-SEP
-League
-League
-UCL
-League
-
-etc.
-
-Fixture congestion should become a real management factor.
-
-============================================================
-5. TRANSFER WINDOW STATE MACHINE — FIX COMPLETELY
-============================================================
-
-There is an existing serious transfer-window lifecycle bug.
-
-Observed failures include:
-
-window repeatedly returning to Week 1
-
-and sometimes:
-
-window advancing beyond Week 12
-
-Fix this at the backend state-machine level.
-
-Summer transfer window should behave exactly:
-
-Week 1
-Week 2
-...
-Week 12
-CLOSED
-
-Never expose:
-
-Week 13/12
-Week 14/12
-
-Never reset to Week 1 unless a NEW summer window begins.
-
-Audit:
-
-BeginOffSeasonWindow
-AdvanceOpenWindow
-CurrentWeek
-CurrentDay
-IsOffSeason
-SeasonPhase
-FinalizeSeasonTransition
-ResetForNewSeason
-Sim Week
-Sim Month
-Sim Season
-save/load
+The Summer Transfer Window currently remains visually/state-wise stuck at:
+
+Week 1 of 12
+
+even after attempting to advance it.
+
+This is the highest-priority functional bug.
+
+Reproduce it through BOTH:
+
+- Transfer screen "Advance One Week"
+- macro simulation paths:
+  - Sim Week
+  - Sim Month
+  - Sim Season
+
+Trace the full state lifecycle:
+
+TournamentManager.SeasonPhase
+TransferEngine.IsOffSeason
+TransferEngine.CurrentWeek
+TransferEngine.CurrentDay
+AdvanceOpenWindow()
+BeginOffSeasonWindow()
+FinalizeSeasonTransition()
+ResetForNewSeason()
+season rollover
+save/load restoration
+/api/transfers
+/api/transfers/advance
+/api/sim/week
+/api/sim/month
+/api/sim/season
 
 Required behavior:
 
-Sim Week:
-+1 transfer week
+Season finishes
+→ transfer phase begins
+→ transfer window initializes at Week 1/12 exactly once
+
+Advance One Week:
+Week 1 → 2 → 3 → ... → 12
+
+After Week 12 has actually been processed:
+window may finish
+→ season transition can occur
+→ next season initializes
+
+The next season MUST NOT initialize while unprocessed transfer weeks remain.
+
+Sim Week during transfer phase:
+advance exactly 1 transfer week
 
 Sim Month:
-up to 4 remaining weeks
+advance up to 4 transfer weeks without exceeding Week 12
 
 Sim Season:
-process every remaining transfer week before next season begins
+process every remaining transfer week before initializing the next season
 
-Save Week 7
-reload
-still Week 7
+Do not fake progression in the frontend.
 
-Do not patch this only in React.
+`TransferEngine.CurrentWeek` must be authoritative.
 
-Backend state is authoritative.
+If CurrentDay remains for legacy compatibility, do not let it control the new 12-week lifecycle.
 
-============================================================
-6. WINTER TRANSFER WINDOW
-============================================================
+Also verify that refreshing/reloading the app does not send the window back to Week 1.
 
-Once summer window logic is reliable, introduce a January window.
+Persist and restore:
 
-Refactor transfer lifecycle away from:
+- IsOffSeason
+- CurrentWeek
+- relevant negotiations
+- TransferredThisWindow
+- club finances
 
-"offseason = transfer window"
+Remove any lifecycle code that repeatedly calls BeginOffSeasonWindow() and therefore resets the current week back to 1.
 
-toward:
+Add regression tests specifically proving:
 
-TransferWindow {
-  type
-  open
-  current_period
-  start
-  end
-}
+1 → 2 after one advance
 
-Potential window types:
+1 → 5 after four advances
 
-SUMMER
-WINTER
-CLOSED
+11 → 12 correctly
 
-Different windows may have different transfer activity levels.
+Week 12 is processed before season rollover
 
-Summer:
-major squad building
+save/reload at Week 7 returns to Week 7
 
-Winter:
-smaller corrective market
+Sim Month at Week 10 does not skip the end of the window
+
+Sim Season processes all remaining weeks
 
 ============================================================
-7. PLAYER MORALE
+2. STARTING XI / FORMATION IS STILL WRONG
 ============================================================
 
-Add persistent morale:
+The attached Barcelona squad screenshot shows the formation renderer is not sufficient yet.
 
-0–100
+Visible problems include:
 
-Suggested states:
+- Pedri and Rodri overlapping vertically
+- Rodri and Christensen occupying almost the same lane
+- Cancelo and Koundé overlapping on the right
+- two RBs being selected at the same time
+- no natural right winger visible
+- the screen claims a formation, but the actual XI does not obey that formation
+- player cards can cover each other
+- generic CB/CM fallback spacing is still not enough
 
-90–100:
-Excellent
+This is not only a CSS problem.
 
-75–89:
-Happy
+Inspect BOTH:
 
-55–74:
-Content
+A. starting XI selection
+B. formation-slot rendering
 
-35–54:
-Unhappy
+The XI generator must select players INTO REAL TACTICAL SLOTS rather than simply selecting the strongest 11 and attempting to draw their natural positions afterward.
 
-0–34:
-Very Unhappy
-
-Morale should respond gradually to actual football events.
-
-Positive examples:
-
-starts
-minutes
-good performances
-goals
-assists
-winning
-trophies
-manager trust
-playing preferred position
-good development
-
-Negative examples:
-
-repeated benching
-broken playing-time expectations
-poor club form
-being used badly out of position
-transfer request denied
-losing important games
-manager conflict
-not making matchday squad
-
-Keep changes bounded.
-
-Do not make morale jump 20 points because of one match.
-
-============================================================
-8. SQUAD ROLES / PLAYING-TIME EXPECTATIONS
-============================================================
-
-Add meaningful squad roles:
-
-Crucial
-Important
-Rotation
-Squad
-Prospect
-
-Role determines expected playing time.
-
-Example:
-
-90 OVR Crucial:
-expects frequent starts
-
-84 OVR Important:
-expects regular participation
-
-77 OVR Rotation:
-expects meaningful rotation
-
-71 OVR Squad:
-accepts limited appearances
-
-young Prospect:
-expects development opportunities rather than constant starts
-
-Track playing time across a rolling recent-match window.
-
-Potential fields:
-
-available_matches
-starts
-appearances
-minutes
-expected_minutes
-actual_minutes
-satisfaction
-
-This should feed morale.
-
-============================================================
-9. TRANSFER REQUESTS
-============================================================
-
-Very unhappy players should sometimes request a transfer.
-
-Potential causes:
-
-lack of playing time
-club below player's level
-broken squad-role expectations
-manager relationship
-lack of European football
-club decline
-
-Transfer request should:
-
-persist
-appear in inbox
-affect selling willingness
-affect buyer interest
-
-It should NOT guarantee a transfer.
-
-Players may withdraw requests if circumstances improve.
-
-============================================================
-10. FITNESS, SHARPNESS AND MORALE SHOULD BE SEPARATE
-============================================================
-
-Do not combine these systems.
-
-Fitness:
-physical readiness
-
-Sharpness:
-match readiness
-
-Morale:
-psychological satisfaction
-
-Fitness decreases with:
-
-minutes
-congested fixtures
-injury recovery
-
-Fitness recovers through:
-
-rest
-
-Sharpness increases through:
-
-meaningful competitive minutes
-
-Sharpness declines through:
-
-long periods without playing
-
-Morale reacts to:
-
-role
-performance
-results
-treatment
-
-These should create meaningful squad-management choices.
-
-============================================================
-11. PLAYER FORM
-============================================================
-
-Add recent form as a separate concept from OVR.
-
-Use rolling recent-match ratings.
-
-Form may consider:
-
-rating
-goals
-assists
-clean sheets
-mistakes
-minutes
-
-Form should affect:
-
-AI lineup selection
-award weighting
-transfer interest
-morale
-news narratives
-
-Do not directly permanently increase OVR because of temporary good form.
-
-============================================================
-12. BETTER LINEUP AI
-============================================================
-
-Starting XI selection should become tactical and situational.
-
-Use explicit tactical slots.
-
-Example 4-3-3:
+For a 4-3-3-style XI, think in explicit slots such as:
 
 GK
 
@@ -589,151 +173,345 @@ RCB
 RB
 
 LCM
-CDM/CM
+CM/CDM
 RCM
 
 LW
-ST
+ST/CF
 RW
 
-Selection factors:
+Other formations may use:
 
-slot compatibility
-OVR
-form
-fitness
-sharpness
-morale
-injury
-suspension
-competition importance
-manager philosophy
-fixture congestion
+CAM
+LDM
+RDM
+LM
+RM
+LWB
+RWB
+LAM
+RAM
+LF
+RF
 
-Avoid:
+Create a deterministic slot assignment system.
 
-two RBs taking RB/CB unnecessarily
-no right winger because a stronger central player exists
-duplicate overlapping tactical positions
+Preferred behavior:
 
-Return:
-
-player
-+
-assigned tactical slot
-
-Frontend should render assigned slot rather than guessing from natural position.
-
-============================================================
-13. ROTATION AI
-============================================================
-
-Managers must rotate intelligently.
-
-Example:
-
-Premier League Saturday
-Champions League Tuesday
-Premier League Saturday
-
-AI should sometimes rest players.
-
-Factors:
-
-fitness
-recent minutes
-sharpness
-role
-OVR
-competition importance
-opponent quality
-injury risk
-
-A club with 55 matches should not automatically use the exact same XI 55 times.
-
-============================================================
-14. MANAGER PERSONALITY SHOULD MATTER
-============================================================
-
-Manager styles should have actual football consequences.
+exact role match
+→ compatible position match
+→ category-compatible fallback
+→ emergency deterministic fallback
 
 Examples:
 
-Youth Developer:
-more likely to use prospects
+RB should strongly prefer RB/RWB before CB.
 
-Veteran Trust:
-prefers experienced players
+RW should strongly prefer RW/RM/RF before generic FWD.
 
-High Press:
-values pace/stamina
-higher fatigue/injury risk
+LW should prefer LW/LM/LF.
 
-Possession:
-values passing/composure
+LCB/RCB can use CB.
 
-Counter:
-values pace/transitions
+CAM should prefer CAM, then CM/AM-compatible midfielder.
 
-Aggressive Market:
-more transfer activity
+Do not select two RBs when another reasonable defender can fill CB.
 
-Financially Conservative:
-avoids expensive transfers
+Do not omit an entire flank simply because a slightly higher-OVR player exists elsewhere.
 
-Managers should influence:
+Do not mutate Player.Position to make rendering easier.
 
-XI
-rotation
-transfers
-player development
-player morale
-tactical choices
+After XI selection, formation rendering should receive explicit slot metadata.
+
+For example:
+
+{
+  player: ...,
+  slot: "RCB"
+}
+
+rather than trying to infer the slot again from `player.position`.
+
+Acceptance criteria:
+
+- exactly 11 unique players
+- exactly one GK
+- no duplicate player IDs
+- no card overlap at normal desktop sizes
+- LW visibly left
+- RW visibly right
+- ST central
+- CAM advanced and central
+- LB/RB clearly separated
+- LCB/RCB clearly separated
+- central midfield slots separated
+- deterministic output
+- same squad + same availability = same XI
+
+Add tests for cases including:
+
+two natural RBs
+three CBs
+multiple CMs
+no natural RW
+no natural LB
+CAM + CM
+injured first-choice player
 
 ============================================================
-15. MANAGER JOB SECURITY
+3. MATCH EVENT BUG: "UNKNOWN" PLAYER ON YELLOW CARD
 ============================================================
 
-Board expectations should become richer.
+The screenshots show a match event such as:
 
-Consider:
+Yellow card
+41'
+Unknown
+Tottenham Hotspur
 
-club reputation
-squad strength
+That is invalid.
+
+A match event that refers to a real player must preserve that player's identity through the entire pipeline.
+
+Trace:
+
+match engine event creation
+→ MatchReport event
+→ fixture serialization
+→ WebSocket event serialization if relevant
+→ REST response
+→ frontend Matchday event list
+→ frontend event detail panel
+
+For card events ensure the payload consistently includes:
+
+player_id
+player name
+side
+club/team
+minute
+card type
+
+Do the same audit for:
+
+goal
+penalty
+own goal
+yellow
+red
+substitution
+assist if represented
+injury if represented
+
+Do not let the frontend guess a player from side/team/order.
+
+If an event genuinely has no player, "Unknown" is acceptable only as a defensive legacy fallback.
+
+Normal simulation must not produce Unknown card recipients.
+
+Add a backend regression test for a yellow-card event and a red-card event proving the serialized player is resolvable.
+
+============================================================
+4. MATCH EVENT FEED CONSISTENCY
+============================================================
+
+The compact event list and expanded event details should describe the SAME event consistently.
+
+The screenshots suggest event presentation is currently inconsistent.
+
+For each event, verify:
+
+minute
+player
+club
+event type
+score implication
+penalty label
+own-goal label
+red/yellow state
+substitution data
+
+The compact feed should use recognizable visual treatment:
+
+goal
+penalty
+own goal
+yellow card
+red card
+substitution
+
+Do not use color alone as the only distinction.
+
+For example:
+
+Ødegaard 77' (pen)
+
+and:
+
+Udogie 85' (og)
+
+are fine patterns, but the selected detail pane must resolve the same event/player.
+
+============================================================
+5. LIVE MATCH PITCH NEEDS A LEGIBILITY PASS
+============================================================
+
+The live pitch screenshot shows useful information but the presentation is cramped.
+
+Visible issues include:
+
+- player surnames being truncated awkwardly
+- substitution minute markers competing with names
+- card markers squeezed against circles
+- assist markers and goal markers cluttering the same area
+- player labels near the edges risk clipping
+- markers can become visually dense around midfield
+- some text is difficult to distinguish quickly
+
+Improve this WITHOUT redesigning the whole app.
+
+Keep the current visual identity.
+
+Focus on:
+
+player name readability
+marker spacing
+responsive label width
+edge-aware placement
+card indicator position
+goal badge position
+assist badge position
+substitution indicator position
+
+Do not hide important match information.
+
+Prefer a compact marker hierarchy such as:
+
+player circle
+rating pill
+surname below
+event/status badges around the circle
+
+If full surname does not fit, intelligently abbreviate it rather than showing ugly arbitrary truncation.
+
+Examples:
+
+Schlotterbeck → Schlotterbeck if space exists
+Konstantelias → Konstantelias if possible
+very long names → controlled ellipsis
+
+Use title/tooltip for the full name if truncated.
+
+Avoid marker overlap as much as possible while preserving actual player coordinates.
+
+Do not alter match simulation coordinates purely to make the UI pretty.
+
+============================================================
+6. BALLON D'OR / AWARDS PODIUM UI IMPROVEMENT
+============================================================
+
+The Ballon d'Or screenshot is functional but visually unfinished.
+
+Current visible issues:
+
+- huge unused empty areas
+- podium boxes extend below the visible content area
+- podium presentation feels oversized relative to player information
+- 2nd/3rd place layout is not well balanced with the winner
+- lower portions can be clipped
+- responsive behavior needs work
+
+Keep the existing award logic unless tests prove it incorrect.
+
+Improve the presentation.
+
+The podium should clearly communicate:
+
+1st
+2nd
+3rd
+
+player
+club
+OVR
+goals
+assists
+award score
+
+Make the entire podium fit within the modal viewport without requiring awkward clipping.
+
+The modal should remain usable at common laptop resolutions such as:
+
+1366×768
+1920×1080
+
+Allow internal scrolling if needed, but the podium itself should not disappear below a fixed-height container.
+
+Keep explicit stable winner IDs.
+
+Do NOT revert to determining a winner from card order or player names.
+
+Also verify:
+
+Ballon d'Or #1 is exactly rankings[0]
+2nd is rankings[1]
+3rd is rankings[2]
+
+Scores shown in the UI must be the real backend award scores.
+
+============================================================
+7. REVIEW BALLON D'OR WEIGHTING WHILE HERE
+============================================================
+
+The screenshot shows:
+
+Maverick Cantalejo
+25G · 4A · 86 OVR
+263.75 pts
+
+Ousmane Dembélé
+19G · 5A · 87 OVR
+256.05 pts
+
+Izyan Levin Bantol
+23G · 3A · 84 OVR
+3rd
+
+This is not automatically wrong.
+
+Do NOT change results simply because a wonderkid won.
+
+But verify the weighting is genuinely based on the intended factors rather than accidentally overvaluing one field.
+
+Ballon d'Or should meaningfully consider some combination of:
+
+goals
+assists
+average rating / match performance
+appearances
+OVR
+league success
+continental success
+major trophies
+
+Do not let top scorer automatically equal Ballon d'Or winner.
+
+Do not apply a special anti-wonderkid handicap.
+
+If Maverick legitimately wins under the formula, preserve it.
+
+============================================================
+8. CLUB IDENTITY + FINANCE API CHECK
+============================================================
+
+Finish any post-merge API work still incomplete.
+
+The club serializer should expose authoritative:
+
+identity
 finances
-last season
-European participation
 
-Example expectations:
-
-Real Madrid:
-title challenge
-deep Champions League run
-
-Arsenal:
-top-four/title challenge
-European progress
-
-mid-table club:
-top half
-
-relegation candidate:
-survival
-
-BoardPatience should determine tolerance.
-
-Manager sackings should produce:
-
-news
-history
-replacement
-tactical changes
-
-============================================================
-16. CLUB IDENTITY SHOULD INFLUENCE BEHAVIOR
-============================================================
-
-Existing identity fields such as:
+including:
 
 Reputation
 HistoricalPrestige
@@ -745,1115 +523,231 @@ YouthPreference
 TransferAggressiveness
 SellingTendency
 
-should increasingly affect simulation decisions.
-
-Examples:
-
-high YouthPreference:
-more academy/prospect minutes
-
-high TransferAggressiveness:
-more bids
-
-high SellingTendency:
-more willing to accept offers
-
-high FinancialPower:
-larger budgets
-
-high HistoricalPrestige:
-more resistant reputation decline
-
-============================================================
-17. CLUB FINANCES
-============================================================
-
-Continue improving finances gradually.
-
-Core fields:
-
-Balance
 TransferBudget
+Balance
 
-Possible additions:
+The transfer UI must use:
 
-WageBudget
-WageBill
-PrizeMoney
-CompetitionRevenue
+club.Finances.TransferBudget
 
-Do not immediately build a full accounting simulator.
+as the authoritative warchest.
 
-But success should matter financially.
+Manager.BudgetEur may exist only as a compatibility mirror.
 
-Champions League run:
-major financial benefit
-
-domestic cup:
-smaller benefit
-
-relegation:
-large negative effect
+Check the actual merged `main`; do not assume this is still incomplete.
 
 ============================================================
-18. TRANSFER AI
+9. MANUAL TRAINING MUST RESPECT ANNUAL +5 OVR CAP
 ============================================================
 
-Transfers should become sporting decisions rather than random transactions.
+A previous long-run test discovered stacked development could cause +7 OVR in one season.
 
-Buying logic:
+A central annual-development cap was added.
 
-position weakness
-depth
-injuries
-player quality
-potential
-age
-value
-finances
-manager system
-club ambition
+Verify EVERY mutation path now uses it, including the manual training endpoint.
 
-Selling logic:
+Audit:
 
-player importance
-replacement
-offer premium
-club finances
-player morale
-transfer request
-SellingTendency
-
-Player acceptance:
-
-club reputation
-league prestige
-European football
-expected squad role
-competition for position
-current morale
-
-Players should sometimes reject moves.
-
-============================================================
-19. TRANSFER DEADLINE DAY
-============================================================
-
-Consider creating more activity near transfer deadlines.
-
-Example:
-
-last two transfer weeks:
-
-higher bid frequency
-more urgent selling
-more replacement signings
-more transfer news
-
-Keep it deterministic and believable.
-
-============================================================
-20. LOANS
-============================================================
-
-Loans are highly recommended once playing time matters.
-
-Loan state should explicitly track:
-
-parent club
-temporary club
-start season
-return season
-optional future buy clause if later added
-
-Permanent ownership must remain separate from temporary registration.
-
-A prospect blocked at a top club should sometimes seek a loan.
-
-Loan development should depend on actual minutes.
-
-============================================================
-21. PLAYER DEVELOPMENT
-============================================================
-
-Preserve realistic annual growth.
-
-Approximate target:
-
-+1 / +2 normal
-+3 strong
-+4 rare
-+5 exceptional maximum
-
-Playing time may influence development.
-
-But:
-
-training
-playing time
-match XP
+RunTrainingCycle
+ApplyMatchXP
+weekly autonomous training
 mentorship
-form
+puberty development
+seasonal growth
+manual training endpoint
+any direct OVR mutation
 
-must NEVER stack beyond the annual +5 ceiling.
+Absolute annual OVR gain ceiling:
 
-Keep underlying attributes coherent with OVR.
++5
 
-============================================================
-22. COMPETITION-SPECIFIC PLAYER STATS
-============================================================
+Do not merely clamp Player.OVR while leaving attributes inflated.
 
-Track stats separately.
-
-Example:
-
-Player:
-Vinícius Júnior
-
-La Liga:
-31 apps
-19 goals
-9 assists
-
-Champions League:
-10 apps
-7 goals
-4 assists
-
-Copa del Rey:
-4 apps
-2 goals
-
-TOTAL:
-45 apps
-28 goals
-13 assists
-
-Store:
-
-appearances
-starts
-minutes
-goals
-assists
-ratings
-cards
-
-by competition.
-
-This should feed:
-
-awards
-UI
-player profiles
-records
+Underlying attributes must remain coherent with the capped OVR.
 
 ============================================================
-23. PLAYER PROFILE OVERHAUL
+10. PLAYER ASSET / IMAGE AUDIT
 ============================================================
 
-Improve the player page substantially.
+Perform the remaining Chunk 1 asset verification.
 
-Potential information:
+For every referenced player image:
 
-photo
-club
-nationality
-age
-position
-OVR
-potential
-value
+stable deterministic URL/key
+asset exists
+reload doesn't change image
+frontend production build resolves it
+desktop/static packaging can locate it
 
-Morale
-Fitness
-Sharpness
-Form
+Do not re-encode existing images.
 
-Squad role
-
-season:
-starts
-apps
-minutes
-goals
-assists
-average rating
-
-competition breakdown
-
-career history
-
-transfer history
-
-trophies
-
-development graph
-
-injury history
-
-Use real backend data only.
+Do not commit unnecessary binary rewrites.
 
 ============================================================
-24. SQUAD HUB OVERHAUL
+11. UI RESPONSIVENESS PASS
 ============================================================
 
-Create a genuinely useful squad management screen.
-
-Suggested table columns:
-
-Player
-Position
-OVR
-Age
-Role
-Morale
-Form
-Fitness
-Sharpness
-Starts
-Apps
-Minutes
-Goals
-Assists
-Value
-
-Allow:
-
-sorting
-filtering
-position groups
-
-Keep the formation view.
-
-Provide obvious visual states for:
-
-injured
-suspended
-unhappy
-excellent form
-fatigued
-
-============================================================
-25. COMPETITION HUB
-============================================================
-
-This should become one of the strongest frontend areas.
-
-Navigation concept:
-
-Competitions
-
-England
-Premier League
-FA Cup
-EFL Cup
-
-Spain
-La Liga
-Copa del Rey
-
-Germany
-Bundesliga
-DFB-Pokal
-
-Italy
-Serie A
-Coppa Italia
-
-France
-Ligue 1
-Coupe de France
-
-Europe
-Champions League
-Europa League
-Conference League
-
-Each competition page should support:
-
-Overview
-Table / Bracket
-Fixtures
-Results
-Stats
-History
-
-============================================================
-26. IMPROVE LEAGUE PAGE UX
-============================================================
-
-The current League page already has a strong visual direction.
-
-Evolve it further.
-
-Recommended structure:
-
-Top league header:
-logo
-league name
-country
-current matchweek
-season
-
-Main table:
-position
-club crest
-club
-P
-W
-D
-L
-GF
-GA
-GD
-Pts
-form
-qualification/status
-
-Right sidebar:
-
-This Week's Fixtures
-Top Scorers
-Top Assists
-Quick Actions
-
-Below table:
-
-Title Race
-European Race
-Relegation Battle
-
-Bottom:
-
-Season Timeline
-
-Use subtle qualification bands:
-
-Champions League
-Europa League
-Conference League
-Relegation
-
-Do not clutter the page with giant empty panels.
-
-============================================================
-27. GLOBAL HOME DASHBOARD
-============================================================
-
-Build a football-world dashboard.
-
-Possible cards:
-
-Premier League leader
-La Liga leader
-Bundesliga leader
-Serie A leader
-Ligue 1 leader
-
-Champions League status
-
-Top scorer in Europe
-
-Biggest transfers
-
-Major injuries
-
-Manager sackings
-
-Wonderkid watch
-
-Upcoming big fixtures
-
-This should make the universe feel alive.
-
-============================================================
-28. MATCHDAY HUB
-============================================================
-
-Improve matchday presentation.
-
-Pre-match:
-
-venue
-competition
-table positions
-form
-expected XI
-injuries
-tactical matchup
-key player
-
-Live:
-
-score
-clock
-momentum
-possession
-shots
-events
-pitch
-ratings
-
-Post-match:
-
-score
-stats
-ratings
-MOTM
-x-style shot map if already available
-standings impact
-player morale changes
-injuries
-development
-
-Fix any remaining:
-
-Unknown player events
-bad event identity
-layout overlaps
-truncated player labels
-
-============================================================
-29. MATCH EVENT QUALITY
-============================================================
-
-Ensure events preserve stable player identity.
-
-Each event should include:
-
-player_id
-name
-club
-side
-minute
-event_type
-
-Examples:
-
-goal
-assist
-penalty
-own goal
-yellow
-red
-substitution
-injury
-
-Frontend should never normally show:
-
-Unknown
-
-unless loading legacy broken data.
-
-============================================================
-30. NEWS + INBOX
-============================================================
-
-Make the football world generate meaningful stories.
-
-Examples:
-
-transfer request
-manager sacking
-major signing
-title race
-relegation fight
-cup upset
-wonderkid breakout
-injury
-award
-club record
-player milestone
-European qualification
-
-Stories must be generated from actual state.
-
-Avoid generic random filler.
-
-============================================================
-31. PLAYER INTERACTIONS
-============================================================
-
-Optional but encouraged.
-
-Simple player requests can deepen morale.
-
-Examples:
-
-"I need more playing time."
-
-"I want to go on loan."
-
-"I want to leave."
-
-"I'm happy with my role."
-
-"I want a bigger role."
-
-Keep this lightweight.
-
-Do not build a giant dialogue simulator.
-
-============================================================
-32. RIVALRIES
-============================================================
-
-Expand derby/rivalry effects.
-
-Derbies may influence:
-
-morale
-manager pressure
-news importance
-match intensity
-attendance
-fan expectations
-
-Examples:
-
-El Clásico
-North London Derby
-Manchester Derby
-Der Klassiker
-Derby della Madonnina
-
-Keep effects moderate.
-
-============================================================
-33. COMPETITION IMPORTANCE
-============================================================
-
-Every match should have an importance score.
-
-Examples:
-
-League early season:
-medium
-
-Domestic cup early round:
-lower
-
-title decider:
-very high
-
-European knockout:
-very high
-
-final:
-maximum
-
-AI uses this for:
-
-lineup strength
-rotation
-tactical risk
-star-player usage
-
-============================================================
-34. AWARDS EXPANSION
-============================================================
-
-Preserve:
-
-Ballon d'Or
-Player of the Season
-Golden Boy
-Team of the Season
-Manager of the Year
-
-Add per-competition awards where useful:
-
-Premier League Golden Boot
-La Liga Pichichi-style top scorer
-Bundesliga top scorer
-Serie A top scorer
-Ligue 1 top scorer
-
-League Player of the Season
-
-Young Player
-
-European Golden Boot
-
-Champions League Player of the Season
-
-Award calculations should use:
-
-performance
-ratings
-goals
-assists
-appearances
-team success
-
-not just raw goals.
-
-============================================================
-35. RECORDS + HISTORY
-============================================================
-
-Track:
-
-league champions
-cup winners
-European winners
-top scorers
-record points
-record transfers
-club trophy history
-player career goals
-player career appearances
-Ballon d'Or winners
-
-Create a proper historical archive.
-
-Long-term simulation should feel meaningful.
-
-============================================================
-36. SAVE SYSTEM
-============================================================
-
-This growing world needs explicit save versioning.
-
-Persist:
-
-leagues
-cups
-European competitions
-calendar
-transfers
-morale
-fitness
-sharpness
-roles
-form
-manager state
-club finances
-stats
-history
-
-Old saves should either:
-
-migrate safely
-
-or:
-
-load as explicitly identified legacy saves
-
-Never panic.
-
-============================================================
-37. WORLD VALIDATOR
-============================================================
-
-Expand ValidateWorldState.
-
-Validate:
-
-unique club IDs
-unique player IDs
-one permanent owning club per player
-valid loans
-valid league membership
-fixture references
-competition membership
-table correctness
-calendar sanity
-transfer-window state
-finances
-morale 0–100
-fitness bounds
-sharpness bounds
-role validity
-manager references
-European qualification
-no duplicate fixture IDs
-no player on two teams simultaneously
-
-============================================================
-38. PERFORMANCE
-============================================================
-
-The world may now contain around:
-
-96 clubs
-2000+ players
-multiple competitions
-
-Do not repeatedly scan every player for simple lookups.
-
-Use indexes where appropriate:
-
-clubByID
-playerByID
-competitionByID
-
-Avoid unnecessary deep copies in hot paths.
-
-Keep simulation responsive.
-
-============================================================
-39. DETERMINISTIC SIMULATION
-============================================================
-
-Determinism remains mandatory.
-
-Same:
-
-seed
-database
-user actions
-
-must produce the same meaningful world.
-
-Use subsystem RNG streams.
-
-Suggested ownership:
-
-matches
-transfers
-development
-injuries
-managers
-competition draws
-academy
-news
-
-Never choose RNG-indexed data from unsorted Go map iteration.
-
-============================================================
-40. FRONTEND DESIGN DIRECTION
-============================================================
-
-The visual direction should evolve toward:
-
-premium
-football-focused
-data-rich
-dark green
-cream
-brass/gold
-clean typography
-professional spacing
-
-Use:
-
-club crests
-competition logos
-subtle photography where appropriate
-small contextual icons
-
-Do not copy EA FC's exact design.
-
-Create an original football-management identity.
-
-============================================================
-41. FRONTEND INFORMATION ARCHITECTURE
-============================================================
-
-Strong candidate navigation:
-
-Home
-Match
-Leagues
-Competitions
-Squads
+Use the screenshots as regression references.
+
+Specifically inspect these views at normal laptop resolution:
+
+Awards ceremony / Ballon d'Or
+Match event feed
+Match event detail
+Squad formation
+Live pitch
 Transfers
-Players
-Inbox
-History
 
-Potential global header:
+Fix:
 
-current season
-current date
-next fixture
-Continue button
-notifications
-simulation controls
+clipping
+overflow
+overlap
+unnecessary horizontal scroll
+content hidden below fixed containers
+bad text truncation
+cards covering each other
 
-Avoid forcing users to understand internal simulation concepts like:
+Do not redesign unrelated tabs.
 
-"MW scheduler state"
-
-Use football language.
+Preserve the app's dark green/brass football aesthetic.
 
 ============================================================
-42. CONTINUE BUTTON
+12. STRICT REGRESSION TESTS TO ADD
 ============================================================
 
-Consider replacing several simulation actions with a primary:
+Do not only manually inspect these fixes.
 
-Continue
+Add useful automated coverage.
 
-button.
+Transfer lifecycle:
 
-Example:
+Week 1 -> Week 2
+Week 7 persists over save/reload
+Week 12 is actually processed
+season cannot begin early
+Sim Week/Month/Season obey transfer weeks
 
-Continue
-"Simulate to next important event"
+Formation:
 
-Possible stopping points:
+11 unique players
+one GK
+left/right slots correct
+no duplicate role-card overlap
+two RB scenario handled
+missing RW deterministic fallback
 
-next watched-club match
-transfer offer
-player request
-injury
-cup draw
-transfer deadline
-season event
+Events:
 
-Keep Week / Month / Season simulation available as secondary controls.
+yellow card includes player ID/name
+red card includes player ID/name
+own goal preserves scorer
+penalty preserves scorer
+frontend does not normally render Unknown
 
-This will make the product feel much more like a career simulator.
+Development:
 
-============================================================
-43. SMALL UX DETAILS
-============================================================
+manual training respects +5
+weekly training respects +5
+match XP respects +5
+10-season soak respects +5
 
-Improve:
+Awards:
 
-hover states
-empty states
-loading states
-tooltips
-keyboard navigation
-responsive layout
-text truncation
-scroll behavior
-modal sizing
-table readability
-
-Avoid huge empty cards.
-
-Avoid information being hidden below fixed-height containers.
+winner_id is explicit
+podium ordering matches ranking
+TOTS still exactly 1 GK / 4 DEF / 3 MID / 3 FWD
 
 ============================================================
-44. RESPONSIVENESS
+13. RUN THE EXISTING 10-SEASON SOAK
 ============================================================
 
-Primary target:
+Do not disable it.
 
-desktop
+It should verify season after season:
 
-But test at least:
+world state remains valid
+transfer window processes correctly
+finances remain >= 0
+no duplicate players
+canonical wonderkids stay in designated clubs
+growth <= +5 per season
+season advances
+transfers stay permanent
 
-1366×768
-1920×1080
-
-Key screens should not break:
-
-League
-Competition Hub
-Squads
-Transfers
-Match
-Awards
-Player Profile
+If it fails, fix the underlying system.
 
 ============================================================
-45. CREATIVE AUTHORITY
+14. FINAL VERIFICATION
 ============================================================
 
-You have explicit permission to introduce additional features if they improve the central goal:
+Before declaring this complete, run:
 
-"A living European football career universe."
-
-Potential creative additions include:
-
-captaincy
-player leadership
-homegrown status
-club registration rules
-academy intake
-loan reports
-deadline-day feed
-club power rankings
-dynamic rivalries
-dynamic player roles
-player promises
-clean-sheet tracking
-manager tactical evolution
-UEFA coefficients
-stadium attendance
-club fan expectations
-club season previews
-media pressure
-team chemistry
-player versatility
-position retraining
-
-Do not implement everything simply because it is listed.
-
-Choose systems that interact meaningfully with the rest of the simulation.
-
-============================================================
-46. IMPLEMENT IN COHERENT PHASES
-============================================================
-
-Recommended sequence:
-
-PHASE A — World
-Top 5 leagues
-domestic cups
-shared calendar
-competition hub
-
-PHASE B — Europe
-Champions League
-Europa League
-Conference League
-qualification
-
-PHASE C — Transfers
-summer state-machine fix
-winter window
-transfer AI
-destination logic
-loans
-
-PHASE D — Squad Management
-morale
-roles
-fitness
-sharpness
-form
-rotation
-
-PHASE E — Frontend
-Home Dashboard
-League UI
-Competition Hub
-Squad Hub
-Player Profile
-Transfer Centre
-
-PHASE F — Career Depth
-manager objectives
-player requests
-records
-news
-history
-rivalries
-
-Each phase should be:
-
-implemented
-tested
-validated
-committed
-
-before spreading into too many unfinished systems.
-
-============================================================
-47. MULTI-SEASON SOAK
-============================================================
-
-Maintain a long-run automated simulation.
-
-Eventually target 10 complete seasons.
-
-Verify every year:
-
-all five leagues complete
-cups complete
-European competitions complete
-qualification works
-transfer windows close correctly
-no Week 13 summer transfer state
-finances remain valid
-ownership remains valid
-loans return correctly
-morale remains bounded
-fitness remains bounded
-development <= +5 annually
-managers remain valid
-save/reload works
-history persists
-next season starts correctly
-
-Never weaken assertions to hide world-state corruption.
-
-============================================================
-48. REQUIRED FINAL ENGINEERING QUALITY
-============================================================
-
-Backend:
+cd backend_go
 
 go test ./...
 go vet ./...
 go test -race ./...
 
-Frontend:
+Then frontend:
 
-run actual frontend test suite
+cd ../frontend
+
+run the project's actual frontend test command
 npm run build
 
-Also manually smoke-test:
+Also perform a real application smoke test of:
 
-Home
-League page
-Competition Hub
-Squad Hub
-Player Profile
-Match
-Transfer Centre
-Awards
-Inbox
-season rollover
-summer transfer Week 12
-winter transfer window
+starting XI formation
+live match
+yellow/red card events
+Ballon d'Or ceremony
+transfer Week 1 → Week 2 → several more weeks
+save/reload during transfer window
+Sim Month during transfer phase
+Sim Season during transfer phase
+
+Do not claim success merely because unit tests pass.
 
 ============================================================
-49. FINAL REPORT
+15. FINAL REPORT
 ============================================================
 
-When a development phase is complete, report:
+At completion report:
 
-features added
-backend architecture changes
-frontend improvements
-bugs found
-bugs fixed
-competition systems
-transfer changes
-player systems
-manager systems
-save migration
-determinism
-world validation
-performance considerations
-multi-season simulation result
-Go tests
-vet
-race detector
-frontend tests
-frontend build
-remaining limitations
+Transfer-window stuck-at-Week-1 root cause
+exact fix
+formation/XI root cause
+event "Unknown" root cause
+live pitch improvements
+Ballon d'Or layout improvements
+club finance/API status
+growth-cap status
+10-season soak result
+go test result
+go vet result
+race-detector result
+frontend test result
+frontend build result
+manual smoke-test result
+remaining limitations, if any
+
+Do not say "everything is fixed" unless the checks actually pass.
 
 ============================================================
-FINAL PRODUCT PRINCIPLE
+IMPORTANT SCOPE RULE
 ============================================================
 
-Every feature should answer at least one of these questions:
+This remains a Chunk 1 correction/hardening pass.
 
-Does it make clubs feel more alive?
+Do NOT begin:
 
-Does it make players feel more like careers rather than numbers?
+contract overhaul
+happiness/morale overhaul
+regen redesign
+manager career mode
+new competition systems
+large UI redesign
+unrelated features
 
-Does it create meaningful management decisions?
-
-Does it make competitions feel connected?
-
-Does it make long-term simulation more interesting?
-
-Does it make the frontend easier and more enjoyable to use?
-
-If the answer is no, do not add it merely because it sounds impressive.
-
-The target is not maximum feature count.
-
-The target is:
-
-A coherent, believable, attractive, persistent European football world that becomes more interesting the longer it is simulated.
+Fix the correctness, state progression, formation logic, event identity, UI presentation, and verification problems shown above.

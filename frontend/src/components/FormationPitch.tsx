@@ -135,17 +135,18 @@ export const FormationPitch: React.FC<FormationPitchProps> = ({ players, onPlaye
           key={player.player_id}
           type="button"
           onClick={() => onPlayerClick?.(player)}
-          className="absolute w-[104px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line/90 bg-ink/90 px-2 py-2 text-center shadow-raised transition-transform hover:scale-105 hover:border-brass focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass"
+          className="absolute w-[76px] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line/90 bg-ink/90 px-1.5 py-1.5 text-center shadow-raised transition-transform hover:scale-105 hover:border-brass focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass"
           style={{ left: `${x}%`, top: `${y}%` }}
           aria-label={`${player.full_name}, ${slot}, ${player.ovr} overall`}
+          title={player.full_name}
         >
-          <span className="inline-block rounded bg-cardLight px-1.5 py-0.5 font-mono text-[10px] font-bold text-sage">
+          <span className="inline-block rounded bg-cardLight px-1 py-0.5 font-mono text-[9px] font-bold text-sage">
             {slot}
           </span>
-          <p className="mt-1 truncate text-[12px] font-semibold text-bone" title={player.full_name}>
+          <p className="mt-0.5 truncate text-[11px] font-semibold text-bone">
             {player.full_name.split(' ').slice(-1)[0]}
           </p>
-          <p className={cx('mt-0.5 font-mono text-[13px] font-bold', ovrTone(player.ovr))}>{player.ovr}</p>
+          <p className={cx('font-mono text-[12px] font-bold', ovrTone(player.ovr))}>{player.ovr}</p>
         </button>
       ))}
     </div>

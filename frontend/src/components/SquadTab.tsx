@@ -52,6 +52,7 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
   const [squad, setSquad] = useState<Player[]>([]);
   const [xi, setXi] = useState<Player[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [posGroup, setPosGroup] = useState<'All' | 'GK' | 'DEF' | 'MID' | 'FWD'>('All');
   const [sortCol, setSortCol] = useState<keyof Player>('ovr');
   const [sortAsc, setSortAsc] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,12 +97,13 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
 
   const filteredSquad = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const filtered =
-      q === ''
-        ? squad
-        : squad.filter((p) => p.full_name.toLowerCase().includes(q) || p.position.toLowerCase().includes(q));
+    const filtered = squad.filter((p) => {
+      if (posGroup !== 'All' && p.category !== posGroup) return false;
+      if (q === '') return true;
+      return p.full_name.toLowerCase().includes(q) || p.position.toLowerCase().includes(q) || (p.squad_role || '').toLowerCase().includes(q);
+    });
     return sortBy(filtered, sortCol, sortAsc);
-  }, [squad, searchQuery, sortCol, sortAsc]);
+  }, [squad, searchQuery, posGroup, sortCol, sortAsc]);
 
   const sortIndicator = (col: keyof Player) => (sortCol === col ? (sortAsc ? ' ↑' : ' ↓') : '');
 
@@ -163,6 +165,24 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
               ))}
             </select>
 
+            <div className="flex gap-1" role="group" aria-label="Position group">
+              {(['All', 'GK', 'DEF', 'MID', 'FWD'] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => {
+                    soundManager.playClick();
+                    setPosGroup(g);
+                  }}
+                  className={cx(
+                    'px-2.5 py-1.5 text-[12px] font-semibold border',
+                    posGroup === g ? 'bg-bone text-ink border-bone' : 'bg-cardLight text-sage border-line hover:text-bone',
+                  )}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-sage" size={14} aria-hidden="true" />
               <label className="sr-only" htmlFor="squad-search">
@@ -318,7 +338,7 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
           <EmptyState message="No players match that search. Clear the search to see the full squad." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[13px] min-w-[980px]">
+            <table className="w-full text-left text-[13px] min-w-[1180px]">
               <thead className="table-head">
                 <tr>
                   <th className="py-3 px-4 font-semibold">Pos</th>
@@ -329,6 +349,9 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                       ['age', 'Age'],
                       ['squad_role', 'Role'],
                       ['morale', 'Morale'],
+                      ['form', 'Form'],
+                      ['fitness', 'Fit'],
+                      ['sharpness', 'Sharp'],
                       ['market_value_eur', 'Valuation'],
                     ] as Array<[keyof Player, string]>
                   ).map(([col, label]) => (
@@ -342,7 +365,9 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                       </span>
                     </th>
                   ))}
+                  <th className="py-3 px-3 font-semibold">Starts</th>
                   <th className="py-3 px-3 font-semibold">Apps</th>
+                  <th className="py-3 px-3 font-semibold">Min</th>
                   <th className="py-3 px-3 font-semibold">G</th>
                   <th className="py-3 px-3 font-semibold">A</th>
                   <th className="py-3 px-3 font-semibold whitespace-nowrap">All-time</th>
@@ -368,10 +393,23 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                 {filteredSquad.map((player) => {
                   const isWk = player.universe_wonderkid;
                   const isHeadline = player.player_source === 'headline';
+                  const injured = (player.injured_matches ?? 0) > 0;
+                  const suspended = (player.suspended_matches ?? 0) > 0;
+                  const unhappy = (player.morale ?? 70) < 55;
+                  const excellentForm = (player.form ?? 0) >= 4 || player.form_band === 'Excellent';
+                  const fatigued = (player.fitness ?? 80) < 55;
                   return (
                     <tr
                       key={player.player_id}
-                      className={cx('hover:bg-cardLight/60 transition-colors cursor-pointer', isWk && 'bg-brass/[0.06]')}
+                      className={cx(
+                        'hover:bg-cardLight/60 transition-colors cursor-pointer',
+                        injured && 'bg-ember/[0.08]',
+                        !injured && suspended && 'bg-ember/[0.05]',
+                        !injured && !suspended && unhappy && 'bg-[#D89A84]/[0.06]',
+                        !injured && excellentForm && 'bg-brass/[0.05]',
+                        fatigued && 'opacity-80',
+                        isWk && !injured && 'bg-brass/[0.04]',
+                      )}
                       onClick={() => {
                         openPlayer(player.player_id);
                       }}
@@ -379,15 +417,27 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                       <td className="py-3 px-4 font-mono font-semibold">
                         <span className={cx('px-2 py-0.5 rounded-md text-[11px] font-semibold', positionTone(player.category))}>{player.position}</span>
                       </td>
-                      <td className="py-3 px-3 font-semibold text-bone">{player.full_name}</td>
+                      <td className="py-3 px-3 font-semibold text-bone">
+                        <span className="inline-flex items-center gap-1.5">
+                          {player.full_name}
+                          {player.is_captain && <span className="text-[10px] font-mono uppercase tracking-[0.08em] text-brass">C</span>}
+                          {player.is_vice_captain && !player.is_captain && <span className="text-[10px] font-mono uppercase tracking-[0.08em] text-sage">VC</span>}
+                          {player.homegrown && <span className="text-[10px] font-mono uppercase tracking-[0.08em] text-pitchtone">HG</span>}
+                        </span>
+                      </td>
                       <td className="py-3 px-3 font-bold font-mono text-[14px]">
                         <span className={ovrTone(player.ovr)}>{player.ovr}</span>
                       </td>
                       <td className="py-3 px-3 text-sage font-mono">{player.age}</td>
                       <td className="py-3 px-3 text-sage text-[12px]">{player.squad_role || '—'}</td>
-                      <td className="py-3 px-3 font-mono text-[12px] text-bone/85">{player.morale ?? '—'}</td>
+                      <td className={cx('py-3 px-3 font-mono text-[12px]', unhappy ? 'text-ember' : 'text-bone/85')}>{player.morale ?? '—'}</td>
+                      <td className={cx('py-3 px-3 font-mono text-[12px]', excellentForm ? 'text-brass font-semibold' : 'text-sage')}>{player.form_band || '—'}</td>
+                      <td className={cx('py-3 px-3 font-mono text-[12px]', fatigued ? 'text-ember' : 'text-sage')}>{player.fitness ?? '—'}</td>
+                      <td className="py-3 px-3 font-mono text-[12px] text-sage">{player.sharpness ?? '—'}</td>
                       <td className="py-3 px-3 font-mono text-[#A9CDBB] font-semibold whitespace-nowrap">{player.formatted_value}</td>
+                      <td className="py-3 px-3 text-sage font-mono">{player.starts ?? '—'}</td>
                       <td className="py-3 px-3 text-sage font-mono">{player.appearances}</td>
+                      <td className="py-3 px-3 text-sage font-mono">{player.minutes ?? '—'}</td>
                       <td className="py-3 px-3 text-bone font-semibold font-mono">{player.goals}</td>
                       <td className="py-3 px-3 text-bone/70 font-mono">{player.assists}</td>
                       <td className="py-3 px-3 font-mono text-[12px] whitespace-nowrap">

@@ -74,6 +74,20 @@ type Player struct {
 	// loan starts (0 = no clause). Set only for non-wonderkid loans and
 	// always inside valuation clamps; cleared on return or purchase.
 	LoanBuyClauseEUR int64 `json:"loan_buy_clause_eur,omitempty"`
+
+	// Dressing-room identity. Leadership 0 is filled from age/OVR/personality.
+	IsCaptain          bool   `json:"is_captain,omitempty"`
+	IsViceCaptain      bool   `json:"is_vice_captain,omitempty"`
+	Leadership         int    `json:"leadership"`
+	Homegrown          bool   `json:"homegrown,omitempty"`
+	AssociationTrained bool   `json:"association_trained,omitempty"`
+	RegisteredEurope   bool   `json:"registered_europe,omitempty"`
+	CleanSheets        int    `json:"clean_sheets,omitempty"`
+	CareerCleanSheets  int    `json:"career_clean_sheets,omitempty"`
+	Versatility        int    `json:"versatility,omitempty"`
+	PromiseKind        string `json:"promise_kind,omitempty"`
+	PromiseSeason      string `json:"promise_season,omitempty"`
+	PromiseMatchweek   int    `json:"promise_matchweek,omitempty"`
 }
 
 const (
@@ -201,6 +215,8 @@ func (p *Player) UnmarshalJSON(data []byte) error {
 		p.Sharpness = 65
 	}
 	p.ClampDynamics()
+	p.EnsureLeadership()
+	p.RefreshVersatility()
 
 	// Default personality
 	if p.Personality == "" {
@@ -578,7 +594,7 @@ func clampInt(v, lo, hi int) int {
 	return v
 }
 
-// ClampDynamics keeps morale, fitness, and sharpness in 0–100.
+// ClampDynamics keeps morale, fitness, sharpness, and leadership in 0–100.
 func (p *Player) ClampDynamics() {
 	if p == nil {
 		return
@@ -586,6 +602,116 @@ func (p *Player) ClampDynamics() {
 	p.Morale = clampInt(p.Morale, 0, 100)
 	p.Fitness = clampInt(p.Fitness, 0, 100)
 	p.Sharpness = clampInt(p.Sharpness, 0, 100)
+	if p.Leadership != 0 {
+		p.Leadership = clampInt(p.Leadership, 1, 99)
+	}
+	if p.Versatility != 0 {
+		p.Versatility = clampInt(p.Versatility, 1, 99)
+	}
+}
+
+// EnsureLeadership fills a missing leadership score from age, OVR, and personality.
+func (p *Player) EnsureLeadership() {
+	if p == nil {
+		return
+	}
+	if p.Leadership > 0 {
+		p.Leadership = clampInt(p.Leadership, 1, 99)
+		return
+	}
+	lead := 38 + (p.Age-17)*2 + (p.OVR - 70)
+	switch p.Personality {
+	case "dedicated_pro":
+		lead += 10
+	case "academic_dual":
+		lead += 6
+	case "big_game_performer":
+		lead += 8
+	case "flamboyant_star":
+		lead += 2
+	}
+	if p.SquadRole == RoleCrucial {
+		lead += 8
+	} else if p.SquadRole == RoleImportant {
+		lead += 4
+	}
+	if p.UniverseWonderkid {
+		lead -= 6
+	}
+	p.Leadership = clampInt(lead, 25, 96)
+}
+
+// RefreshVersatility derives a 1–99 score from secondary position and position XP.
+func (p *Player) RefreshVersatility() {
+	if p == nil {
+		return
+	}
+	v := 42
+	if p.SecondaryPosition != "" {
+		v += 22
+	}
+	v += p.PositionXP / 2
+	if p.Age <= 21 {
+		v += 4
+	}
+	p.Versatility = clampInt(v, 30, 92)
+}
+
+// IsClubTrained reports whether this player counts as homegrown at clubID.
+func (p *Player) IsClubTrained(clubID string) bool {
+	if p == nil || clubID == "" {
+		return false
+	}
+	if p.PlayerSource == "academy" {
+		return p.OriginalClubID == clubID || p.ClubID == clubID
+	}
+	return p.OriginalClubID == clubID
+}
+
+// MaybeLearnSecondary converts out-of-position minutes into a secondary role.
+func (p *Player) MaybeLearnSecondary(playedPosition string) {
+	if p == nil {
+		return
+	}
+	played := strings.ToUpper(strings.TrimSpace(playedPosition))
+	if played == "" || played == "GK" || strings.EqualFold(played, p.Position) {
+		p.RefreshVersatility()
+		return
+	}
+	if p.SecondaryPosition != "" {
+		p.RefreshVersatility()
+		return
+	}
+	if p.PositionXP < 10 {
+		p.RefreshVersatility()
+		return
+	}
+	for _, opt := range p.PositionOptions() {
+		if strings.EqualFold(opt, played) {
+			p.SecondaryPosition = played
+			p.RefreshVersatility()
+			return
+		}
+	}
+	if p.PositionXP >= 14 && GetPositionCategory(played) == p.Category {
+		p.SecondaryPosition = played
+	}
+	p.RefreshVersatility()
+}
+
+// CoversPosition is true when the player can occupy a tactical slot naturally.
+func (p *Player) CoversPosition(slotPos string) bool {
+	if p == nil {
+		return false
+	}
+	want := strings.ToUpper(strings.TrimSpace(slotPos))
+	if want == "" {
+		return false
+	}
+	if strings.EqualFold(p.Position, want) {
+		return true
+	}
+	return p.SecondaryPosition != "" && strings.EqualFold(p.SecondaryPosition, want)
 }
 
 // AdjustMorale applies a bounded morale swing.
@@ -654,6 +780,16 @@ func (p *Player) ResetSeasonCompetitionStats() {
 	p.CompetitionStats = nil
 	p.TransferRequested = false
 	p.RecentRatings = nil
+	p.CareerCleanSheets += p.CleanSheets
+	p.CleanSheets = 0
+	p.RegisteredEurope = false
+	p.IsCaptain = false
+	p.IsViceCaptain = false
+	if p.PromiseKind != "contract" {
+		p.PromiseKind = ""
+		p.PromiseSeason = ""
+		p.PromiseMatchweek = 0
+	}
 }
 
 // RecordRating stores a rolling window of match ratings used for form.
