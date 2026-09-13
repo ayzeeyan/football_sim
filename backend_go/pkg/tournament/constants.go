@@ -114,6 +114,84 @@ func WeekChapter(matchweek int) string {
 	}
 }
 
+// LeaguePhaseFor, MonthLabelFor, and CalendarLabelFor keep the original
+// 44-week Super League calendar intact while giving 38-week world careers a
+// truthful run-in. The world manager deliberately shares the same season
+// year boundary (January starts at MW21) but finishes in May rather than
+// displaying the legacy "MW 38/44 · April" label.
+func LeaguePhaseFor(matchweek, maxMatchweeks int) string {
+	if maxMatchweeks <= 0 || maxMatchweeks == LeagueRounds {
+		return LeaguePhase(matchweek)
+	}
+	opening := maxMatchweeks * 28 / 100
+	returning := maxMatchweeks * 52 / 100
+	third := maxMatchweeks * 76 / 100
+	switch {
+	case matchweek <= opening:
+		return "Opening series"
+	case matchweek <= returning:
+		return "Return series"
+	case matchweek <= third:
+		return "Third series"
+	default:
+		return "Final stretch"
+	}
+}
+
+func MonthLabelFor(matchweek, maxMatchweeks int) string {
+	if maxMatchweeks <= 0 || maxMatchweeks == LeagueRounds {
+		return MonthLabel(matchweek)
+	}
+	if maxMatchweeks == 38 {
+		bands := []struct {
+			lo, hi int
+			name   string
+		}{
+			{1, 4, "August"}, {5, 8, "September"}, {9, 12, "October"},
+			{13, 16, "November"}, {17, 20, "December"}, {21, 24, "January"},
+			{25, 28, "February"}, {29, 32, "March"}, {33, 35, "April"}, {36, 38, "May"},
+		}
+		for _, b := range bands {
+			if matchweek >= b.lo && matchweek <= b.hi {
+				return b.name
+			}
+		}
+	}
+	return "Season"
+}
+
+func CalendarLabelFor(seasonName string, matchweek, maxMatchweeks int) string {
+	if maxMatchweeks <= 0 {
+		maxMatchweeks = LeagueRounds
+	}
+	if matchweek < 1 {
+		matchweek = 1
+	}
+	if matchweek > maxMatchweeks {
+		matchweek = maxMatchweeks
+	}
+	return fmt.Sprintf("MW %d/%d · %s %d", matchweek, maxMatchweeks, MonthLabelFor(matchweek, maxMatchweeks), CalendarYear(seasonName, matchweek))
+}
+
+func (tm *TournamentManager) calendarPhaseUnlocked(matchweek int) string {
+	return LeaguePhaseFor(matchweek, tm.MaxMatchweeks)
+}
+
+func (tm *TournamentManager) calendarMonthUnlocked(matchweek int) string {
+	return MonthLabelFor(matchweek, tm.MaxMatchweeks)
+}
+
+func (tm *TournamentManager) calendarLabelUnlocked(matchweek int) string {
+	return CalendarLabelFor(tm.SeasonName, matchweek, tm.MaxMatchweeks)
+}
+
+func (tm *TournamentManager) weekChapterUnlocked(matchweek int) string {
+	if tm.World != nil {
+		return tm.calendarMonthUnlocked(matchweek) + ": " + toLowerFirst(tm.calendarPhaseUnlocked(matchweek))
+	}
+	return WeekChapter(matchweek)
+}
+
 func containsInt(xs []int, v int) bool {
 	for _, x := range xs {
 		if x == v {

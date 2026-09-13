@@ -17,7 +17,7 @@ const (
 // ClubReputationSeasonInput contains only achievements the simulator actually models.
 type ClubReputationSeasonInput struct {
 	CurrentReputation   int
-	HistoricalPrestige int
+	HistoricalPrestige  int
 	LeagueFinish        int
 	ClubCount           int
 	LeagueChampion      bool
@@ -93,11 +93,11 @@ func (tm *TournamentManager) updateClubReputationsUnlocked() {
 			continue
 		}
 		in := ClubReputationSeasonInput{
-			CurrentReputation: club.Identity.Reputation,
-			HistoricalPrestige: club.Identity.HistoricalPrestige,
-			LeagueFinish: position[club.ClubID],
-			ClubCount: len(standings),
-			LeagueChampion: position[club.ClubID] == 1,
+			CurrentReputation:   club.Identity.Reputation,
+			HistoricalPrestige:  club.Identity.HistoricalPrestige,
+			LeagueFinish:        position[club.ClubID],
+			ClubCount:           len(standings),
+			LeagueChampion:      position[club.ClubID] == 1,
 			ContinentalChampion: tm.UCLChampionID == club.ClubID,
 		}
 		in.SuperCupChampion = superCupWinnerID == club.ClubID
@@ -133,7 +133,7 @@ func (tm *TournamentManager) completedSeasonInputsAvailableUnlocked() bool {
 
 	leagueFixtures := 0
 	for _, f := range tm.Fixtures {
-		if f.Competition != "" && f.Competition != "super-league" {
+		if f.Competition != "" && f.Competition != "super-league" && !tm.isWorldDomesticLeague(f.Competition) {
 			continue
 		}
 		leagueFixtures++
@@ -145,6 +145,22 @@ func (tm *TournamentManager) completedSeasonInputsAvailableUnlocked() bool {
 	// calendar boundary is the only safe completion signal in that case.
 	if leagueFixtures == 0 && tm.CurrentMatchweek <= tm.MaxMatchweeks {
 		return false
+	}
+	if tm.World != nil {
+		for _, f := range tm.World.Fixtures {
+			if f.Status != "finished" || f.HomeGoals == nil || f.AwayGoals == nil {
+				return false
+			}
+		}
+		for _, id := range tm.World.CompetitionOrder {
+			comp := tm.World.Competitions[id]
+			if comp == nil {
+				continue
+			}
+			if comp.Kind != CompetitionLeague && (comp.ChampionID == "" || tm.Clubs[comp.ChampionID] == nil) {
+				return false
+			}
+		}
 	}
 
 	if len(tm.UCLFixtures) > 0 {

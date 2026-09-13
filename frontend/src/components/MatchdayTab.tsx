@@ -647,7 +647,7 @@ export const MatchdayTab: React.FC<MatchdayTabProps> = ({
                     <span className="font-display font-semibold text-[15px] text-sage mr-2">{item.timestamp}</span>
                     {isGoal && <span className="text-ember font-semibold mr-1.5">Goal</span>}
                     {isFullTime && <span className="text-bone font-semibold mr-1.5">Full time</span>}
-                    {item.is_wonderkid && <span className="text-bone/70 mr-1.5">U-14</span>}
+                    {item.is_wonderkid && <span className="text-bone/70 mr-1.5">U-17</span>}
                     {stripEmojis(item.text)}
                   </div>
                 );

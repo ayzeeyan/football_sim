@@ -65,6 +65,36 @@ const RESULT_TONE: Record<string, string> = {
   L: 'text-[#D89A84]',
 };
 
+const COMPETITION_LABELS: Record<string, string> = {
+  'premier-league': 'Premier League',
+  'la-liga': 'La Liga',
+  'bundesliga': 'Bundesliga',
+  'serie-a': 'Serie A',
+  'ligue-1': 'Ligue 1',
+  'fa-cup': 'FA Cup',
+  'efl-cup': 'EFL Cup',
+  'copa-del-rey': 'Copa del Rey',
+  'dfb-pokal': 'DFB-Pokal',
+  'coppa-italia': 'Coppa Italia',
+  'coupe-de-france': 'Coupe de France',
+  'champions-league': 'UEFA Champions League',
+  'europa-league': 'UEFA Europa League',
+  'conference-league': 'UEFA Conference League',
+  'super-league': 'Super League',
+  'ucl': 'Champions Cup',
+  'super-cup': 'Super Cup',
+};
+
+export function prettyCompetitionName(id: string | null | undefined): string {
+  if (!id) return 'League';
+  const key = id.trim().toLowerCase();
+  if (COMPETITION_LABELS[key]) return COMPETITION_LABELS[key];
+  return id
+    .replace(/[_]+/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export const PlayerSheetModal: React.FC<{
   profile: PlayerProfile | null;
   loading: boolean;
@@ -84,12 +114,14 @@ export const PlayerSheetModal: React.FC<{
             title={player.full_name}
             subtitle={`${player.position} · ${profile?.club?.club_name ?? ''} · ${
               player.universe_wonderkid
-                ? 'U-14 prodigy'
-                : player.player_source === 'academy'
-                  ? 'Academy'
-                  : player.player_source === 'headline'
-                    ? 'Headline'
-                    : 'Squad'
+                ? 'U-17 prodigy'
+                : player.on_loan
+                  ? 'On loan'
+                  : player.player_source === 'academy'
+                    ? 'Academy'
+                    : player.player_source === 'headline'
+                      ? 'Headline'
+                      : player.squad_role || 'Squad'
             }`}
             onClose={onClose}
           />
@@ -129,6 +161,43 @@ export const PlayerSheetModal: React.FC<{
                 </p>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="border border-line bg-ink/40 p-3">
+                <p className="eyebrow">Role</p>
+                <p className="font-semibold text-bone mt-1">{player.squad_role || 'Squad'}</p>
+              </div>
+              <div className="border border-line bg-ink/40 p-3">
+                <p className="eyebrow">Morale</p>
+                <p className="font-semibold text-bone mt-1">{player.morale_band || 'Content'}</p>
+                <p className="font-mono text-[12px] text-sage">{player.morale ?? 70}</p>
+              </div>
+              <div className="border border-line bg-ink/40 p-3">
+                <p className="eyebrow">Fitness</p>
+                <p className="font-mono font-bold text-bone mt-1">{player.fitness ?? 80}</p>
+              </div>
+              <div className="border border-line bg-ink/40 p-3">
+                <p className="eyebrow">Sharpness</p>
+                <p className="font-mono font-bold text-bone mt-1">{player.sharpness ?? 65}</p>
+                <p className="text-[12px] text-sage">{player.form_band || 'Average'} form</p>
+              </div>
+            </div>
+
+            {player.competition_stats && Object.keys(player.competition_stats).length > 0 && (
+              <div className="border border-line bg-ink/40 p-3">
+                <p className="eyebrow mb-2">By competition</p>
+                <ul className="space-y-1.5">
+                  {Object.values(player.competition_stats).map((row) => (
+                    <li key={row.competition_id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                      <span className="text-bone truncate">{prettyCompetitionName(row.competition_id)}</span>
+                      <span className="font-mono text-sage shrink-0">
+                        {row.appearances} apps · {row.goals} G · {row.assists} A
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="border border-line bg-ink/40 p-3 text-[13px] space-y-1.5">
               <p>
@@ -177,11 +246,11 @@ export const PlayerSheetModal: React.FC<{
 
             <div>
               <p className="eyebrow mb-2">Last matches</p>
-              {(profile?.last_matches.length ?? 0) === 0 ? (
+              {(profile?.last_matches?.length ?? 0) === 0 ? (
                 <p className="text-[13px] text-sage">No rated appearances this season.</p>
               ) : (
                 <div className="space-y-1">
-                  {profile!.last_matches.map((m) => (
+                  {(profile?.last_matches ?? []).map((m) => (
                     <div
                       key={`${m.fixture_id}-${m.matchweek}`}
                       className="flex items-center justify-between gap-2 py-1.5 border-b border-line/60 last:border-0 text-[12.5px]"
@@ -193,7 +262,7 @@ export const PlayerSheetModal: React.FC<{
                         </p>
                         <p className="font-mono text-sage text-[11px]">
                           MW {m.matchweek}
-                          {m.competition === 'ucl' ? ' · Cup' : m.competition === 'super-cup' ? ' · Super Cup' : ''}
+                          {m.competition ? ` · ${prettyCompetitionName(m.competition)}` : ''}
                           {m.motm ? ' · MOTM' : ''} · {m.minutes}'
                           {m.goals ? ` · ${m.goals}G` : ''}
                           {m.assists ? ` · ${m.assists}A` : ''}
@@ -215,7 +284,7 @@ export const PlayerSheetModal: React.FC<{
           </div>
         </>
       ) : (
-        <div className="p-8 text-center text-sage text-[13px]">That player is not in the Super League.</div>
+        <div className="p-8 text-center text-sage text-[13px]">That player is not in this career.</div>
       )}
     </Modal>
   );

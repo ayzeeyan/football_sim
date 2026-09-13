@@ -25,6 +25,13 @@ type Club struct {
 	Morale            int          `json:"morale"`
 	Identity          ClubIdentity `json:"identity"`
 	Finances          ClubFinances `json:"finances"`
+	BoardObjective    string       `json:"board_objective,omitempty"`
+	ExpectedFinish    int          `json:"expected_finish,omitempty"`
+	// Coefficient is the UEFA-style points total earned from European
+	// campaigns (league-phase results plus knockout progress). It seeds
+	// Swiss pots and playoff prestige; 0 on fresh worlds (rating order
+	// applies until points are earned).
+	Coefficient int `json:"coefficient,omitempty"`
 
 	// Standings & Form
 	Played         int      `json:"p"`
@@ -87,6 +94,60 @@ func (c *Club) UnmarshalJSON(data []byte) error {
 	if c.Finances.Balance < 0 {
 		c.Finances.Balance = 0
 	}
+	if c.Finances.TransferBudget > c.Finances.Balance {
+		c.Finances.TransferBudget = c.Finances.Balance
+	}
+	if c.Finances.WageCap < 0 {
+		c.Finances.WageCap = 0
+	}
+	var bill int64
+	for _, p := range c.Squad {
+		if p != nil {
+			bill += p.WageEUR * 52
+		}
+	}
+	if c.Finances.EuropeanRevenue < 0 {
+		c.Finances.EuropeanRevenue = 0
+	}
+	if c.Coefficient < 0 {
+		c.Coefficient = 0
+	}
+	formula := WageCapForIdentity(c.Identity)
+	if identityMissing {
+		// Static dataset input: establish a cap that covers the real squad.
+		c.Finances.WageCap = formula
+		if c.Finances.WageCap < bill {
+			headroom := bill / 10
+			if headroom > 10_000_000 {
+				headroom = 10_000_000
+			}
+			c.Finances.WageCap = bill + headroom
+		}
+	} else if c.Finances.WageCap <= 0 {
+		c.Finances.WageCap = formula
+		if c.Finances.WageCap < bill {
+			headroom := bill / 10
+			if headroom > 10_000_000 {
+				headroom = 10_000_000
+			}
+			c.Finances.WageCap = bill + headroom
+		}
+	} else if c.Finances.WageCap < formula {
+		// Pre-headroom save (running code guarantees cap >= formula): raise
+		// to the structural floor, covering the committed bill. Caps at or
+		// above formula are never touched here, so legal transients where
+		// academy intake or loan returns pushed the bill over the cap do not
+		// ratchet — the wage gate handles those.
+		c.Finances.WageCap = formula
+		if c.Finances.WageCap < bill {
+			headroom := bill / 10
+			if headroom > 10_000_000 {
+				headroom = 10_000_000
+			}
+			c.Finances.WageCap = bill + headroom
+		}
+	}
+	c.Finances.WageBudget = bill
 
 	// Kit colors fallback
 	if c.PrimaryColor == [3]uint8{0, 0, 0} && c.SecondaryColor == [3]uint8{0, 0, 0} {
@@ -206,11 +267,22 @@ func (c *Club) AvailableSquad(fixture ...string) []*Player {
 	return ready
 }
 
-// sortKey computes wonderkid priority and fatigue-penalized OVR.
-func sortKey(p *Player) (wkPriority int, adjustedOVR int) {
+// sortKey computes wonderkid priority and a selection OVR that respects
+// fatigue, fitness, sharpness, morale, form, role, and match importance.
+func sortKey(p *Player, competition string, matchweek int) (wkPriority int, adjustedOVR int) {
 	fatigueDrop := 0
 	if p.ConsecutiveStarts >= 3 {
 		fatigueDrop = (p.ConsecutiveStarts - 2) * 3
+	}
+	importance := CompetitionImportance(competition, matchweek)
+	if importance <= 50 && p.ConsecutiveStarts >= 2 {
+		fatigueDrop += 4
+	}
+	if importance <= 50 && p.Fitness > 0 && p.Fitness < 65 {
+		fatigueDrop += 5
+	}
+	if importance >= 80 && (p.SquadRole == RoleRotation || p.SquadRole == RoleSquad || p.SquadRole == RoleProspect) {
+		fatigueDrop += 3
 	}
 
 	wkPriority = 0
@@ -218,15 +290,68 @@ func sortKey(p *Player) (wkPriority int, adjustedOVR int) {
 		wkPriority = 1
 	}
 
-	adjustedOVR = p.OVR - fatigueDrop
+	adjustedOVR = p.OVR - fatigueDrop + p.FormModifier()
+	if p.Fitness > 0 {
+		adjustedOVR += (p.Fitness - 70) / 8
+	}
+	if p.Sharpness > 0 {
+		adjustedOVR += (p.Sharpness - 65) / 10
+	}
+	if p.Morale > 0 {
+		adjustedOVR += (p.Morale - 70) / 15
+	}
+	if p.SquadRole == RoleCrucial && importance >= 70 {
+		adjustedOVR += 2
+	}
 	return wkPriority, adjustedOVR
 }
 
+func applyManagerBias(p *Player, style, focus string) int {
+	if p == nil {
+		return 0
+	}
+	bias := 0
+	switch strings.ToLower(strings.TrimSpace(focus)) {
+	case "youth":
+		if p.Age <= 21 {
+			bias += 3
+		}
+	case "stars":
+		if p.OVR >= 84 {
+			bias += 2
+		}
+	}
+	switch strings.ToLower(strings.TrimSpace(style)) {
+	case "high_press", "press":
+		if p.Fitness >= 75 {
+			bias += 2
+		}
+		if p.Age >= 32 {
+			bias -= 2
+		}
+	case "possession":
+		if p.Category == "MID" {
+			bias += 2
+		}
+	case "low_block", "counter":
+		if p.Age >= 28 && p.Category == "DEF" {
+			bias += 2
+		}
+	case "free_flowing":
+		if p.UniverseWonderkid {
+			bias += 2
+		}
+	}
+	return bias
+}
+
 // sortPlayersForXI sorts players according to starting XI priority.
-func sortPlayersForXI(players []*Player) {
+func sortPlayersForXI(players []*Player, competition string, matchweek int, style, focus string) {
 	sort.SliceStable(players, func(i, j int) bool {
-		wkI, ovrI := sortKey(players[i])
-		wkJ, ovrJ := sortKey(players[j])
+		wkI, ovrI := sortKey(players[i], competition, matchweek)
+		wkJ, ovrJ := sortKey(players[j], competition, matchweek)
+		ovrI += applyManagerBias(players[i], style, focus)
+		ovrJ += applyManagerBias(players[j], style, focus)
 
 		if wkI != wkJ {
 			return wkI > wkJ
@@ -238,9 +363,30 @@ func sortPlayersForXI(players []*Player) {
 	})
 }
 
+// StartingSlot is one non-overlapping tactical place in the default 4-3-3.
+// Keeping the slot beside the player lets API consumers render an XI without
+// guessing which of two centre-backs or full-backs belongs on each side.
+type StartingSlot struct {
+	Slot string `json:"slot"`
+	*Player
+}
+
 // GetStartingEleven selects the best 11 players in a 4-3-3 formation
 // (1 GK, 4 DEF, 3 MID, 3 FWD) with wonderkid priority and fatigue rotation.
 func (c *Club) GetStartingEleven(fixture ...string) []*Player {
+	slots := c.GetStartingElevenSlots(fixture...)
+	startingXI := make([]*Player, 0, len(slots))
+	for _, slot := range slots {
+		if slot.Player != nil {
+			startingXI = append(startingXI, slot.Player)
+		}
+	}
+	return startingXI
+}
+
+// GetStartingElevenWithBias applies a manager's style and recruitment focus
+// on top of fitness, form, and match importance.
+func (c *Club) GetStartingElevenWithBias(style, focus string, fixture ...string) []*Player {
 	pool := c.AvailableSquad(fixture...)
 
 	var gks, defs, mids, fwds []*Player
@@ -259,10 +405,11 @@ func (c *Club) GetStartingEleven(fixture ...string) []*Player {
 		}
 	}
 
-	sortPlayersForXI(gks)
-	sortPlayersForXI(defs)
-	sortPlayersForXI(mids)
-	sortPlayersForXI(fwds)
+	comp, week := parseFixtureArgs(fixture)
+	sortPlayersForXI(gks, comp, week, style, focus)
+	sortPlayersForXI(defs, comp, week, style, focus)
+	sortPlayersForXI(mids, comp, week, style, focus)
+	sortPlayersForXI(fwds, comp, week, style, focus)
 
 	var startingXI []*Player
 
@@ -321,7 +468,7 @@ func (c *Club) GetStartingEleven(fixture ...string) []*Player {
 			}
 		}
 
-		sortPlayersForXI(remain)
+		sortPlayersForXI(remain, comp, week, style, focus)
 		needed := 11 - len(startingXI)
 		if needed > len(remain) {
 			needed = len(remain)
@@ -332,6 +479,94 @@ func (c *Club) GetStartingEleven(fixture ...string) []*Player {
 	// Assembly is capped at exactly 11 (1 GK + 4 DEF + 3 MID + 3 FWD) and the
 	// fill above tops up to precisely 11, so no truncation is needed.
 	return startingXI
+}
+
+// GetStartingElevenSlots returns the selected XI in stable 4-3-3 tactical
+// slots. Natural positions are preferred before a category-compatible
+// fallback, and each player can only be assigned once.
+func (c *Club) GetStartingElevenSlots(fixture ...string) []StartingSlot {
+	return c.GetStartingElevenSlotsWithBias("", "", fixture...)
+}
+
+// GetStartingElevenSlotsWithBias is the manager-aware equivalent used by
+// squad and fixture previews. It retains the same selection priorities as
+// GetStartingElevenWithBias while exposing a renderer-safe tactical slot.
+func (c *Club) GetStartingElevenSlotsWithBias(style, focus string, fixture ...string) []StartingSlot {
+	pool := c.AvailableSquad(fixture...)
+	if len(pool) == 0 {
+		return nil
+	}
+	// Preserve the long-standing no-keeper safety rule: malformed short
+	// squads open with their first available player rather than silently
+	// changing that fallback because the tactical ranking is sorted below.
+	firstAvailable := pool[0]
+	comp, week := parseFixtureArgs(fixture)
+	sortPlayersForXI(pool, comp, week, style, focus)
+
+	type slotRule struct {
+		slot      string
+		category  string
+		positions map[string]bool
+	}
+	rules := []slotRule{
+		{"GK", "GK", map[string]bool{"GK": true}},
+		{"LB", "DEF", map[string]bool{"LB": true, "LWB": true}},
+		{"LCB", "DEF", map[string]bool{"CB": true}},
+		{"RCB", "DEF", map[string]bool{"CB": true}},
+		{"RB", "DEF", map[string]bool{"RB": true, "RWB": true}},
+		{"LCM", "MID", map[string]bool{"CM": true, "CAM": true, "CDM": true}},
+		{"CM", "MID", map[string]bool{"CDM": true, "CM": true, "CAM": true}},
+		{"RCM", "MID", map[string]bool{"CM": true, "CAM": true, "CDM": true}},
+		{"LW", "FWD", map[string]bool{"LW": true}},
+		{"ST", "FWD", map[string]bool{"ST": true, "CF": true}},
+		{"RW", "FWD", map[string]bool{"RW": true}},
+	}
+
+	used := make(map[string]bool, len(pool))
+	pick := func(rule slotRule, naturalOnly bool) *Player {
+		for _, p := range pool {
+			if p == nil || used[p.PlayerID] {
+				continue
+			}
+			if naturalOnly {
+				if rule.positions[strings.ToUpper(strings.TrimSpace(p.Position))] {
+					return p
+				}
+				continue
+			}
+			if p.Category == rule.category {
+				return p
+			}
+		}
+		return nil
+	}
+
+	slots := make([]StartingSlot, 0, 11)
+	for _, rule := range rules {
+		p := pick(rule, true)
+		if p == nil {
+			p = pick(rule, false)
+		}
+		if p == nil && rule.slot == "GK" && firstAvailable != nil && !used[firstAvailable.PlayerID] {
+			p = firstAvailable
+		}
+		if p == nil {
+			// A short or malformed squad can be missing an entire category.
+			// Still give every selected player one unique visible slot.
+			for _, fallback := range pool {
+				if fallback != nil && !used[fallback.PlayerID] {
+					p = fallback
+					break
+				}
+			}
+		}
+		if p == nil {
+			continue
+		}
+		used[p.PlayerID] = true
+		slots = append(slots, StartingSlot{Slot: rule.slot, Player: p})
+	}
+	return slots
 }
 
 // FixtureContext builds the competition:matchweek key used by XI/bench selection
@@ -400,6 +635,7 @@ func (c *Club) RecalculateRatings() {
 	if c.SquadSize == 0 {
 		c.SquadAvgOVR = 0
 		c.OverallTeamRating = 0
+		c.Finances.WageBudget = 0
 		return
 	}
 	total := 0
@@ -422,6 +658,78 @@ func (c *Club) RecalculateRatings() {
 	} else {
 		c.OverallTeamRating = 0
 	}
+	c.RecalculateWageBill()
+}
+
+// RecalculateWageBill stores the annual committed wage bill from current contracts.
+// WageBudget keeps the bill (legacy name); WageCap is the real constraint
+// derived from financial power. The cap never sits below committed wages:
+// fresh squads get headroom, and future signings must fit under it.
+func (c *Club) RecalculateWageBill() {
+	if c == nil {
+		return
+	}
+	var annual int64
+	for _, p := range c.Squad {
+		if p != nil {
+			annual += p.WageEUR * 52
+		}
+	}
+	c.Finances.WageBudget = annual
+	formula := WageCapForIdentity(c.Identity)
+	// The cap is structural (financial power), not a shadow of the bill:
+	// it is fixed at max(formula, first-seen bill + headroom) and never
+	// ratchets upward just because the bill grew. Future signings must fit
+	// under it via CanAffordWage. Identity upgrades can still raise it.
+	if c.Finances.WageCap <= 0 {
+		cap := formula
+		if cap < annual {
+			headroom := annual / 10
+			if headroom > 10_000_000 {
+				headroom = 10_000_000
+			}
+			cap = annual + headroom
+		}
+		c.Finances.WageCap = cap
+		return
+	}
+	if formula > c.Finances.WageCap {
+		c.Finances.WageCap = formula
+	}
+}
+
+// WageBill returns the annual committed wages for the current squad.
+func (c *Club) WageBill() int64 {
+	if c == nil {
+		return 0
+	}
+	var annual int64
+	for _, p := range c.Squad {
+		if p != nil {
+			annual += p.WageEUR * 52
+		}
+	}
+	return annual
+}
+
+// WageCap returns the club's annual wage cap (financial-power derived).
+func (c *Club) WageCap() int64 {
+	if c == nil {
+		return 0
+	}
+	if c.Finances.WageCap > 0 {
+		return c.Finances.WageCap
+	}
+	return WageCapForIdentity(c.Identity)
+}
+
+// CanAffordWage reports whether adding annualWage keeps the bill under the cap.
+// Valuation clamps are enforced separately; this never mutates market values.
+func (c *Club) CanAffordWage(annualWage int64) bool {
+	if c == nil || annualWage < 0 {
+		return false
+	}
+	return c.WageBill()+annualWage <= c.WageCap()
 }
 
 // ToStandingsRow converts a Club's current season record to a StandingsRow.

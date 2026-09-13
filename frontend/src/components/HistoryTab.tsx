@@ -31,7 +31,7 @@ const SeasonCard: React.FC<{ row: SeasonHistoryRow }> = ({ row }) => (
       <div>
         <p className="eyebrow !text-brass">{row.season_name}</p>
         <h3 className="font-display text-[22px] font-semibold text-bone mt-1">
-          {row.champion?.club_name ?? 'Super League'}
+          {row.champion?.club_name ?? 'League champions'}
         </h3>
         <p className="text-[13px] text-sage mt-0.5">
           {row.champion ? `${row.champion.pts} pts` : 'Champion archived'}
@@ -44,8 +44,8 @@ const SeasonCard: React.FC<{ row: SeasonHistoryRow }> = ({ row }) => (
       <p className="text-[14px] text-bone/85 leading-relaxed">{row.recap}</p>
     )}
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-      <Honour kicker="Champions Cup" title={row.ucl_champion?.club_name ?? 'Not decided'} sub={row.ucl_champion?.short_name} tone="gold" />
-      <Honour kicker="Super Cup" title={row.super_cup_champion?.club_name ?? 'Not decided'} sub={row.super_cup_champion?.short_name} />
+      <Honour kicker="Champions League" title={row.ucl_champion?.club_name ?? 'Not decided'} sub={row.ucl_champion?.short_name} tone="gold" />
+      <Honour kicker="Cups & Europe" title={row.super_cup_champion?.club_name ?? 'Not decided'} sub={row.super_cup_champion?.short_name} />
       <Honour
         kicker="Golden boot"
         title={row.top_scorer?.full_name ?? '—'}
@@ -159,7 +159,7 @@ export const HistoryTab: React.FC = () => {
                 <h3 className="font-display text-[24px] font-semibold text-bone mt-1">This season</h3>
                 <p className="text-[13px] text-sage mt-1">
                   Matchweek {Math.min(data.current_matchweek, data.max_matchweeks)} of {data.max_matchweeks}
-                  {' · '}Champions Cup {stageLabel(data.ucl_stage)}
+                  {' · '}Europe {stageLabel(data.ucl_stage)}
                 </p>
               </div>
               <Trophy size={22} className="text-brass" />
@@ -174,12 +174,12 @@ export const HistoryTab: React.FC = () => {
                   tone="gold"
                 />
                 <Honour
-                  kicker="Champions Cup"
+                  kicker="Champions League"
                   title={cur.ucl_champion?.club_name ?? 'Still to be decided'}
                   sub={cur.ucl_champion?.short_name}
                 />
                 <Honour
-                  kicker="Super Cup"
+                  kicker="Cups & Europe"
                   title={cur.super_cup_champion?.club_name ?? 'Still to be decided'}
                   sub={cur.super_cup_champion?.short_name}
                 />
@@ -249,7 +249,7 @@ export const HistoryTab: React.FC = () => {
               <div className="flex items-center justify-between pb-3 border-b border-line">
                 <div>
                   <h3 className="font-display font-semibold text-lg text-bone">European Trophy Cabinet</h3>
-                  <p className="text-xs text-sage">All-time titles won across European football and the autonomous Super League dynasty.</p>
+                  <p className="text-xs text-sage">All-time titles won across the Top Five European world and legacy Super League dynasties.</p>
                 </div>
                 <Trophy size={24} className="text-brass" />
               </div>

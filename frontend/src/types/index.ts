@@ -2,6 +2,8 @@ export interface Player {
   player_id: string;
   full_name: string;
   position: string;
+  /** Explicit 4-3-3 placement supplied for a pre-match starting XI. */
+  starting_slot?: string;
   ovr: number;
   age: number;
   market_value_eur: number;
@@ -46,6 +48,26 @@ export interface Player {
   mentor_id?: string | null;
   mentor_name?: string | null;
   mentor_ovr?: number | null;
+  morale?: number;
+  morale_band?: string;
+  squad_role?: string;
+  fitness?: number;
+  sharpness?: number;
+  transfer_requested?: boolean;
+  form?: number;
+  form_band?: string;
+  on_loan?: boolean;
+  parent_club_id?: string;
+  loan_buy_clause_eur?: number | null;
+  formatted_buy_clause?: string | null;
+  competition_stats?: Record<string, {
+    competition_id: string;
+    appearances: number;
+    starts: number;
+    minutes: number;
+    goals: number;
+    assists: number;
+  }>;
 }
 
 export interface ManagerHistoryEntry {
@@ -94,6 +116,10 @@ export interface ClubIdentity {
 export interface ClubFinances {
   transfer_budget: number;
   balance: number;
+  wage_budget?: number;
+  wage_cap?: number;
+  wage_bill?: number;
+  european_revenue?: number;
 }
 
 export interface Club {
@@ -123,7 +149,10 @@ export interface Club {
   cup_status?: 'qualified' | 'eliminated' | 'must_win' | 'live' | null;
   identity?: ClubIdentity;
   finances?: ClubFinances;
+  board_objective?: string;
+  expected_finish?: number;
   reputation?: number;
+  coefficient?: number;
   transfer_warchest_eur?: number;
   formatted_transfer_warchest?: string;
   budget_eur?: number;
@@ -214,6 +243,10 @@ export interface MatchEventItem {
   player?: MatchMiniPlayer | null;
   player_in?: MatchMiniPlayer | null;
   player_out?: MatchMiniPlayer | null;
+  player_id?: string | null;
+  player_name?: string | null;
+  club_id?: string | null;
+  club_name?: string | null;
   sent_off?: boolean | null;
   detail?: string | null;
   disallowed?: boolean;
@@ -902,7 +935,9 @@ export interface AwardsCeremony {
   categories: AwardsCategory[];
   ballon_dor?: BallonDorRankItem[];
   team_of_the_season?: TeamOfTheSeason | null;
+  league_teams_of_the_season?: Record<string, TeamOfTheSeason>;
   manager_of_the_year?: ManagerOfTheYear | null;
+  world?: boolean;
 }
 
 export interface GrowthMilestoneItem {
@@ -957,6 +992,106 @@ export interface SuperLeagueState {
   season_name: string;
   clubs: Club[];
   recent_results: string[];
+  world?: boolean;
+}
+
+export type CompetitionKind = 'LEAGUE' | 'DOMESTIC_CUP' | 'EUROPEAN';
+
+export interface CompetitionClub {
+  club_id: string;
+  club_name: string;
+  short_name: string;
+  league?: string;
+  country?: string;
+  primary_color?: [number, number, number];
+  secondary_color?: [number, number, number];
+  form?: string[];
+  p?: number;
+  w?: number;
+  d?: number;
+  l?: number;
+  gf?: number;
+  ga?: number;
+  gd?: number;
+  pts?: number;
+  coefficient?: number;
+}
+
+export interface CompetitionSummary {
+  id: string;
+  name: string;
+  country: string;
+  kind: CompetitionKind;
+  stage: string;
+  prestige: number;
+  participants: number;
+  champion?: CompetitionClub | null;
+  champion_id?: string;
+}
+
+export interface CompetitionTableRow {
+  club: CompetitionClub;
+  club_id: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goals_for: number;
+  goals_against: number;
+  goal_difference: number;
+  points: number;
+  form?: string[];
+}
+
+export interface CompetitionFixtureRow {
+  id: string;
+  fixture_id?: string;
+  matchweek: number;
+  competition: string;
+  stage: string;
+  status: string;
+  home_id: string;
+  away_id: string;
+  home: CompetitionClub | null;
+  away: CompetitionClub | null;
+  home_goals: number | null;
+  away_goals: number | null;
+  decided_by?: string | null;
+  penalties?: number[] | null;
+  leg?: number | null;
+  tie_id?: string | null;
+}
+
+export interface CompetitionRound {
+  stage: string;
+  fixture_ids: string[];
+  entrant_ids?: string[];
+  bye_ids?: string[];
+  winner_ids?: string[];
+  tie_ids?: string[];
+  ties?: CompetitionFixtureRow[];
+}
+
+export interface CompetitionDetail {
+  id: string;
+  name: string;
+  country: string;
+  kind: CompetitionKind;
+  prestige: number;
+  stage: string;
+  participants: CompetitionClub[];
+  qualification_sources?: Record<string, string>;
+  pots?: string[][];
+  table: CompetitionTableRow[];
+  rounds: CompetitionRound[];
+  fixtures: CompetitionFixtureRow[];
+  champion?: CompetitionClub | null;
+  champion_id?: string;
+}
+
+export interface CompetitionsResponse {
+  world: boolean;
+  competitions: CompetitionSummary[];
 }
 
 export interface TransferFeedItem {
@@ -996,18 +1131,25 @@ export interface CompletedTransfer {
   matchweek: number;
 }
 
+export interface InboxChoice {
+  id: string;
+  label: string;
+}
+
 export interface InboxItem {
   id: string;
   timestamp: string;
   matchweek: number;
   season_name: string;
-  category: 'match' | 'transfer' | 'wonderkid' | 'honour' | 'race' | 'cup' | 'system' | 'injury' | 'dugout' | 'youth';
+  category: 'match' | 'transfer' | 'wonderkid' | 'honour' | 'race' | 'cup' | 'system' | 'injury' | 'dugout' | 'youth' | 'nxgn';
   headline: string;
   body: string;
   club_ids: string[];
   player_id: string | null;
   fixture_id: string | null;
   unread: boolean;
+  choices?: InboxChoice[];
+  resolved?: boolean;
 }
 
 export interface InboxFeed {

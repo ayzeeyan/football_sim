@@ -49,10 +49,18 @@ func TestSingleTransferLockPerWindow(t *testing.T) {
 	te, barca, madrid, _ := createOverhaulTestUniverse()
 	p := barca.Squad[0]
 	neg := &TransferNegotiation{NegotiationID: "TEST_LOCK_1", Player: p, Buyer: madrid, Seller: barca, CurrentBid: 60_000_000}
-	if !te.executeTransfer(neg) { t.Fatal("first transfer should commit") }
-	if !te.TransferredThisWindow[p.PlayerID] { t.Fatalf("player %s should be flagged as transferred this window", p.PlayerID) }
-	if neg2 := te.InitiateBid(p.PlayerID, barca.ClubID, 70_000_000); neg2 != nil { t.Errorf("second transfer should be blocked, got %+v", neg2) }
-	if neg3 := te.TriggerSpecificBid(barca.ClubID, madrid.ClubID, p.PlayerID); neg3 != nil { t.Errorf("second targeted transfer should be blocked, got %+v", neg3) }
+	if !te.executeTransfer(neg) {
+		t.Fatal("first transfer should commit")
+	}
+	if !te.TransferredThisWindow[p.PlayerID] {
+		t.Fatalf("player %s should be flagged as transferred this window", p.PlayerID)
+	}
+	if neg2 := te.InitiateBid(p.PlayerID, barca.ClubID, 70_000_000); neg2 != nil {
+		t.Errorf("second transfer should be blocked, got %+v", neg2)
+	}
+	if neg3 := te.TriggerSpecificBid(barca.ClubID, madrid.ClubID, p.PlayerID); neg3 != nil {
+		t.Errorf("second targeted transfer should be blocked, got %+v", neg3)
+	}
 }
 
 func TestWarchestDeductionAndNoNegativeBalance(t *testing.T) {
@@ -81,26 +89,50 @@ func TestWarchestDeductionAndNoNegativeBalance(t *testing.T) {
 func TestWonderkidTransferRestrictions(t *testing.T) {
 	te, barca, madrid, nonLeague := createOverhaulTestUniverse()
 	wk := barca.Squad[1]
-	if neg := te.InitiateBid(wk.PlayerID, nonLeague.ClubID, 40_000_000); neg != nil { t.Errorf("canonical wonderkid should not transfer outside designated 12") }
-	if neg := te.TriggerSpecificBid(nonLeague.ClubID, barca.ClubID, wk.PlayerID); neg != nil { t.Errorf("outside club should not target canonical wonderkid") }
+	if neg := te.InitiateBid(wk.PlayerID, nonLeague.ClubID, 40_000_000); neg != nil {
+		t.Errorf("canonical wonderkid should not transfer outside designated 12")
+	}
+	if neg := te.TriggerSpecificBid(nonLeague.ClubID, barca.ClubID, wk.PlayerID); neg != nil {
+		t.Errorf("outside club should not target canonical wonderkid")
+	}
 	neg := te.TriggerSpecificBid(madrid.ClubID, barca.ClubID, wk.PlayerID)
-	if neg == nil { t.Fatal("canonical wonderkid transfer between designated clubs should be allowed") }
-	if !te.executeTransfer(neg) { t.Fatal("legal wonderkid transfer should commit") }
-	if wk.ClubID != madrid.ClubID { t.Errorf("wonderkid should be at Madrid, got %s", wk.ClubID) }
-	if wk.OriginalClubID != "LAL-BAR" { t.Errorf("historical original club should remain LAL-BAR, got %s", wk.OriginalClubID) }
+	if neg == nil {
+		t.Fatal("canonical wonderkid transfer between designated clubs should be allowed")
+	}
+	if !te.executeTransfer(neg) {
+		t.Fatal("legal wonderkid transfer should commit")
+	}
+	if wk.ClubID != madrid.ClubID {
+		t.Errorf("wonderkid should be at Madrid, got %s", wk.ClubID)
+	}
+	if wk.OriginalClubID != "LAL-BAR" {
+		t.Errorf("historical original club should remain LAL-BAR, got %s", wk.OriginalClubID)
+	}
 }
 
 func TestTwelveWeekWindowProgression(t *testing.T) {
 	te, _, _, _ := createOverhaulTestUniverse()
-	if te.CurrentWeek != 1 { t.Fatalf("expected starting week 1, got %d", te.CurrentWeek) }
+	if te.CurrentWeek != 1 {
+		t.Fatalf("expected starting week 1, got %d", te.CurrentWeek)
+	}
 	for week := 1; week <= TransferWindowWeeks; week++ {
-		if !te.IsWindowOpen() { t.Errorf("window should be open in offseason week %d", week) }
-		if !strings.Contains(te.GetWindowName(), "Week") { t.Errorf("window name should contain Week, got %s", te.GetWindowName()) }
+		if !te.IsWindowOpen() {
+			t.Errorf("window should be open in offseason week %d", week)
+		}
+		if !strings.Contains(te.GetWindowName(), "Week") {
+			t.Errorf("window name should contain Week, got %s", te.GetWindowName())
+		}
 		te.AdvanceOpenWindow()
 	}
-	if te.CurrentWeek != TransferWindowWeeks+1 { t.Fatalf("expected week=%d, got %d", TransferWindowWeeks+1, te.CurrentWeek) }
-	if te.IsWindowOpen() { t.Error("window should close after exactly 12 weeks") }
+	if te.CurrentWeek != TransferWindowWeeks {
+		t.Fatalf("expected final legal week=%d, got %d", TransferWindowWeeks, te.CurrentWeek)
+	}
+	if te.IsWindowOpen() {
+		t.Error("window should close after exactly 12 weeks")
+	}
 	prevDay := te.CurrentDay
 	te.AdvanceOpenWindow()
-	if te.CurrentDay != prevDay { t.Errorf("advance after window close should be a no-op") }
+	if te.CurrentDay != prevDay {
+		t.Errorf("advance after window close should be a no-op")
+	}
 }

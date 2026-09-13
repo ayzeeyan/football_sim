@@ -41,7 +41,7 @@ export const ClubIdentityPanel: React.FC<ClubIdentityPanelProps> = ({ club }) =>
 
   const rows = [
     ['Historical prestige', identity.historical_prestige, 'Long-term stature; intentionally changes much more slowly than current reputation.'],
-    ['Financial power', identity.financial_power, 'Structural financial strength used as one input to transfer budgets.'],
+    ['Financial power', identity.financial_power, 'Structural financial strength: sets transfer budgets and the annual wage cap.'],
     ['Board patience', identity.board_patience, 'Higher patience gives managers more time through poor runs.'],
     ['Academy quality', identity.academy_quality, 'Existing club youth-development identity.'],
     ['Recruitment ambition', identity.recruitment_ambition, 'How ambitious the club is expected to be in recruitment.'],
@@ -57,6 +57,12 @@ export const ClubIdentityPanel: React.FC<ClubIdentityPanelProps> = ({ club }) =>
           <p className="eyebrow flex items-center gap-1.5"><ShieldCheck size={13} /> Club identity</p>
           <h3 className="mt-1 font-display text-[19px] font-semibold text-bone">Current stature and operating profile</h3>
           <p className="mt-1 max-w-2xl text-[12px] text-sage">Identity is persistent simulation state. Reputation evolves from results; prestige remains the slower historical anchor.</p>
+          {(club.board_objective || club.expected_finish) && (
+            <p className="mt-2 text-[13px] text-bone">
+              Board brief: <span className="font-semibold">{club.board_objective || 'Competitive finish'}</span>
+              {club.expected_finish ? <span className="font-mono text-sage"> · target #{club.expected_finish}</span> : null}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <div className="rounded-xl border border-brass/40 bg-brass/[0.08] px-4 py-2 text-right">
@@ -67,6 +73,26 @@ export const ClubIdentityPanel: React.FC<ClubIdentityPanelProps> = ({ club }) =>
             <p className="flex items-center justify-end gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-sage"><Landmark size={11} /> Warchest</p>
             <p className="font-mono text-[18px] font-bold text-brass">{warchest}</p>
             <p className="font-mono text-[10px] text-sage">Balance {formattedBalance}</p>
+            {typeof club.finances?.wage_budget === 'number' && club.finances.wage_budget > 0 && (
+              <p className="font-mono text-[10px] text-sage">
+                Wages {new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(club.finances.wage_budget)}/yr
+              </p>
+            )}
+            {typeof club.finances?.wage_cap === 'number' && club.finances.wage_cap > 0 && (
+              <p className="font-mono text-[10px] text-sage" title="Annual wage cap from financial power; signings must fit under it">
+                Cap {new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(club.finances.wage_cap)}/yr
+              </p>
+            )}
+            {typeof club.finances?.european_revenue === 'number' && club.finances.european_revenue > 0 && (
+              <p className="font-mono text-[10px] text-brass" title="European prize intake last season, tracked separately from domestic prize money">
+                Europe {new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(club.finances.european_revenue)} last season
+              </p>
+            )}
+            {typeof club.coefficient === 'number' && club.coefficient > 0 && (
+              <p className="font-mono text-[10px] text-sage" title="UEFA-style points earned from European campaigns; seeds Swiss pots">
+                Coeff {club.coefficient}
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -131,6 +131,10 @@ func (tm *TournamentManager) fixtureHeadToHeadUnlocked(current *Fixture) []map[s
 	}
 	scan(tm.Fixtures)
 	scan(tm.UCLFixtures)
+	scan(tm.SuperCupFixtures)
+	if tm.World != nil {
+		scan(tm.World.Fixtures)
+	}
 	sort.Slice(rows, func(i, j int) bool {
 		mi, _ := rows[i]["matchweek"].(int)
 		mj, _ := rows[j]["matchweek"].(int)
@@ -223,6 +227,9 @@ func (tm *TournamentManager) playerMatchLogUnlocked(playerID string, limit int) 
 	scan(tm.Fixtures)
 	scan(tm.UCLFixtures)
 	scan(tm.SuperCupFixtures)
+	if tm.World != nil {
+		scan(tm.World.Fixtures)
+	}
 	sort.Slice(rows, func(i, j int) bool {
 		mi, _ := rows[i]["matchweek"].(int)
 		mj, _ := rows[j]["matchweek"].(int)

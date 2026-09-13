@@ -110,7 +110,7 @@ func main() {
 		staticDir = resolveFile("frontend/dist", "../frontend/dist", "../../frontend/dist")
 	}
 
-	log.Printf("[Server] Super League career server (Go)")
+	log.Printf("[Server] European career server (Go)")
 	log.Printf("[Server] Dataset path: %s", datasetPath)
 	log.Printf("[Server] Save path: %s", savePath)
 	log.Printf("[Server] Static directory: %s", staticDir)
@@ -119,8 +119,30 @@ func main() {
 		log.Printf("[Server] Or run the Vite client: cd frontend && bun run dev (proxies /api and /ws to this port)")
 	}
 
-	// 2. Initialize simulation systems from one persistent universe seed. Each
+	// 2. Inspect any existing save BEFORE the universe seed is established.
+	// Twelve-club Super League saves are no longer playable: they are deleted
+	// (save plus seed sidecar) so an ignored legacy career can neither pin a
+	// stale seed nor be restored later in boot.
+	var snapshot *persistence.CareerSnapshot
+	if _, err := os.Stat(savePath); err == nil {
+		log.Printf("[Server] Found existing career save at %s. Restoring...", savePath)
+		snapshot, err = persistence.LoadCareer(savePath)
+		if err != nil {
+			log.Fatalf("[Server] FATAL: Could not load existing career save: %v", err)
+		}
+		if snapshot != nil && snapshot.World == nil {
+			log.Printf("[Server] Ignoring 12-club Super League save; starting a fresh European world.")
+			snapshot = nil
+			_ = persistence.DeleteCareer(savePath)
+		}
+	} else if !os.IsNotExist(err) {
+		log.Fatalf("[Server] FATAL: Could not inspect career save path %s: %v", savePath, err)
+	}
+
+	// 3. Initialize simulation systems from one persistent universe seed. Each
 	// major subsystem gets an independently-derived deterministic stream.
+	// A legacy ignore above leaves no save behind, so the fresh world draws
+	// a fresh random seed; continuing world saves reuse their pinned seed.
 	universeSeed, err := persistence.LoadOrCreateUniverseSeed(savePath)
 	if err != nil {
 		log.Fatalf("[Server] FATAL: Could not establish universe seed: %v", err)
@@ -128,52 +150,48 @@ func main() {
 	rng := tournament.NewSubsystemRNG(universeSeed)
 	ge := growth.NewGrowthEngine(rng.SeedFor("development"))
 	dm := datamanager.NewDataManager(datasetPath, ge)
+	dm.SetSeed(rng.SeedFor("datamanager"))
 	if len(dm.Clubs) == 0 {
 		log.Fatalf("[Server] FATAL: Failed to load clubs from dataset at %s", datasetPath)
 	}
 
-	eliteClubs := dm.GetEliteClubs()
-	if len(eliteClubs) != 12 {
-		log.Fatalf("[Server] FATAL: Expected 12 elite clubs, found %d", len(eliteClubs))
-	}
-
-	tm := tournament.NewTournamentManager(eliteClubs, ge, rng.SeedFor("matches"))
-	te := transfers.NewTransferEngine(eliteClubs, tm.Managers, rng.SeedFor("transfers"))
-	tm.TransferEngine = te
-
-	// 3. Attempt restoring previous career snapshot. Existing saves are never
-	// silently discarded: malformed/corrupt state is a startup error so the
-	// user can diagnose or recover the save instead of unknowingly replacing it.
-	if _, err := os.Stat(savePath); err == nil {
-		log.Printf("[Server] Found existing career save at %s. Restoring...", savePath)
-		snap, err := persistence.LoadCareer(savePath)
-		if err != nil {
-			log.Fatalf("[Server] FATAL: Could not load existing career save: %v", err)
-		}
-		if err := persistence.ValidateCareerSnapshot(snap); err != nil {
+	// 4. Validate a surviving world save (legacy saves are already gone).
+	if snapshot != nil {
+		if err := persistence.ValidateCareerSnapshot(snapshot); err != nil {
 			log.Fatalf("[Server] FATAL: Existing career save failed validation: %v", err)
 		}
-		if err := persistence.RestoreCareer(tm, ge, te, snap); err != nil {
+	}
+
+	// 5. Build the matching universe before any restore.
+	clubs := dm.ClubsList
+	if len(clubs) < 2 {
+		log.Fatalf("[Server] FATAL: Dataset does not contain enough clubs to initialize a career")
+	}
+	tm := tournament.NewEuropeanWorldManager(clubs, ge, rng.SeedFor("matches"))
+	te := transfers.NewTransferEngine(clubs, tm.Managers, rng.SeedFor("transfers"))
+	tm.TransferEngine = te
+
+	// 6. Restore a world save after constructing the matching universe.
+	if snapshot != nil {
+		if err := persistence.RestoreCareer(tm, ge, te, snapshot); err != nil {
 			log.Fatalf("[Server] FATAL: Could not restore existing career save: %v", err)
 		}
 		if err := tm.ValidateWorldState(); err != nil {
 			log.Fatalf("[Server] FATAL: Restored career failed world validation: %v", err)
 		}
-		if len(snap.ProdigyHomes) > 0 {
-			dm.ProdigyHomes = snap.ProdigyHomes
+		if len(snapshot.ProdigyHomes) > 0 {
+			dm.ProdigyHomes = snapshot.ProdigyHomes
 		}
 		log.Printf("[Server] Successfully restored career: Season %s, Matchweek %d", tm.SeasonName, tm.CurrentMatchweek)
-	} else if !os.IsNotExist(err) {
-		log.Fatalf("[Server] FATAL: Could not inspect career save path %s: %v", savePath, err)
 	} else {
-		log.Printf("[Server] No prior career save found. Initialized fresh Super League universe.")
+		log.Printf("[Server] No prior career save found. Initialized fresh Top Five European universe.")
 	}
 
 	if err := tm.ValidateWorldState(); err != nil {
 		log.Fatalf("[Server] FATAL: Universe failed startup validation: %v", err)
 	}
 
-	// 4. Configure HTTP & WebSocket Server. NewServer constructs the live
+	// 7. Configure HTTP & WebSocket Server. NewServer constructs the live
 	// engine before clients can connect; replace its temporary RNG immediately
 	// with the universe-owned live-match stream.
 	port := getFreePort(*hostFlag, *portFlag)
@@ -189,7 +207,7 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	// 5. Graceful shutdown handler
+	// 8. Graceful shutdown handler
 	stopCh := make(chan os.Signal, 1)
 	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
 

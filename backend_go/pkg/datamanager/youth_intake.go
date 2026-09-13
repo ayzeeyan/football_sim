@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
-	"time"
 
 	"football_sim/pkg/growth"
 	"football_sim/pkg/models"
@@ -105,7 +104,9 @@ func runYouthIntakeInternal(
 	rng *rand.Rand,
 ) ([]*models.Player, error) {
 	if rng == nil {
-		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+		// Fixed fallback seed: nil callers (tests, tools) stay deterministic
+		// instead of keying intake to the wall clock.
+		rng = rand.New(rand.NewSource(20260801))
 	}
 
 	taken := make(map[string]bool)

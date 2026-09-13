@@ -20,8 +20,11 @@ func (tm *TournamentManager) ValidateWorldState() error {
 	if tm.SeasonPhase != "season" && tm.SeasonPhase != "transfer_window" {
 		return fmt.Errorf("world validation: unknown season phase %q", tm.SeasonPhase)
 	}
-	if tm.MaxMatchweeks != LeagueRounds {
+	if tm.World == nil && tm.MaxMatchweeks != LeagueRounds {
 		return fmt.Errorf("world validation: max matchweeks=%d want %d", tm.MaxMatchweeks, LeagueRounds)
+	}
+	if tm.World != nil && tm.MaxMatchweeks != 38 {
+		return fmt.Errorf("world validation: European calendar has %d matchweeks, want 38", tm.MaxMatchweeks)
 	}
 	if tm.CurrentMatchweek < 1 || tm.CurrentMatchweek > tm.MaxMatchweeks+1 {
 		return fmt.Errorf("world validation: current matchweek %d outside legal range 1..%d", tm.CurrentMatchweek, tm.MaxMatchweeks+1)
@@ -51,13 +54,30 @@ func (tm *TournamentManager) ValidateWorldState() error {
 		return fmt.Errorf("world validation: club map/list size mismatch map=%d list=%d", len(tm.Clubs), len(clubIDs))
 	}
 
-	if err := validateLeagueSchedule(tm, clubIDs); err != nil {
-		return err
+	if tm.World != nil {
+		if err := validateEuropeanWorldSchedule(tm, clubIDs); err != nil {
+			return err
+		}
+	} else {
+		if err := validateLeagueSchedule(tm, clubIDs); err != nil {
+			return err
+		}
 	}
-	fixtureIDs := make(map[string]struct{}, len(tm.Fixtures)+len(tm.UCLFixtures)+len(tm.SuperCupFixtures))
+	worldFixtureCount := 0
+	if tm.World != nil {
+		worldFixtureCount = len(tm.World.Fixtures)
+	}
+	fixtureIDs := make(map[string]struct{}, len(tm.Fixtures)+len(tm.UCLFixtures)+len(tm.SuperCupFixtures)+worldFixtureCount)
 	for scope, fixtures := range map[string][]Fixture{"league": tm.Fixtures, "ucl": tm.UCLFixtures, "super_cup": tm.SuperCupFixtures} {
 		for i := range fixtures {
 			if err := validateFixtureState(scope, i, &fixtures[i], clubIDs, fixtureIDs); err != nil {
+				return err
+			}
+		}
+	}
+	if tm.World != nil {
+		for i := range tm.World.Fixtures {
+			if err := validateFixtureState("world", i, &tm.World.Fixtures[i], clubIDs, fixtureIDs); err != nil {
 				return err
 			}
 		}
@@ -90,8 +110,15 @@ func (tm *TournamentManager) ValidateWorldState() error {
 
 	if tm.TransferEngine != nil {
 		te := tm.TransferEngine
-		if te.CurrentWeek < 1 || te.CurrentWeek > transfers.TransferWindowWeeks+1 {
-			return fmt.Errorf("world validation: transfer week %d outside legal range 1..%d", te.CurrentWeek, transfers.TransferWindowWeeks+1)
+		if te.WindowType != transfers.WindowClosed && te.WindowType != transfers.WindowSummer && te.WindowType != transfers.WindowWinter {
+			return fmt.Errorf("world validation: unknown transfer window type %q", te.WindowType)
+		}
+		if te.IsWindowOpen() {
+			if te.CurrentWeek < 1 || te.CurrentWeek > te.WindowWeeks() {
+				return fmt.Errorf("world validation: open %s window week %d outside legal range 1..%d", te.WindowType, te.CurrentWeek, te.WindowWeeks())
+			}
+		} else if te.CurrentWeek < 0 || te.CurrentWeek > transfers.TransferWindowWeeks {
+			return fmt.Errorf("world validation: closed transfer week %d outside legal range 0..%d", te.CurrentWeek, transfers.TransferWindowWeeks)
 		}
 		if te.CurrentDay < 0 || te.CurrentMatchweek < 0 {
 			return fmt.Errorf("world validation: transfer counters cannot be negative (day=%d matchweek=%d)", te.CurrentDay, te.CurrentMatchweek)
@@ -115,19 +142,24 @@ func (tm *TournamentManager) ValidateWorldState() error {
 			if transfer.FeeEUR < 0 {
 				return fmt.Errorf("world validation: completed transfer for player %q has negative fee %d", transfer.PlayerID, transfer.FeeEUR)
 			}
-			if _, ok := clubIDs[transfer.SellerID]; transfer.SellerID != "" && !ok {
-				return fmt.Errorf("world validation: completed transfer references unknown seller %q", transfer.SellerID)
-			}
-			if _, ok := clubIDs[transfer.BuyerID]; transfer.BuyerID != "" && !ok {
-				return fmt.Errorf("world validation: completed transfer references unknown buyer %q", transfer.BuyerID)
-			}
-			if seenCompleted[transfer.PlayerID] {
-				return fmt.Errorf("world validation: player %q completed more than one transfer in the active window", transfer.PlayerID)
-			}
-			seenCompleted[transfer.PlayerID] = true
-			if !te.TransferredThisWindow[transfer.PlayerID] {
-				return fmt.Errorf("world validation: completed transfer player %q lacks transferred-this-window marker", transfer.PlayerID)
-			}
+		// Historical/foreign counterparties outside the active map are
+		// explicitly permitted: snapshot validation allows them for
+		// multi-season saves (pinned by TestValidateCareerSnapshotAllows-
+		// ExpiredNegotiationsAndHistoricalBuyers), so rejecting them here
+		// would fatal saves that passed snapshot validation at boot.
+		// Marker checks are likewise scoped to fully-local deals, but the
+		// duplicate-player check stays universal: CompletedTransfers is
+		// window-local by construction (cleared every ResetForNewSeason).
+		_, sellerKnown := clubIDs[transfer.SellerID]
+		_, buyerKnown := clubIDs[transfer.BuyerID]
+		historical := (transfer.SellerID != "" && !sellerKnown) || (transfer.BuyerID != "" && !buyerKnown)
+		if seenCompleted[transfer.PlayerID] {
+			return fmt.Errorf("world validation: player %q completed more than one transfer in the active window", transfer.PlayerID)
+		}
+		seenCompleted[transfer.PlayerID] = true
+		if !historical && !te.TransferredThisWindow[transfer.PlayerID] {
+			return fmt.Errorf("world validation: completed transfer player %q lacks transferred-this-window marker", transfer.PlayerID)
+		}
 		}
 		for _, negotiation := range te.ActiveNegotiations {
 			if negotiation == nil {
@@ -169,6 +201,9 @@ func (tm *TournamentManager) ValidateWorldState() error {
 			if bio.Age < 0 || bio.Potential < 0 || bio.Potential > 100 || bio.CurrentHeightCM <= 0 || bio.CurrentWeightKG <= 0 || bio.LevelXPTarget < 0 || bio.AccumulatedXP < 0 {
 				return fmt.Errorf("world validation: player %q has invalid biometric bounds", playerID)
 			}
+			if models.IsCanonicalWonderkidID(playerID) && (bio.Potential < 93 || bio.Potential > 96) {
+				return fmt.Errorf("world validation: canonical wonderkid %q potential %d outside [93, 96]", playerID, bio.Potential)
+			}
 		}
 	}
 	return nil
@@ -206,6 +241,9 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 	if club.OverallTeamRating < 0 || club.OverallTeamRating > 100 {
 		return fmt.Errorf("world validation: club %q team rating %d outside 0..100", club.ClubID, club.OverallTeamRating)
 	}
+	if club.Coefficient < 0 {
+		return fmt.Errorf("world validation: club %q has negative coefficient %d", club.ClubID, club.Coefficient)
+	}
 	for i, player := range club.Squad {
 		if player == nil || player.PlayerID == "" {
 			return fmt.Errorf("world validation: club %q has nil/empty-id player at index %d", club.ClubID, i)
@@ -225,6 +263,18 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 		}
 		if player.OVR < 0 || player.OVR > 100 || player.Age < 0 || player.MarketValueEUR < 0 || player.WageEUR < 0 {
 			return fmt.Errorf("world validation: player %q has invalid OVR/age/value/wage", player.PlayerID)
+		}
+		if player.LoanBuyClauseEUR < 0 || player.LoanBuyClauseEUR > 500_000_000 {
+			return fmt.Errorf("world validation: player %q has out-of-bounds loan buy clause %d", player.PlayerID, player.LoanBuyClauseEUR)
+		}
+		if player.LoanBuyClauseEUR > 0 && player.LoanBuyClauseEUR < 300_000 {
+			return fmt.Errorf("world validation: player %q loan buy clause %d below €300k floor", player.PlayerID, player.LoanBuyClauseEUR)
+		}
+		if player.UniverseWonderkid && player.LoanBuyClauseEUR > 0 {
+			return fmt.Errorf("world validation: canonical wonderkid %q must not carry a loan buy clause", player.PlayerID)
+		}
+		if player.UniverseWonderkid && player.OnLoan {
+			return fmt.Errorf("world validation: canonical wonderkid %q must not be on loan", player.PlayerID)
 		}
 	}
 	return nil
@@ -269,6 +319,104 @@ func validateLeagueSchedule(tm *TournamentManager, clubIDs map[string]struct{}) 
 			}
 			if directed[a+">"+b] != 2 {
 				return fmt.Errorf("world validation: directed league pairing %s>%s occurs %d times want 2", a, b, directed[a+">"+b])
+			}
+		}
+	}
+	return nil
+}
+
+func validateEuropeanWorldSchedule(tm *TournamentManager, clubIDs map[string]struct{}) error {
+	if tm.World == nil || len(tm.World.Competitions) == 0 {
+		return fmt.Errorf("world validation: European career has no competition registry")
+	}
+	leagueMembership := map[string]string{}
+	for _, def := range domesticLeagueDefinitions {
+		comp := tm.World.Competitions[def.ID]
+		if comp == nil || comp.Kind != CompetitionLeague {
+			return fmt.Errorf("world validation: missing domestic league %q", def.ID)
+		}
+		n := len(comp.ParticipantIDs)
+		if n < 2 {
+			return fmt.Errorf("world validation: league %q needs at least two clubs", def.ID)
+		}
+		seenParticipants := map[string]bool{}
+		for _, id := range comp.ParticipantIDs {
+			club := tm.Clubs[id]
+			if club == nil {
+				return fmt.Errorf("world validation: league %q references unknown club %q", def.ID, id)
+			}
+			if club.League != def.League {
+				return fmt.Errorf("world validation: club %q is in %q but registered to %q", id, club.League, def.Name)
+			}
+			if seenParticipants[id] || leagueMembership[id] != "" {
+				return fmt.Errorf("world validation: club %q has duplicate domestic membership", id)
+			}
+			seenParticipants[id] = true
+			leagueMembership[id] = def.ID
+		}
+
+		fixtures := tm.worldCompetitionFixturesUnlocked(def.ID)
+		wantFixtures := n * (n - 1)
+		if len(fixtures) != wantFixtures {
+			return fmt.Errorf("world validation: %s fixtures=%d want %d", def.Name, len(fixtures), wantFixtures)
+		}
+		games, homes, aways := map[string]int{}, map[string]int{}, map[string]int{}
+		directed := map[string]int{}
+		perWeek := map[int]map[string]bool{}
+		for _, f := range fixtures {
+			if f.Matchweek < 1 || f.Matchweek > 2*(n-1) {
+				return fmt.Errorf("world validation: %s fixture %q has invalid matchweek %d", def.Name, f.FixtureID, f.Matchweek)
+			}
+			if !seenParticipants[f.HomeID] || !seenParticipants[f.AwayID] {
+				return fmt.Errorf("world validation: %s fixture %q crosses league membership", def.Name, f.FixtureID)
+			}
+			if perWeek[f.Matchweek] == nil {
+				perWeek[f.Matchweek] = map[string]bool{}
+			}
+			if perWeek[f.Matchweek][f.HomeID] || perWeek[f.Matchweek][f.AwayID] {
+				return fmt.Errorf("world validation: %s schedules a club twice in matchweek %d", def.Name, f.Matchweek)
+			}
+			perWeek[f.Matchweek][f.HomeID], perWeek[f.Matchweek][f.AwayID] = true, true
+			games[f.HomeID]++
+			games[f.AwayID]++
+			homes[f.HomeID]++
+			aways[f.AwayID]++
+			directed[f.HomeID+">"+f.AwayID]++
+		}
+		for id := range seenParticipants {
+			if games[id] != 2*(n-1) || homes[id] != n-1 || aways[id] != n-1 {
+				return fmt.Errorf("world validation: %s club %q has games/home/away %d/%d/%d want %d/%d/%d", def.Name, id, games[id], homes[id], aways[id], 2*(n-1), n-1, n-1)
+			}
+			for other := range seenParticipants {
+				if id != other && directed[id+">"+other] != 1 {
+					return fmt.Errorf("world validation: %s directed pairing %s>%s occurs %d times", def.Name, id, other, directed[id+">"+other])
+				}
+			}
+		}
+	}
+	if len(leagueMembership) != len(clubIDs) {
+		return fmt.Errorf("world validation: domestic membership covers %d clubs, universe has %d", len(leagueMembership), len(clubIDs))
+	}
+
+	europeanMembership := map[string]string{}
+	for _, def := range europeanDefinitions {
+		comp := tm.World.Competitions[def.ID]
+		if comp == nil || comp.Kind != CompetitionEuropean {
+			return fmt.Errorf("world validation: missing European competition %q", def.ID)
+		}
+		if len(comp.ParticipantIDs) == 0 {
+			continue
+		}
+		for _, id := range comp.ParticipantIDs {
+			if _, ok := clubIDs[id]; !ok {
+				return fmt.Errorf("world validation: %s references unknown participant %q", def.Name, id)
+			}
+			if previous := europeanMembership[id]; previous != "" {
+				return fmt.Errorf("world validation: club %q appears in both %s and %s", id, previous, def.ID)
+			}
+			europeanMembership[id] = def.ID
+			if comp.Records[id] == nil {
+				return fmt.Errorf("world validation: %s has no league-phase record for %q", def.Name, id)
 			}
 		}
 	}

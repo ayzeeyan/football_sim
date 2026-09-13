@@ -77,7 +77,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
     <div className="space-y-5">
       <Card>
         <PanelHeader
-          kicker="U-14 development · 12 outfield prodigies, age 14"
+          kicker="U-17 development · 12 outfield prodigies, age 17"
           title="Wonderkids"
           subtitle="School calendars, growth, and a second position after adult height. Minutes still do most of the developing."
           right={
@@ -160,7 +160,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
             <div className="flex items-center justify-between border-b border-line pb-4 gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge tone="gold"><span className="flex items-center gap-1"><Sparkle size={10} /> U-14 prodigy</span></Badge>
+                  <Badge tone="gold"><span className="flex items-center gap-1"><Sparkle size={10} /> U-17 prodigy</span></Badge>
                   <Badge tone="slate">
                     {selected.position}
                     {selected.secondary_position ? ` / ${selected.secondary_position}` : ''}
@@ -444,7 +444,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
 
                 <div className="grid grid-cols-3 gap-2 text-center text-[12px] font-mono">
                   <div className="p-2 rounded bg-cardBg border border-line">
-                    <div className="text-[10px] text-sage uppercase">Starting (U-14)</div>
+                    <div className="text-[10px] text-sage uppercase">Starting (U-17)</div>
                     <div className="font-bold text-bone mt-0.5">{timelineData?.baseline_height_cm ?? selected.baseline_height_cm} cm</div>
                   </div>
                   <div className="p-2 rounded bg-brass/10 border border-brass/40">
@@ -673,7 +673,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
                       {
                         id: 'senior_debut',
                         title: 'Senior Debut',
-                        description: 'Earned first team match minutes in the European Super League.',
+                        description: 'Earned first team match minutes in the Top Five European world.',
                         unlocked: selected.career_goals > 0 || selected.appearances > 0,
                         badge: 'green',
                       },

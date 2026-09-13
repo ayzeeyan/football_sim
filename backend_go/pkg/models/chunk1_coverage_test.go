@@ -222,18 +222,18 @@ func TestChunk1CovRecalculateRatings(t *testing.T) {
 
 func TestChunk1CovSortKeyFatigueAndSortClubs(t *testing.T) {
 	tired := &Player{PlayerID: "T", OVR: 85, ConsecutiveStarts: 6}
-	if _, adj := sortKey(tired); adj != 85-12 {
+	if _, adj := sortKey(tired, "super-league", 1); adj != 85-12 {
 		t.Errorf("fatigue drop wrong: %d", adj)
 	}
 	fresh := &Player{PlayerID: "F", OVR: 80}
-	if _, adj := sortKey(fresh); adj != 80 {
+	if _, adj := sortKey(fresh, "super-league", 1); adj != 80 {
 		t.Errorf("fresh player should have no drop: %d", adj)
 	}
 	// sortPlayersForXI tiebreak on PlayerID.
 	a := &Player{PlayerID: "A", Category: "MID", OVR: 75}
 	b := &Player{PlayerID: "B", Category: "MID", OVR: 75}
 	pool := []*Player{b, a}
-	sortPlayersForXI(pool)
+	sortPlayersForXI(pool, "super-league", 1, "", "")
 	if pool[0].PlayerID != "A" {
 		t.Errorf("ID tiebreak failed: %v", pool)
 	}

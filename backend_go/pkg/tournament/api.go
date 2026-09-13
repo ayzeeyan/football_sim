@@ -14,6 +14,7 @@ func (tm *TournamentManager) GetCalendar() map[string]interface{} {
 	weeks := make([]map[string]interface{}, 0, tm.MaxMatchweeks)
 	for mw := 1; mw <= tm.MaxMatchweeks; mw++ {
 		leagueN, uclN, scN := 0, 0, 0
+		worldCounts := map[string]int{}
 		for i := range tm.Fixtures {
 			if tm.Fixtures[i].Matchweek == mw {
 				leagueN++
@@ -29,16 +30,24 @@ func (tm *TournamentManager) GetCalendar() map[string]interface{} {
 				scN++
 			}
 		}
+		if tm.World != nil {
+			for i := range tm.World.Fixtures {
+				if tm.World.Fixtures[i].Matchweek == mw {
+					worldCounts[tm.World.Fixtures[i].Competition]++
+				}
+			}
+		}
 		weeks = append(weeks, map[string]interface{}{
-			"matchweek": mw,
-			"phase":     LeaguePhase(mw),
-			"month":     MonthLabel(mw),
-			"year":      CalendarYear(tm.SeasonName, mw),
-			"chapter":   WeekChapter(mw),
-			"league":    leagueN,
-			"ucl":       uclN,
-			"super_cup": scN,
-			"current":   mw == view,
+			"matchweek":    mw,
+			"phase":        tm.calendarPhaseUnlocked(mw),
+			"month":        tm.calendarMonthUnlocked(mw),
+			"year":         CalendarYear(tm.SeasonName, mw),
+			"chapter":      tm.weekChapterUnlocked(mw),
+			"league":       leagueN,
+			"ucl":          uclN,
+			"super_cup":    scN,
+			"competitions": worldCounts,
+			"current":      mw == view,
 		})
 	}
 	nextCup := 0
@@ -53,6 +62,14 @@ func (tm *TournamentManager) GetCalendar() map[string]interface{} {
 		f := &tm.SuperCupFixtures[i]
 		if f.Status == "scheduled" && f.Matchweek < view {
 			overdue = true
+		}
+	}
+	if tm.World != nil {
+		for i := range tm.World.Fixtures {
+			f := &tm.World.Fixtures[i]
+			if f.Status == "scheduled" && f.Matchweek < view {
+				overdue = true
+			}
 		}
 	}
 	if overdue {
@@ -74,6 +91,14 @@ func (tm *TournamentManager) GetCalendar() map[string]interface{} {
 					}
 				}
 			}
+			if !found && tm.World != nil {
+				for i := range tm.World.Fixtures {
+					if tm.World.Fixtures[i].Matchweek == mw && tm.World.Fixtures[i].Status == "scheduled" {
+						found = true
+						break
+					}
+				}
+			}
 			if found {
 				nextCup = mw
 				break
@@ -88,13 +113,14 @@ func (tm *TournamentManager) GetCalendar() map[string]interface{} {
 		"current_matchweek": tm.CurrentMatchweek,
 		"max_matchweeks":    tm.MaxMatchweeks,
 		"season_name":       tm.SeasonName,
-		"phase":             LeaguePhase(view),
-		"month":             MonthLabel(view),
+		"phase":             tm.calendarPhaseUnlocked(view),
+		"month":             tm.calendarMonthUnlocked(view),
 		"year":              CalendarYear(tm.SeasonName, view),
-		"chapter":           WeekChapter(view),
+		"chapter":           tm.weekChapterUnlocked(view),
 		"this_week":         view,
 		"next_cup_night":    nextCupVal,
 		"weeks":             weeks,
+		"world":             tm.World != nil,
 	}
 }
 

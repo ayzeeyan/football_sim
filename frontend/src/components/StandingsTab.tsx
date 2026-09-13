@@ -30,22 +30,53 @@ function positionMarker(pos: number): string {
   return 'bg-sage/30';
 }
 
+// cupBadge shortens any cup competition id for the same-week jump buttons.
+// Legacy ids keep their historic badges; world cups map by family.
+export function cupBadge(competition: string): string {
+  switch (competition) {
+    case 'ucl':
+      return 'CU';
+    case 'super-cup':
+      return 'SC';
+    case 'champions-league':
+      return 'UCL';
+    case 'europa-league':
+      return 'UEL';
+    case 'conference-league':
+      return 'UECL';
+    case 'fa-cup':
+      return 'FAC';
+    case 'efl-cup':
+      return 'EFL';
+    case 'copa-del-rey':
+      return 'CDR';
+    case 'dfb-pokal':
+      return 'DFB';
+    case 'coppa-italia':
+      return 'CI';
+    case 'coupe-de-france':
+      return 'CDF';
+    default:
+      return 'Cup';
+  }
+}
+
 // Table narrative strip (F8): pure math off the current table — title pace,
 // Europe race, relegation scrap. Derived from props/state only, so the text
 // moves whenever the table moves. No resim.
-export function tableNarrative(clubs: Club[], maxMatchweeks: number = 44): { title: string; europe: string; scrap: string } {
+export function tableNarrative(clubs: Club[], maxMatchweeks: number = 38, world = true): { title: string; europe: string; scrap: string } {
   if (clubs.length === 0) return { title: 'No table yet.', europe: 'No table yet.', scrap: 'No table yet.' };
   const played = clubs[0]?.p ?? 0;
   if (played === 0) {
     return {
       title: 'Title pace: too early — opening series decides the first gaps.',
-      europe: 'Europe race: too early — 2nd–4th reach the Champions Cup.',
+      europe: world ? 'Europe race: too early — top sides reach UEFA competitions.' : 'Europe race: too early — 2nd–4th reach the Champions Cup.',
       scrap: 'Relegation scrap: too early — the bottom three are all level.',
     };
   }
   const [first, second] = [clubs[0], clubs[1]];
   const gap = (first?.pts ?? 0) - (second?.pts ?? 0);
-  const pace = ((first?.pts ?? 0) / Math.max(1, played)) * (maxMatchweeks || 44);
+  const pace = ((first?.pts ?? 0) / Math.max(1, played)) * (maxMatchweeks || 38);
   const title = gap <= 0
     ? `Title pace: level at the top — ${first?.short_name ?? '?'} and ${second?.short_name ?? '?'} on ${first?.pts ?? 0} (${Math.round(pace)}-pt pace).`
     : `Title pace: ${first?.short_name} lead by ${gap} (${first?.pts} pts, ${Math.round(pace)}-pt pace).`;
@@ -182,7 +213,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
     }
   };
 
-  if (loading || !league) return <Card><LoadingState message="Loading the Super League…" /></Card>;
+  if (loading || !league) return <Card><LoadingState message="Loading the table…" /></Card>;
 
   const isFinished = league.current_matchweek > league.max_matchweeks;
   const champion = league.clubs[0];
@@ -200,7 +231,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
             </div>
             <div>
               <p className="eyebrow !text-brass">Champions · {league.max_matchweeks} of {league.max_matchweeks} matchweeks</p>
-              <h3 className="font-display text-[30px] font-semibold text-bone mt-1">{champion.club_name} win the Super League</h3>
+              <h3 className="font-display text-[30px] font-semibold text-bone mt-1">{champion.club_name} {league.world && champion.league ? `win ${champion.league}` : league.world ? 'top their league' : 'win the Super League'}</h3>
               <p className="text-[14px] text-sage font-normal mt-0.5">
                 {champion.pts} points · {champion.w} wins · {formatGd(champion.gd)} goal difference
               </p>
@@ -234,8 +265,12 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
       <Card>
         <PanelHeader
           kicker={isFinished ? 'Season complete' : `Matchweek ${Math.min(league.current_matchweek, league.max_matchweeks)} of ${league.max_matchweeks}`}
-          title="League table"
-          subtitle="Quadruple round-robin, 44 games each. Champions Cup and Super Cup sit on the same slate. Decided games lock."
+          title={league.world && league.clubs[0]?.league ? `${league.clubs[0].league} table` : 'League table'}
+          subtitle={
+            league.world
+              ? 'Your watched club’s domestic league — home and away once. Cups and Europe share the same slate in the Competition Hub. Decided games lock.'
+              : 'Quadruple round-robin, 44 games each. Champions Cup and Super Cup sit on the same slate. Decided games lock.'
+          }
           right={
             !isFinished ? (
               <PrimaryButton
@@ -256,7 +291,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
       <Card>
         <p className="eyebrow mb-2">Table narrative · matchweek {Math.min(league.current_matchweek, league.max_matchweeks)}</p>
         {(() => {
-          const n = tableNarrative(league.clubs, league.max_matchweeks);
+          const n = tableNarrative(league.clubs, league.max_matchweeks, league.world);
           return (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               {[
@@ -302,7 +337,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
                 </p>
                 <p className="text-[13px] text-bone/80 mt-2 font-mono">
                   {stats.player_of_the_week.goals} G · {stats.player_of_the_week.assists} A
-                  {stats.player_of_the_week.is_wonderkid ? ' · U-14' : ''}
+                  {stats.player_of_the_week.is_wonderkid ? ' · U-17' : ''}
                 </p>
               </Card>
             </button>
@@ -325,7 +360,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
                     <span className="font-mono font-bold text-[15px] text-bone">{r.goals}<span className="text-sage font-semibold text-[12px]"> G · {r.assists} A</span></span>
                   </div>
                   <p className="font-semibold text-[13px] text-bone truncate mt-1" title={r.full_name}>
-                    {r.full_name} {r.is_wonderkid && <span className="text-brass">· U-14</span>}
+                    {r.full_name} {r.is_wonderkid && <span className="text-brass">· U-17</span>}
                   </p>
                   <p className="text-[11.5px] text-sage font-mono truncate">{r.club_short} · {r.position}</p>
                 </button>
@@ -388,8 +423,8 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
             {stats.history.slice().reverse().map((h) => (
               <div key={h.season_name} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg border border-line bg-ink/40 text-[13px]">
                 <span className="font-mono text-brass font-semibold">{h.season_name}</span>
-                <span className="text-bone">{h.champion?.club_name ?? '—'} · Super League</span>
-                <span className="text-sage">{h.ucl_champion?.club_name ?? '—'} · Cup</span>
+                <span className="text-bone">{h.champion?.club_name ?? '—'} · League</span>
+                <span className="text-sage">{h.ucl_champion?.club_name ?? '—'} · Europe</span>
                 <span className="font-mono text-sage">{h.top_scorer ? `${h.top_scorer.full_name} ${h.top_scorer.goals} G` : ''}</span>
               </div>
             ))}
@@ -468,8 +503,14 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
         </div>
         <div className="px-5 py-3.5 bg-ink/40 border-t border-line flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-mono text-sage">
           <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-brass" /> 1st takes the title</span>
-          <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#8AB4C8]" /> 2nd–4th reach the Champions Cup</span>
-          <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pitchtone" /> Super Cup: seeds 1–4 bye, 5–12 play in</span>
+          {league.world ? (
+            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#8AB4C8]" /> Top sides reach Europe — see the Competition Hub</span>
+          ) : (
+            <>
+              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#8AB4C8]" /> 2nd–4th reach the Champions Cup</span>
+              <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pitchtone" /> Super Cup: seeds 1–4 bye, 5–12 play in</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -478,7 +519,11 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
           <PanelHeader
             kicker={isFinished ? 'Season complete' : `Matchweek ${shownMw} of ${league.max_matchweeks}`}
             title={calendar?.weeks.find((w) => w.matchweek === shownMw)?.chapter ?? `Matchweek ${shownMw}`}
-            subtitle="Super League and Champions Cup sit on one list. Simulate one game, or the rest of the week. Cup legs play in order."
+            subtitle={
+              league.world
+                ? 'Domestic league plus same-week cups and Europe on one list. Simulate one game, or the rest of the week. European ties play home and away.'
+                : 'Super League and Champions Cup sit on one list. Simulate one game, or the rest of the week. Cup legs play in order.'
+            }
             right={
               <div className="flex items-center gap-2">
                 <select
@@ -537,7 +582,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
                       onClick={() => { soundManager.playClick(); onWatchFixture(cup); }}
                       className="px-3 py-1.5 border border-line bg-dugout hover:bg-cardHover text-[12.5px] text-bone"
                     >
-                      Jump: {cup.home.short_name} vs {cup.away.short_name} ({cup.competition === 'ucl' ? 'CU' : 'SC'})
+                      Jump: {cup.home.short_name} vs {cup.away.short_name} ({cupBadge(cup.competition)})
                     </button>
                   ))}
                 </div>
@@ -559,16 +604,16 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
                 </div>
                 <div className="text-right font-mono text-[12px] text-sage space-y-1">
                   <p>
-                    Super League {weekFixtures.filter((f) => f.competition === 'super-league' && f.status === 'finished').length}
-                    /{weekFixtures.filter((f) => f.competition === 'super-league').length}
+                    League {weekFixtures.filter((f) => (f.competition === 'super-league' || ['premier-league', 'la-liga', 'bundesliga', 'serie-a', 'ligue-1'].includes(f.competition)) && f.status === 'finished').length}
+                    /{weekFixtures.filter((f) => f.competition === 'super-league' || ['premier-league', 'la-liga', 'bundesliga', 'serie-a', 'ligue-1'].includes(f.competition)).length}
                   </p>
                   <p>
-                    Champions Cup {weekFixtures.filter((f) => f.competition === 'ucl' && f.status === 'finished').length}
-                    /{weekFixtures.filter((f) => f.competition === 'ucl').length || 0}
+                    Europe {weekFixtures.filter((f) => ['ucl', 'champions-league', 'europa-league', 'conference-league'].includes(f.competition) && f.status === 'finished').length}
+                    /{weekFixtures.filter((f) => ['ucl', 'champions-league', 'europa-league', 'conference-league'].includes(f.competition)).length || 0}
                   </p>
                   <p>
-                    Super Cup {weekFixtures.filter((f) => f.competition === 'super-cup' && f.status === 'finished').length}
-                    /{weekFixtures.filter((f) => f.competition === 'super-cup').length || 0}
+                    Cups {weekFixtures.filter((f) => ['super-cup', 'fa-cup', 'efl-cup', 'copa-del-rey', 'dfb-pokal', 'coppa-italia', 'coupe-de-france'].includes(f.competition) && f.status === 'finished').length}
+                    /{weekFixtures.filter((f) => ['super-cup', 'fa-cup', 'efl-cup', 'copa-del-rey', 'dfb-pokal', 'coppa-italia', 'coupe-de-france'].includes(f.competition)).length || 0}
                   </p>
                 </div>
               </div>
@@ -599,17 +644,27 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
         </Card>
       </div>
 
-      <UclTournamentTab
-        key={`cup-${league.current_matchweek}-${weekFixtures.filter((f) => f.competition === 'ucl' && f.status === 'finished').length}`}
-        boardOnly
-        onWatchFixture={onWatchFixture}
-        onShowToast={onShowToast}
-      />
+      {league.world ? (
+        <Card>
+          <p className="text-[13px] text-sage leading-relaxed">
+            Cups and Europe live in the <span className="text-bone font-semibold">Competitions</span> tab for this 96-club career — domestic cups plus three UEFA league phases and two-legged knockouts share the calendar above.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <UclTournamentTab
+            key={`cup-${league.current_matchweek}-${weekFixtures.filter((f) => f.competition === 'ucl' && f.status === 'finished').length}`}
+            boardOnly
+            onWatchFixture={onWatchFixture}
+            onShowToast={onShowToast}
+          />
 
-      <SuperCupBoard
-        data={superCup}
-        loading={!superCup}
-      />
+          <SuperCupBoard
+            data={superCup}
+            loading={!superCup}
+          />
+        </>
+      )}
 
       <MatchDetailModal fixture={openFixture} onClose={() => setOpenFixture(null)} />
       <PreMatchModal

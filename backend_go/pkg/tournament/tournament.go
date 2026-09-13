@@ -69,6 +69,11 @@ type TournamentManager struct {
 	SuperCupStage         string
 	SuperCupByes          []*models.Club
 
+	// World is non-nil for version-4 European careers. Legacy Super League
+	// saves retain their original fields and are migrated only when a user
+	// explicitly starts a new world career.
+	World *EuropeanWorld
+
 	// ReputationAppliedSeason records the completed campaign whose results have
 	// already been applied to club reputation. It is persisted so repeated
 	// window/finalization actions and save/load cannot double-apply a season.
@@ -138,6 +143,9 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 	for _, c := range eliteClubs {
 		tm.MoraleStoryStatus[c.ClubID] = "normal"
 		tm.ClubSeasonHistory[c.ClubID] = nil
+		if c != nil {
+			c.RecalculateWageBill()
+		}
 		if m := tm.Managers[c.ClubID]; m != nil {
 			tm.ManagerHistory = append(tm.ManagerHistory, ManagerHistoryEntry{
 				SeasonName: tm.SeasonName, Matchweek: 1, ClubID: c.ClubID, ClubName: c.ClubName,
@@ -151,6 +159,8 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 
 	PairSeniorMentors(eliteClubs, ge)
 	tm.initCups()
+	tm.AssignSquadRolesUnlocked()
+	tm.AssignBoardExpectationsUnlocked()
 	tm.seedOpeningInbox()
 	return tm
 }
@@ -170,7 +180,8 @@ func (tm *TournamentManager) seedOpeningInbox() {
 	)
 }
 
-// PushInbox appends a news wire item.
+// PushInbox appends a news wire item and returns its ID ("" when dedup
+// suppresses it). Ignoring the return keeps every existing call site valid.
 func (tm *TournamentManager) PushInbox(
 	category string,
 	headline string,
@@ -179,10 +190,10 @@ func (tm *TournamentManager) PushInbox(
 	clubIDs []string,
 	playerID string,
 	fixtureID string,
-) {
+) string {
 	for _, existing := range tm.Inbox {
 		if existing.Headline == headline && existing.SeasonName == tm.SeasonName && existing.Matchweek == matchweek && existing.FixtureID == fixtureID {
-			return
+			return ""
 		}
 	}
 	tm.InboxSeq++
@@ -192,6 +203,7 @@ func (tm *TournamentManager) PushInbox(
 	if len(tm.Inbox) > 180 {
 		tm.Inbox = tm.Inbox[:180]
 	}
+	return id
 }
 
 // GetStandings returns the sorted league table.
@@ -270,9 +282,9 @@ func (tm *TournamentManager) kickoffNoteUnlocked(f *Fixture, home, away *models.
 		}
 	}
 	if models.IsExamWeek(f.Matchweek) {
-		return fmt.Sprintf("Exam week — enrolled prodigies sit. %s · %s at %s.", LeaguePhase(f.Matchweek), MonthLabel(f.Matchweek), home.HomeStadium)
+		return fmt.Sprintf("Exam week — enrolled prodigies sit. %s · %s at %s.", tm.calendarPhaseUnlocked(f.Matchweek), tm.calendarMonthUnlocked(f.Matchweek), home.HomeStadium)
 	}
-	return fmt.Sprintf("%s · %s at %s.", LeaguePhase(f.Matchweek), MonthLabel(f.Matchweek), home.HomeStadium)
+	return fmt.Sprintf("%s · %s at %s.", tm.calendarPhaseUnlocked(f.Matchweek), tm.calendarMonthUnlocked(f.Matchweek), home.HomeStadium)
 }
 
 func absInt(v int) int {
@@ -316,6 +328,11 @@ func (tm *TournamentManager) SimulateMatchweek(mw int) map[string]interface{} {
 	collect(tm.Fixtures)
 	collect(tm.UCLFixtures)
 	collect(tm.SuperCupFixtures)
+	// Shared-calendar path: world cups and Europe live in World.Fixtures.
+	// Legacy careers (World == nil) are unaffected.
+	if tm.World != nil {
+		collect(tm.World.Fixtures)
+	}
 	saved := tm.CurrentMatchweek
 	if saved < 1 {
 		saved = 1
@@ -414,6 +431,11 @@ func (tm *TournamentManager) GetHeadToHead(clubAID, clubBID string) map[string]i
 	}
 	for _, f := range tm.SuperCupFixtures {
 		record(f)
+	}
+	if tm.World != nil {
+		for _, f := range tm.World.Fixtures {
+			record(f)
+		}
 	}
 	sort.Slice(recentMatches, func(i, j int) bool {
 		mi, _ := recentMatches[i]["matchweek"].(int)
@@ -606,6 +628,17 @@ func (tm *TournamentManager) seasonAwardsUnlocked() map[string]interface{} {
 	if tm.SuperCupChampionID != "" {
 		scChamp = tm.Clubs[tm.SuperCupChampionID]
 	}
+	if tm.World != nil {
+		if table := tm.worldLeagueStandingsUnlocked("premier-league"); len(table) > 0 {
+			champ = table[0]
+			if len(table) > 1 {
+				runner = table[1]
+			}
+		}
+		if comp := tm.worldCompetitionUnlocked("champions-league"); comp != nil && comp.ChampionID != "" {
+			uclChamp = tm.Clubs[comp.ChampionID]
+		}
+	}
 
 	return map[string]interface{}{
 		"season_name":            tm.SeasonName,
@@ -648,7 +681,10 @@ func (tm *TournamentManager) GetAllTimeRecords() map[string]interface{} {
 		if goalsI != goalsJ {
 			return goalsI > goalsJ
 		}
-		return allPlayers[i].p.OVR > allPlayers[j].p.OVR
+		if allPlayers[i].p.OVR != allPlayers[j].p.OVR {
+			return allPlayers[i].p.OVR > allPlayers[j].p.OVR
+		}
+		return allPlayers[i].p.PlayerID < allPlayers[j].p.PlayerID
 	})
 
 	var topScorers []map[string]interface{}
@@ -674,7 +710,10 @@ func (tm *TournamentManager) GetAllTimeRecords() map[string]interface{} {
 		if assistsI != assistsJ {
 			return assistsI > assistsJ
 		}
-		return allPlayers[i].p.OVR > allPlayers[j].p.OVR
+		if allPlayers[i].p.OVR != allPlayers[j].p.OVR {
+			return allPlayers[i].p.OVR > allPlayers[j].p.OVR
+		}
+		return allPlayers[i].p.PlayerID < allPlayers[j].p.PlayerID
 	})
 
 	var topAssisters []map[string]interface{}

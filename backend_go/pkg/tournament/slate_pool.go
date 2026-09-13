@@ -134,13 +134,16 @@ func (tm *TournamentManager) computeSlateFixture(f *Fixture, rng *rand.Rand) (sl
 		return slateComputed{}, "Club not found."
 	}
 
+	// Read-only heat and climate: this runs on worker goroutines, so it must
+	// not mutate the fixture or the shared climate table (serial pre-phases
+	// in simulateRemainingUnlocked/simulateRemainingExcludingUnlocked already
+	// persisted weather via EnsureFixtureWeather; reports carry it forward
+	// at apply time). derbyHeatUnlocked/ResolveWeather are pure reads.
 	heat := f.DerbyHeat
 	if f.DerbyName != "" {
 		heat = tm.derbyHeatUnlocked(f.DerbyName)
-		f.DerbyHeat = heat
-		f.IsHighHeatDerby = heat > 70
 	}
-	weather := tm.EnsureFixtureWeather(f)
+	weather := tm.ResolveWeather(f)
 	cfg := &matchengine.InstantMatchConfig{
 		Weather:     weather,
 		DerbyHeat:   heat,
@@ -152,13 +155,20 @@ func (tm *TournamentManager) computeSlateFixture(f *Fixture, rng *rand.Rand) (sl
 	homeMgr := tm.Managers[f.HomeID]
 	awayMgr := tm.Managers[f.AwayID]
 	report := matchengine.SimulateInstantMatch(home, away, homeMgr, awayMgr, tm.GrowthEngine, cfg, rng)
+	homeStyle, homeFocus, awayStyle, awayFocus := "", "", "", ""
+	if homeMgr != nil {
+		homeStyle, homeFocus = homeMgr.Style, homeMgr.Focus
+	}
+	if awayMgr != nil {
+		awayStyle, awayFocus = awayMgr.Style, awayMgr.Focus
+	}
 
 	payload := matchreport.InstantPayload{
 		HomeGoals:  report.HomeGoals,
 		AwayGoals:  report.AwayGoals,
 		Events:     report.Events,
-		HomeXI:     home.GetStartingEleven(models.FixtureContext(f.Competition, f.Matchweek)),
-		AwayXI:     away.GetStartingEleven(models.FixtureContext(f.Competition, f.Matchweek)),
+		HomeXI:     home.GetStartingElevenWithBias(homeStyle, homeFocus, models.FixtureContext(f.Competition, f.Matchweek)),
+		AwayXI:     away.GetStartingElevenWithBias(awayStyle, awayFocus, models.FixtureContext(f.Competition, f.Matchweek)),
 		HomeBench:  home.GetBench(nil, 7, models.FixtureContext(f.Competition, f.Matchweek)),
 		AwayBench:  away.GetBench(nil, 7, models.FixtureContext(f.Competition, f.Matchweek)),
 		Stats:      report.Stats,
@@ -221,10 +231,19 @@ func (tm *TournamentManager) computeSlateWaves(waves [][]string, base int64) map
 	return computed
 }
 
-// applySlateFixture runs the serial half of simulateFixtureUnlocked: table
-// updates, cup advancement, inbox, and rollover. Must be called in slate
-// order while holding tm.mu.
+// applySlateFixture runs the serial half of a single-fixture simulation.
+// Batch callers use applySlateFixtureWithoutRollover so a club's later
+// same-week match sees the first result before it is computed, while the
+// matchweek itself only rolls once every fixture on the slate is resolved.
 func (tm *TournamentManager) applySlateFixture(f *Fixture, computed slateComputed) map[string]interface{} {
+	return tm.applySlateFixtureWithRollover(f, computed, true)
+}
+
+func (tm *TournamentManager) applySlateFixtureWithoutRollover(f *Fixture, computed slateComputed) map[string]interface{} {
+	return tm.applySlateFixtureWithRollover(f, computed, false)
+}
+
+func (tm *TournamentManager) applySlateFixtureWithRollover(f *Fixture, computed slateComputed, allowRollover bool) map[string]interface{} {
 	home := tm.Clubs[f.HomeID]
 	away := tm.Clubs[f.AwayID]
 	assembled := computed.assembled
@@ -235,11 +254,16 @@ func (tm *TournamentManager) applySlateFixture(f *Fixture, computed slateCompute
 		cupEvent = tm.maybeAdvanceUCL()
 	} else if f.Competition == "super-cup" {
 		cupEvent = tm.maybeAdvanceSuperCup()
+	} else if tm.worldCompetitionUnlocked(f.Competition) != nil {
+		cupEvent = tm.advanceWorldCompetitionUnlocked(f.Competition)
 	}
 	if cupEvent != "" {
 		tm.PushInbox("cup", strings.TrimRight(cupEvent, "."), cupEvent, f.Matchweek, []string{home.ClubID, away.ClubID}, "", f.FixtureID)
 	}
-	rolled := tm.maybeRolloverUnlocked()
+	rolled := map[string]interface{}{"rolled": false, "is_finished": false}
+	if allowRollover {
+		rolled = tm.maybeRolloverUnlocked()
+	}
 	champ, _ := rolled["champion"].(string)
 	return map[string]interface{}{
 		"status":      "success",
@@ -251,4 +275,47 @@ func (tm *TournamentManager) applySlateFixture(f *Fixture, computed slateCompute
 		"is_finished": rolled["is_finished"],
 		"champion":    champ,
 	}
+}
+
+// simulateSlateWavesUnlocked computes only club-disjoint fixtures in
+// parallel. Each completed wave is applied before the next is computed, so
+// fitness, injuries, morale, form, and ordered two-leg deciders are current
+// for a club's second fixture in the same matchweek.
+func (tm *TournamentManager) simulateSlateWavesUnlocked(ids []string, base int64) (played, skipped int) {
+	for _, wave := range groupSlateWaves(tm, ids) {
+		eligible := make([]string, 0, len(wave))
+		for _, id := range wave {
+			fx := tm.findFixtureUnlocked(id)
+			if fx == nil || fx.Status == "finished" {
+				continue
+			}
+			if fx.Matchweek > tm.CurrentMatchweek && tm.CurrentMatchweek > 0 {
+				skipped++
+				continue
+			}
+			if tm.uclLegBlocked(fx) != "" || tm.worldLegBlocked(fx) != "" {
+				skipped++
+				continue
+			}
+			eligible = append(eligible, id)
+		}
+		computed := tm.computeSlateWaves([][]string{eligible}, base)
+		for _, id := range eligible {
+			fx := tm.findFixtureUnlocked(id)
+			res, ok := computed[id]
+			if fx == nil || !ok {
+				skipped++
+				continue
+			}
+			if out := tm.applySlateFixtureWithoutRollover(fx, res); out["status"] == "success" {
+				played++
+			} else {
+				skipped++
+			}
+		}
+	}
+	// The end-of-week tick (and season transition) must run after any cup
+	// fixtures sharing the slate, not after the first domestic-league result.
+	tm.maybeRolloverUnlocked()
+	return played, skipped
 }

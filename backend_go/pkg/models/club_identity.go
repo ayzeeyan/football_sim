@@ -27,9 +27,18 @@ type ClubIdentity struct {
 }
 
 // ClubFinances separates structural financial strength from spendable cash.
+// WageBudget is the persisted annual committed wage bill (legacy name kept
+// for save compatibility). WageCap is the real annual cap derived from
+// financial power; signings must respect it.
 type ClubFinances struct {
 	TransferBudget int64 `json:"transfer_budget"`
 	Balance        int64 `json:"balance"`
+	WageBudget     int64 `json:"wage_budget,omitempty"`
+	WageCap        int64 `json:"wage_cap,omitempty"`
+	// EuropeanRevenue tracks the last completed season's European prize
+	// intake separately from generic (domestic) prize money. Zeroed before
+	// each season's banking (replace, never accumulate).
+	EuropeanRevenue int64 `json:"european_revenue,omitempty"`
 }
 
 type clubIdentityPreset struct {
@@ -116,9 +125,27 @@ func InitialClubFinances(identity ClubIdentity) ClubFinances {
 		budgetMillions = 180
 	}
 	budget := budgetMillions * EuroMillion
-	return ClubFinances{TransferBudget: budget, Balance: budget * 2}
+	return ClubFinances{TransferBudget: budget, Balance: budget * 2, WageCap: WageCapForIdentity(identity)}
 }
 
 func (f ClubFinances) Valid() bool {
-	return f.TransferBudget >= 0 && f.Balance >= 0
+	return f.TransferBudget >= 0 && f.Balance >= 0 && f.WageCap >= 0 && f.EuropeanRevenue >= 0
+}
+
+// WageCapForIdentity derives a real annual wage cap from structural
+// financial power (primary) and reputation (secondary). It never touches
+// player valuations: callers must still clamp market values separately.
+func WageCapForIdentity(identity ClubIdentity) int64 {
+	identity = identity.Clamp()
+	// 80M base + 1.4M per financial-power point + 0.4M per reputation point.
+	// Power 100 / rep 90 => ~256M; power 60 / rep 60 => ~188M. Generous enough
+	// that fresh squads sit under the cap, but elite wage stacks still bind.
+	cap := int64(80_000_000) + int64(identity.FinancialPower)*1_400_000 + int64(identity.Reputation)*400_000
+	if cap < 120_000_000 {
+		cap = 120_000_000
+	}
+	if cap > 320_000_000 {
+		cap = 320_000_000
+	}
+	return cap
 }

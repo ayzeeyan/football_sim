@@ -27,10 +27,10 @@ export function useClubs() {
     void reloadClubs();
   }, [reloadClubs]);
 
-  const applyClubs = useCallback((home: Club | null, away: Club | null) => {
-    setHomeClub(home);
-    setAwayClub(away);
-    if (home && away) matchWs.sendCommand('set_clubs', { home_id: home.club_id, away_id: away.club_id });
+  const applyClubs = useCallback((home: Club | null, away: Club | null, fixtureId?: string) => {
+	setHomeClub(home);
+	setAwayClub(away);
+    if (home && away) matchWs.sendCommand('set_clubs', { home_id: home.club_id, away_id: away.club_id, fixture_id: fixtureId });
   }, []);
 
   const setHome = useCallback(

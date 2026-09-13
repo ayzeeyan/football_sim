@@ -1,7 +1,5 @@
 package tournament
 
-import "football_sim/pkg/transfers"
-
 // FinalizeSeasonTransition is the guarded mutation boundary for moving from a
 // completed campaign/offseason into the next season. Callers should use this
 // instead of invoking ResetNewSeason directly as part of autonomous
@@ -22,7 +20,7 @@ func (tm *TournamentManager) FinalizeSeasonTransition() map[string]interface{} {
 			"current_matchweek": tm.CurrentMatchweek,
 		}
 	}
-	if tm.TransferEngine != nil && tm.TransferEngine.CurrentWeek <= transfers.TransferWindowWeeks {
+	if tm.TransferEngine != nil && tm.TransferEngine.IsWindowOpen() {
 		return map[string]interface{}{
 			"status":            "error",
 			"message":           "Season transition cannot finalize before all 12 transfer weeks are processed.",

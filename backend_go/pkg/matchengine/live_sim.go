@@ -30,6 +30,25 @@ func liveMini(p *models.Player) matchreport.MiniPlayer {
 	return matchreport.ToMiniPlayer(p)
 }
 
+// eventAttribution records the actor and club explicitly. Live events used
+// to infer the club from the post-event possession state, which is wrong for
+// fouls after a save, miss, or goal-kick turnover.
+func (e *LiveMatchEngine) eventAttribution(p *models.Player, side string) (playerID, playerName, clubID, clubName string) {
+	if p != nil {
+		playerID, playerName = p.PlayerID, p.FullName
+		clubID = p.ClubID
+	}
+	club := e.AwayClub
+	if side == "home" {
+		club = e.HomeClub
+	}
+	if club != nil {
+		clubID = club.ClubID
+		clubName = club.ClubName
+	}
+	return
+}
+
 func round2(x float64) float64 {
 	return math.Round(x*100) / 100
 }
@@ -298,6 +317,10 @@ func (e *LiveMatchEngine) AdvancePhase() {
 // ResolveShot evaluates one shot at goal (Python: _resolve_shot).
 func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club, attackingStarters, defendingStarters []*models.Player) {
 	rng := e.rng()
+	defendingSide := "away"
+	if e.PossessionTeam != "home" {
+		defendingSide = "home"
+	}
 	if e.PossessionTeam == "home" {
 		e.HomeShots++
 	} else {
@@ -491,10 +514,12 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 					defSide = "home"
 				}
 				ogMini := liveMini(ogScorer)
+				playerID, playerName, clubID, clubName := e.eventAttribution(ogScorer, defSide)
 				e.Events = append(e.Events, matchreport.MatchEventItem{
 					Minute: shotMinute, Display: fmt.Sprintf("%d'", shotMinute),
 					Type: "own_goal", Side: defSide, Beneficiary: e.PossessionTeam,
 					Scorer: &ogMini, HomeScore: e.HomeScore, AwayScore: e.AwayScore,
+					PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
 				})
 			} else {
 				var aMini *matchreport.MiniPlayer
@@ -502,11 +527,13 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 					m := liveMini(assister)
 					aMini = &m
 				}
+				playerID, playerName, clubID, clubName := e.eventAttribution(shooter, e.PossessionTeam)
 				e.Events = append(e.Events, matchreport.MatchEventItem{
 					Minute: shotMinute, Display: fmt.Sprintf("%d'", shotMinute),
 					Type: "goal", Side: e.PossessionTeam,
 					Scorer: &shooterMini, Assister: aMini,
 					HomeScore: e.HomeScore, AwayScore: e.AwayScore,
+					PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
 				})
 			}
 			if e.PossessionTeam == "home" {
@@ -535,7 +562,7 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 		e.Turnover("goal kick")
 	}
 
-	e.MaybeBookPlayer(defendingStarters)
+	e.MaybeBookPlayer(defendingStarters, defendingSide)
 }
 
 // attDefStances returns the attacking and defending stances for the side
@@ -573,7 +600,7 @@ func (e *LiveMatchEngine) liveStrength(starters []*models.Player) float64 {
 }
 
 // MaybeBookPlayer books a defender/midfielder after a shot (Python: _maybe_book_player).
-func (e *LiveMatchEngine) MaybeBookPlayer(defendingStarters []*models.Player) {
+func (e *LiveMatchEngine) MaybeBookPlayer(defendingStarters []*models.Player, defendingSide ...string) {
 	rng := e.rng()
 	roll := rng.Float64()
 	if roll >= 0.085*weatherCardClimateFactor(e.Weather) {
@@ -597,6 +624,9 @@ func (e *LiveMatchEngine) MaybeBookPlayer(defendingStarters []*models.Player) {
 	if e.PossessionTeam != "home" {
 		side = "home"
 	}
+	if len(defendingSide) > 0 && (defendingSide[0] == "home" || defendingSide[0] == "away") {
+		side = defendingSide[0]
+	}
 	priors := e.Bookings[booked.PlayerID]
 	secondYellow := priors >= 1
 	redThreshold := 0.012
@@ -613,6 +643,7 @@ func (e *LiveMatchEngine) MaybeBookPlayer(defendingStarters []*models.Player) {
 		e.Bookings[booked.PlayerID] = 1
 	}
 	bMini := liveMini(booked)
+	playerID, playerName, clubID, clubName := e.eventAttribution(booked, side)
 	detail := ""
 	if color == "red" {
 		if secondYellow {
@@ -625,6 +656,7 @@ func (e *LiveMatchEngine) MaybeBookPlayer(defendingStarters []*models.Player) {
 		Minute: int(e.CurrentMinute), Display: fmt.Sprintf("%d'", int(e.CurrentMinute)),
 		Type: color, Side: side, Player: &bMini, SentOff: sentOff,
 		HomeScore: e.HomeScore, AwayScore: e.AwayScore, Detail: detail,
+		PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
 		Seq: len(e.Events) + 1,
 	})
 	var text string
@@ -703,6 +735,7 @@ func (e *LiveMatchEngine) ResolvePenalty(attackingClub *models.Club, attackingSt
 	e.triggerMovement([2]float64{goalX, 0.50}, e.PossessionTeam)
 	e.markShotBall(e.PossessionTeam)
 	tMini := liveMini(taker)
+	playerID, playerName, clubID, clubName := e.eventAttribution(taker, e.PossessionTeam)
 	if rng.Float64() < conv {
 		e.LiveShots = append(e.LiveShots, matchreport.ShotMapItem{
 			Minute: minute, Team: e.PossessionTeam, Shooter: miniShooter(taker),
@@ -724,6 +757,7 @@ func (e *LiveMatchEngine) ResolvePenalty(attackingClub *models.Club, attackingSt
 			Minute: minute, Display: fmt.Sprintf("%d'", minute),
 			Type: "penalty", Side: e.PossessionTeam, Scorer: &tMini,
 			HomeScore: e.HomeScore, AwayScore: e.AwayScore,
+			PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
 		})
 	} else {
 		e.LiveShots = append(e.LiveShots, matchreport.ShotMapItem{
@@ -735,6 +769,7 @@ func (e *LiveMatchEngine) ResolvePenalty(attackingClub *models.Club, attackingSt
 			Minute: minute, Display: fmt.Sprintf("%d'", minute),
 			Type: "penalty_miss", Side: e.PossessionTeam, Scorer: &tMini,
 			HomeScore: e.HomeScore, AwayScore: e.AwayScore,
+			PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
 		})
 	}
 	e.Turnover("penalty aftermath")

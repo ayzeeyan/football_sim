@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	SaveVersion     = 3
+	SaveVersion     = 4
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -57,6 +57,9 @@ type TransfersSnapshot struct {
 	CurrentMatchweek      int                              `json:"current_matchweek"`
 	CurrentWeek           int                              `json:"current_week,omitempty"`
 	IsOffSeason           bool                             `json:"is_off_season,omitempty"`
+	WindowType            transfers.WindowType             `json:"window_type,omitempty"`
+	WindowOpen            bool                             `json:"window_open,omitempty"`
+	ProcessedWeeks        int                              `json:"processed_weeks,omitempty"`
 	TransferredThisWindow map[string]bool                  `json:"transferred_this_window,omitempty"`
 	Feed                  []transfers.TransferFeedItem     `json:"feed"`
 	Completed             []transfers.CompletedTransfer    `json:"completed"`
@@ -111,6 +114,7 @@ type CareerSnapshot struct {
 	SuperCupQuarterFinals map[string]tournament.CupTie         `json:"super_cup_quarter_finals,omitempty"`
 	SuperCupSemiFinals    map[string]tournament.CupTie         `json:"super_cup_semi_finals,omitempty"`
 	SuperCupFinal         tournament.CupTie                    `json:"super_cup_final,omitempty"`
+	World                 *tournament.EuropeanWorld            `json:"world,omitempty"`
 	FavouriteClubID       string                               `json:"favourite_club_id,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
@@ -191,6 +195,7 @@ func BuildSnapshot(
 		SuperCupQuarterFinals: tm.SuperCupQuarterFinals,
 		SuperCupSemiFinals:    tm.SuperCupSemiFinals,
 		SuperCupFinal:         tm.SuperCupFinal,
+		World:                 tm.World,
 		FavouriteClubID:       tm.FavouriteClubID,
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
@@ -226,6 +231,9 @@ func BuildSnapshot(
 			CurrentMatchweek:      te.CurrentMatchweek,
 			CurrentWeek:           te.CurrentWeek,
 			IsOffSeason:           te.IsOffSeason,
+			WindowType:            te.WindowType,
+			WindowOpen:            te.WindowOpen,
+			ProcessedWeeks:        te.ProcessedWeeks,
 			TransferredThisWindow: copyBoolMap(te.TransferredThisWindow),
 			Feed:                  te.TransferFeed,
 			Completed:             te.CompletedTransfers,
@@ -371,7 +379,38 @@ func writeShardedSnapshot(data []byte, destPath string) (string, error) {
 	if err := writeAtomic(destPath, manifest); err != nil {
 		return "", err
 	}
+	// Sweep sidecars the current universe no longer indexes (e.g. clubs
+	// absent from the map): without this, stale clubs/*.json accumulate and
+	// a future reader could resurrect dead squads. Runs last so a crash can
+	// never delete before the manifest is safely committed.
+	sweepStaleClubSidecars(dir, index)
 	return destPath, nil
+}
+
+// sweepStaleClubSidecars removes clubs/*.json files no current index entry
+// references. Failures are ignored: leftovers are harmless (the manifest
+// index is authoritative on load) and saves must not fail on cleanup.
+func sweepStaleClubSidecars(dir string, index map[string]map[string]string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	live := make(map[string]bool, len(index))
+	for _, meta := range index {
+		live[filepath.Base(meta["file"])] = true
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if len(name) < 6 || name[len(name)-5:] != ".json" {
+			continue
+		}
+		if !live[name] {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
 }
 
 // LoadCareer reads and decodes a saved CareerSnapshot from disk. It accepts
@@ -575,9 +614,11 @@ func RestoreCareer(
 		if !savedClub.Identity.IsZero() {
 			club.Identity = savedClub.Identity.Clamp()
 		}
-		if !savedClub.Identity.IsZero() || savedClub.Finances.TransferBudget > 0 || savedClub.Finances.Balance > 0 {
-			club.Finances = savedClub.Finances
-		}
+		// Saved finances always win on restore, including genuine €0
+		// balances: the snapshot is authoritative for the saved moment.
+		// (WageCap/EuropeanRevenue round-trip as struct fields; UnmarshalJSON
+		// already migrated legacy caps below the committed bill.)
+		club.Finances = savedClub.Finances
 		if tm.Managers != nil {
 			if mgr := tm.Managers[clubID]; mgr != nil {
 				mgr.BudgetEur = club.Finances.TransferBudget
@@ -585,6 +626,7 @@ func RestoreCareer(
 		}
 
 		// Standings & Form
+		club.Coefficient = savedClub.Coefficient
 		club.Played = savedClub.Played
 		club.Won = savedClub.Won
 		club.Drawn = savedClub.Drawn
@@ -609,14 +651,21 @@ func RestoreCareer(
 
 				// Resolve canonical ID for wonderkids
 				pid := savedPlayer.PlayerID
-				if canonical, ok := ProdigyMap[pid]; ok {
+				// P00xxx aliases belong only to legacy wonderkid records. The
+				// Top Five dataset legitimately reuses some historical numeric
+				// IDs for ordinary players, so never remap them by ID alone.
+				if canonical, ok := ProdigyMap[pid]; ok && savedPlayer.UniverseWonderkid {
 					pid = canonical
 					savedPlayer.PlayerID = canonical
 				}
 
 				nameKey := strings.ToLower(strings.TrimSpace(savedPlayer.FullName))
 				livePlayer := existingPlayers[pid]
-				if livePlayer == nil {
+				// Player IDs are the ownership key. A name fallback is reserved for
+				// genuinely ID-less legacy rows; using it for a missing modern ID
+				// can steal a canonical wonderkid when two dataset rows share a
+				// display name.
+				if livePlayer == nil && pid == "" {
 					livePlayer = existingByName[nameKey]
 				}
 
@@ -650,16 +699,16 @@ func RestoreCareer(
 		}
 	}
 
-	// 4. Enforce strict squad deduplication across all clubs
+	// 4. Enforce strict squad deduplication across all clubs by PlayerID
+	// only: display names are not unique across a 2,401-player dataset, and
+	// both validators allow same-name/distinct-ID squads.
 	for _, club := range tm.ClubsList {
 		seen := make(map[string]bool)
 		cleanSquad := make([]*models.Player, 0, len(club.Squad))
 		for _, p := range club.Squad {
-			key := strings.ToLower(strings.TrimSpace(p.FullName))
-			if seen[key] || seen[p.PlayerID] {
+			if p == nil || seen[p.PlayerID] {
 				continue
 			}
-			seen[key] = true
 			seen[p.PlayerID] = true
 			cleanSquad = append(cleanSquad, p)
 		}
@@ -681,6 +730,10 @@ func RestoreCareer(
 	if len(snap.SuperCupFixtures) > 0 {
 		tm.SuperCupFixtures = append([]tournament.Fixture(nil), snap.SuperCupFixtures...)
 		wireFixtureClubs(tm, tm.SuperCupFixtures)
+	}
+	if snap.World != nil {
+		tm.World = snap.World
+		wireWorldFixtureClubs(tm)
 	}
 	if g := clubsFromIDs(tm, snap.UCLGroupA); len(g) > 0 {
 		tm.UCLGroupA = g
@@ -724,30 +777,45 @@ func RestoreCareer(
 		if snap.Growth.MaxTrainingEnergy > 0 {
 			ge.MaxTrainingEnergy = snap.Growth.MaxTrainingEnergy
 		}
+		// Legacy P00xxx growth keys follow the same guarded remap as squads:
+		// only aliases of restored wonderkids move (Top Five numeric IDs can
+		// collide with legacy aliases for ordinary players). Milestones carry
+		// no player ID and restore wholesale.
+		wkIDs := make(map[string]bool)
+		for _, club := range tm.ClubsList {
+			for _, p := range club.Squad {
+				if p != nil && p.UniverseWonderkid {
+					wkIDs[p.PlayerID] = true
+				}
+			}
+		}
+		remapGrowthKey := func(pid string) string {
+			if c, ok := ProdigyMap[pid]; ok && wkIDs[c] {
+				return c
+			}
+			return pid
+		}
 		if snap.Growth.Biometrics != nil {
 			for pid, bio := range snap.Growth.Biometrics {
-				canonical := pid
-				if c, ok := ProdigyMap[pid]; ok {
-					canonical = c
-				}
+				canonical := remapGrowthKey(pid)
 				bio.PlayerID = canonical
 				ge.Biometrics[canonical] = bio
 			}
 		}
 		if snap.Growth.Attributes != nil {
 			for pid, attrs := range snap.Growth.Attributes {
-				canonical := pid
-				if c, ok := ProdigyMap[pid]; ok {
-					canonical = c
-				}
-				ge.Attributes[canonical] = attrs
+				ge.Attributes[remapGrowthKey(pid)] = attrs
 			}
 		}
 		if snap.Growth.Milestones != nil {
 			ge.Milestones = snap.Growth.Milestones
 		}
 		if snap.Growth.Timeline != nil {
-			ge.Timeline = snap.Growth.Timeline
+			remapped := make(map[string][]growth.TimelineEntry, len(snap.Growth.Timeline))
+			for pid, entries := range snap.Growth.Timeline {
+				remapped[remapGrowthKey(pid)] = entries
+			}
+			ge.Timeline = remapped
 		}
 	}
 
@@ -770,6 +838,31 @@ func RestoreCareer(
 			te.CurrentWeek = snap.Transfers.CurrentWeek
 		}
 		te.IsOffSeason = snap.Transfers.IsOffSeason
+		if snap.Transfers.WindowType != "" {
+			te.WindowType = snap.Transfers.WindowType
+			te.WindowOpen = snap.Transfers.WindowOpen
+			te.ProcessedWeeks = snap.Transfers.ProcessedWeeks
+		} else {
+			// v3 and older encoded a closed summer market as Week 13. Migrate
+			// that sentinel to a closed Week 12 rather than re-exposing it.
+			if te.IsOffSeason {
+				te.WindowType = transfers.WindowSummer
+				te.WindowOpen = te.CurrentWeek >= 1 && te.CurrentWeek <= transfers.TransferWindowWeeks
+				if te.CurrentWeek > transfers.TransferWindowWeeks {
+					te.CurrentWeek = transfers.TransferWindowWeeks
+					te.WindowOpen = false
+				}
+				te.ProcessedWeeks = te.CurrentWeek - 1
+				if !te.WindowOpen {
+					te.ProcessedWeeks = transfers.TransferWindowWeeks
+				}
+			} else {
+				te.WindowType = transfers.WindowClosed
+				te.WindowOpen = false
+				te.CurrentWeek = 1
+				te.ProcessedWeeks = 0
+			}
+		}
 		if snap.Transfers.TransferredThisWindow != nil {
 			te.TransferredThisWindow = copyBoolMap(snap.Transfers.TransferredThisWindow)
 		}
@@ -815,6 +908,9 @@ func RestoreCareer(
 				}
 			}
 		}
+		// Authoritative club finances win over any stale snapshot mirror:
+		// re-sync after applying so hand-edited saves cannot desync the AI.
+		te.SyncAllManagerBudgets()
 	}
 
 	// 8. Stretch short legacy calendars, then re-pair mentors on the restored squads.
@@ -823,7 +919,9 @@ func RestoreCareer(
 	return nil
 }
 
-// DeleteCareer deletes the snapshot manifest and its club sidecars, if any.
+// DeleteCareer deletes the snapshot manifest, its club sidecars, and the
+// universe seed sidecar, if any. Removing the seed with the career keeps a
+// deleted universe from pinning future fresh boots to a stale seed.
 func DeleteCareer(path string) error {
 	if path == "" {
 		path = SavePath()
@@ -832,6 +930,9 @@ func DeleteCareer(path string) error {
 		return err
 	}
 	if err := os.RemoveAll(clubsDirFor(path)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Remove(UniverseSeedPath(path)); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
@@ -870,6 +971,17 @@ func wireFixtureClubs(tm *tournament.TournamentManager, fixtures []tournament.Fi
 	for i := range fixtures {
 		fixtures[i].Home = tm.Clubs[fixtures[i].HomeID]
 		fixtures[i].Away = tm.Clubs[fixtures[i].AwayID]
+	}
+}
+
+func wireWorldFixtureClubs(tm *tournament.TournamentManager) {
+	if tm == nil || tm.World == nil {
+		return
+	}
+	for i := range tm.World.Fixtures {
+		fixture := &tm.World.Fixtures[i]
+		fixture.Home = tm.Clubs[fixture.HomeID]
+		fixture.Away = tm.Clubs[fixture.AwayID]
 	}
 }
 
@@ -928,6 +1040,31 @@ func updatePlayerFromSaved(dest, src *models.Player) {
 	dest.MentorOVR = src.MentorOVR
 	dest.Composure = src.Composure
 	dest.ConsecutiveStarts = src.ConsecutiveStarts
+	// Loan state must round-trip: without it, post-load ReturnLoans and buy
+	// clauses silently no-op (the flags live on the player, not the clubs).
+	dest.OnLoan = src.OnLoan
+	dest.ParentClubID = src.ParentClubID
+	dest.LoanBuyClauseEUR = src.LoanBuyClauseEUR
+	// Per-competition minutes feed the playing-time development curve and the
+	// player sheet; deep-copy so the live squad never aliases the snapshot.
+	if src.CompetitionStats != nil {
+		restored := make(map[string]*models.CompetitionSeasonStats, len(src.CompetitionStats))
+		for k, row := range src.CompetitionStats {
+			if row == nil {
+				continue
+			}
+			cp := *row
+			restored[k] = &cp
+		}
+		dest.CompetitionStats = restored
+	} else {
+		dest.CompetitionStats = nil
+	}
+	if src.RecentRatings != nil {
+		dest.RecentRatings = append([]float64(nil), src.RecentRatings...)
+	} else {
+		dest.RecentRatings = nil
+	}
 	if src.OriginalClubID != "" {
 		dest.OriginalClubID = src.OriginalClubID
 	}
@@ -937,9 +1074,31 @@ func updatePlayerFromSaved(dest, src *models.Player) {
 	if src.PlayerSource != "" {
 		dest.PlayerSource = src.PlayerSource
 	}
-	if src.UniverseWonderkid {
-		dest.UniverseWonderkid = true
+	// Static identity round-trips when present (old saves may omit it).
+	if src.FullName != "" {
+		dest.FullName = src.FullName
 	}
+	if src.Position != "" {
+		dest.Position = src.Position
+	}
+	if src.SquadRole != "" {
+		dest.SquadRole = src.SquadRole
+	}
+	// Dynamics drift mid-season; restore them when present, mirroring the
+	// club-level `> 0` guards (a zero here means "unset" in hand-built and
+	// ancient saves, and live defaults already apply). Squad roles are
+	// static within a season, so that copy is a no-op for honest saves.
+	if src.Morale > 0 {
+		dest.Morale = src.Morale
+	}
+	if src.Fitness > 0 {
+		dest.Fitness = src.Fitness
+	}
+	if src.Sharpness > 0 {
+		dest.Sharpness = src.Sharpness
+	}
+	dest.TransferRequested = src.TransferRequested
+	dest.UniverseWonderkid = src.UniverseWonderkid
 	if src.Season != "" {
 		dest.Season = src.Season
 	}

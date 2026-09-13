@@ -17,27 +17,29 @@ interface PitchSlot {
 
 const EXACT_COORDS: Record<string, [number, number]> = {
   GK: [50, 91],
-  LB: [17, 76],
+  LB: [16, 75],
   LWB: [13, 66],
-  LCB: [38, 76],
-  RCB: [62, 76],
-  RB: [83, 76],
+  LCB: [38, 77],
+  RCB: [62, 77],
+  RB: [84, 75],
   RWB: [87, 66],
   LDM: [38, 62],
   CDM: [50, 62],
   RDM: [62, 62],
   LM: [18, 50],
-  LCM: [38, 51],
-  RCM: [62, 51],
+  LCM: [30, 52],
+  CM: [50, 58],
+  RCM: [70, 52],
   RM: [82, 50],
   LAM: [31, 38],
   CAM: [50, 38],
   RAM: [69, 38],
-  LW: [17, 20],
+  LW: [18, 20],
+  ST: [50, 18],
   LF: [34, 24],
   CF: [50, 24],
   RF: [66, 24],
-  RW: [83, 20],
+  RW: [82, 20],
 };
 
 const GENERIC_COORDS: Record<string, Array<[number, number]>> = {
@@ -89,13 +91,18 @@ function assignFormationSlots(players: Player[]): PitchSlot[] {
   };
 
   return players.map((player) => {
-    const pos = normalizedPosition(player.position);
+    // The backend assigns every preview XI one rigid tactical slot. Honour it
+    // first; legacy payloads still receive the collision-safe position logic.
+    const assignedSlot = normalizedPosition(player.starting_slot ?? '');
+    const pos = assignedSlot || normalizedPosition(player.position);
     const occurrence = positionUse.get(pos) ?? 0;
     positionUse.set(pos, occurrence + 1);
 
     let coords: [number, number] | undefined;
     const generic = GENERIC_COORDS[pos];
-    if (generic) {
+    if (assignedSlot && EXACT_COORDS[pos]) {
+      coords = EXACT_COORDS[pos];
+    } else if (generic) {
       coords = generic[Math.min(occurrence, generic.length - 1)];
     } else if (EXACT_COORDS[pos]) {
       coords = EXACT_COORDS[pos];

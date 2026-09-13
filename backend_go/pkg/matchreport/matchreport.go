@@ -45,16 +45,22 @@ type MatchEventItem struct {
 	Player      *MiniPlayer `json:"player,omitempty"`     // booked player
 	PlayerOut   *MiniPlayer `json:"player_out,omitempty"` // subbed out
 	PlayerIn    *MiniPlayer `json:"player_in,omitempty"`  // subbed in
-	Display     string      `json:"display"`
-	Disallowed  bool        `json:"disallowed,omitempty"`
-	Outcome     string      `json:"outcome,omitempty"`  // for var_review: goal_stands, goal_disallowed
-	Reason      string      `json:"reason,omitempty"`   // for var_review: offside, handball, check complete
-	Decision    string      `json:"decision,omitempty"` // mirrors outcome
-	SentOff     bool        `json:"sent_off,omitempty"` // red-card dismissal flag
-	HomeScore   int         `json:"home_score"`
-	AwayScore   int         `json:"away_score"`
-	Detail      string      `json:"detail,omitempty"`
-	Period      string      `json:"period,omitempty"` // et for extra-time goals
+	// Flat attribution keeps timeline consumers independent from the nested
+	// player shape and makes a card's club unambiguous after possession flips.
+	PlayerID   string `json:"player_id,omitempty"`
+	PlayerName string `json:"player_name,omitempty"`
+	ClubID     string `json:"club_id,omitempty"`
+	ClubName   string `json:"club_name,omitempty"`
+	Display    string `json:"display"`
+	Disallowed bool   `json:"disallowed,omitempty"`
+	Outcome    string `json:"outcome,omitempty"`  // for var_review: goal_stands, goal_disallowed
+	Reason     string `json:"reason,omitempty"`   // for var_review: offside, handball, check complete
+	Decision   string `json:"decision,omitempty"` // mirrors outcome
+	SentOff    bool   `json:"sent_off,omitempty"` // red-card dismissal flag
+	HomeScore  int    `json:"home_score"`
+	AwayScore  int    `json:"away_score"`
+	Detail     string `json:"detail,omitempty"`
+	Period     string `json:"period,omitempty"` // et for extra-time goals
 }
 
 type MatchPlayerRow struct {
@@ -236,7 +242,7 @@ func RateXI(
 	rng *rand.Rand,
 ) []MatchPlayerRow {
 	if rng == nil {
-		rng = rand.New(rand.NewSource(rand.Int63()))
+		rng = rand.New(rand.NewSource(1))
 	}
 
 	type tally struct {
@@ -402,7 +408,7 @@ func GenerateShotMap(
 	liveShots []ShotMapItem,
 ) ShotMapData {
 	if rng == nil {
-		rng = rand.New(rand.NewSource(rand.Int63()))
+		rng = rand.New(rand.NewSource(1))
 	}
 	var shots []ShotMapItem
 
@@ -413,7 +419,16 @@ func GenerateShotMap(
 	}
 
 	sort.Slice(shots, func(i, j int) bool {
-		return shots[i].Minute < shots[j].Minute
+		if shots[i].Minute != shots[j].Minute {
+			return shots[i].Minute < shots[j].Minute
+		}
+		if shots[i].Team != shots[j].Team {
+			return shots[i].Team < shots[j].Team
+		}
+		if shots[i].Outcome != shots[j].Outcome {
+			return shots[i].Outcome < shots[j].Outcome
+		}
+		return shots[i].XG < shots[j].XG
 	})
 
 	flow := []XGFlowPoint{{Minute: 0, HomeXG: 0.0, AwayXG: 0.0}}
@@ -598,7 +613,7 @@ func reconstructShots(
 // passed through (capped at 150 per side) instead of synthesizing.
 func GenerateTouchHeatmap(homeClub *models.Club, awayClub *models.Club, homePoss int, rng *rand.Rand, liveTouches map[string][][2]float64) TouchHeatmapData {
 	if rng == nil {
-		rng = rand.New(rand.NewSource(rand.Int63()))
+		rng = rand.New(rand.NewSource(1))
 	}
 	points := map[string][][]float64{"home": {}, "away": {}}
 

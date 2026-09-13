@@ -248,6 +248,22 @@ const PitchDot: React.FC<{
           fill={player.card === 'red' ? '#BE5A38' : '#C7A23A'}
         />
       )}
+      {player.off_minute != null && player.card !== 'red' && (
+        <g transform="translate(0,-7.2)">
+          <rect x={-5.8} y={-2.3} width={11.6} height={4.6} rx={2.3} fill="#263026" stroke="rgba(234,228,214,0.32)" strokeWidth={0.45} />
+          <text
+            y={0.52}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#EAE4D6"
+            fontSize={2.75}
+            fontWeight={800}
+            fontFamily="'IBM Plex Mono', monospace"
+          >
+            ↓{player.off_minute}'
+          </text>
+        </g>
+      )}
       {player.match_assists > 0 && (
         <g transform={`translate(${PILL_W / 2 + BUBBLE_R + 0.2},${PILL_TOP + PILL_H / 2})`}>
           <circle r={BUBBLE_R} fill="#8AB4C8" />
@@ -317,7 +333,7 @@ const PitchDot: React.FC<{
         fontFamily="Inter, sans-serif"
         clipPath={`url(#nl-${player.player_id})`}
       >
-        {shown}{player.off_minute != null ? ` ↓${player.off_minute}` : ''}
+        {shown}
       </text>
     </g>
   );
@@ -398,7 +414,7 @@ const LineupsPitch: React.FC<{ fixture: Fixture; mode: 'rating' | 'age' }> = ({ 
         ))}
       </div>
       <p className="text-[11px] text-sage font-mono leading-relaxed">
-        Gold ring: U-14. Brass glow: man of the match. Name ↓minute: subbed off. Bench ↑minute: came on. Unused substitutes sit without a rating.
+        Gold ring: U-17. Brass glow: man of the match. Name ↓minute: subbed off. Bench ↑minute: came on. Unused substitutes sit without a rating.
       </p>
     </div>
   );

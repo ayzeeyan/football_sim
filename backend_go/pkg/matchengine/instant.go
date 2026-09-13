@@ -93,7 +93,7 @@ func SimulateInstantMatch(
 	rng *rand.Rand,
 ) *matchreport.MatchReport {
 	if rng == nil {
-		rng = rand.New(rand.NewSource(rand.Int63()))
+		rng = rand.New(rand.NewSource(1))
 	}
 	if cfg == nil {
 		cfg = &InstantMatchConfig{Weather: "clear", Referee: "balanced"}
@@ -123,8 +123,15 @@ func SimulateInstantMatch(
 	homeEdge := managers.TacticEdge(homeStyle, awayStyle)
 
 	fxKey := models.FixtureContext(cfg.Competition, cfg.Matchweek)
-	homeXI := homeClub.GetStartingEleven(fxKey)
-	awayXI := awayClub.GetStartingEleven(fxKey)
+	homeFocus, awayFocus := "", ""
+	if homeMgr != nil {
+		homeFocus = homeMgr.Focus
+	}
+	if awayMgr != nil {
+		awayFocus = awayMgr.Focus
+	}
+	homeXI := homeClub.GetStartingElevenWithBias(homeStyle, homeFocus, fxKey)
+	awayXI := awayClub.GetStartingElevenWithBias(awayStyle, awayFocus, fxKey)
 	homeBench := homeClub.GetBench(homeXI, 7, fxKey)
 	awayBench := awayClub.GetBench(awayXI, 7, fxKey)
 

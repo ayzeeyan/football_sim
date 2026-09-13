@@ -8,9 +8,9 @@ import (
 )
 
 // serialSlateForTest is the independent serial reference for the pooled
-// slate: same batch order, same per-fixture streams, compute+apply inline.
-// It shares only slateBatchUnlocked, computeSlateFixture, and
-// applySlateFixture with the implementation under test.
+// slate: same batch order and per-fixture streams, but compute+apply inline.
+// It mirrors the production end-of-slate rollover boundary without using the
+// worker-pool implementation under test.
 func serialSlateForTest(tm *TournamentManager) map[string]interface{} {
 	mw, ids := tm.slateBatchUnlocked()
 	var base int64 = 1
@@ -36,18 +36,23 @@ func serialSlateForTest(tm *TournamentManager) map[string]interface{} {
 			skipped++
 			continue
 		}
+		if blocked := tm.worldLegBlocked(fx); blocked != "" {
+			skipped++
+			continue
+		}
 		rng := rand.New(rand.NewSource(slateSeed(base, id)))
 		computed, errMsg := tm.computeSlateFixture(fx, rng)
 		if errMsg != "" {
 			skipped++
 			continue
 		}
-		if out := tm.applySlateFixture(fx, computed); out["status"] == "success" {
+		if out := tm.applySlateFixtureWithoutRollover(fx, computed); out["status"] == "success" {
 			played++
 		} else {
 			skipped++
 		}
 	}
+	tm.maybeRolloverUnlocked()
 	return map[string]interface{}{
 		"status":          "success",
 		"played":          played,

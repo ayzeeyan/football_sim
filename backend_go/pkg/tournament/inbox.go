@@ -7,18 +7,26 @@ import (
 
 // InboxItem represents a journalistic or narrative headline in the user's news wire.
 type InboxItem struct {
-	ID         string    `json:"id"`
-	Timestamp  string    `json:"timestamp"`
-	Matchweek  int       `json:"matchweek"`
-	SeasonName string    `json:"season_name"`
-	Category   string    `json:"category"` // match, transfer, wonderkid, honour, race, cup, system, injury, dugout, youth, nxgn
-	Headline   string    `json:"headline"`
-	Body       string    `json:"body"`
-	ClubIDs    []string  `json:"club_ids"`
-	PlayerID   string    `json:"player_id,omitempty"`
-	FixtureID  string    `json:"fixture_id,omitempty"`
-	Unread     bool      `json:"unread"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         string        `json:"id"`
+	Timestamp  string        `json:"timestamp"`
+	Matchweek  int           `json:"matchweek"`
+	SeasonName string        `json:"season_name"`
+	Category   string        `json:"category"` // match, transfer, wonderkid, honour, race, cup, system, injury, dugout, youth, nxgn
+	Headline   string        `json:"headline"`
+	Body       string        `json:"body"`
+	ClubIDs    []string      `json:"club_ids"`
+	PlayerID   string        `json:"player_id,omitempty"`
+	FixtureID  string        `json:"fixture_id,omitempty"`
+	Unread     bool          `json:"unread"`
+	CreatedAt  time.Time     `json:"created_at"`
+	Choices    []InboxChoice `json:"choices,omitempty"`
+	Resolved   bool          `json:"resolved,omitempty"`
+}
+
+// InboxChoice is a lightweight reply option on a player conversation.
+type InboxChoice struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 // InboxFeed wraps the list of inbox items and unread count.

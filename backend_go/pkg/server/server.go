@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/rand"
 	"net/http"
 	"os"
 	urlpath "path"
@@ -69,7 +70,7 @@ type Server struct {
 	wsLastEvents    int
 }
 
-var errFreshCareer = errors.New("could not rebuild the Super League from dataset.json")
+var errFreshCareer = errors.New("could not rebuild the European world from dataset.json")
 
 // NewServer initializes and configures the HTTP & WebSocket engine.
 func NewServer(
@@ -187,6 +188,8 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("GET /api/super-league", s.handleGetSuperLeague)
 	s.mux.HandleFunc("GET /api/ucl", s.handleGetUCL)
 	s.mux.HandleFunc("GET /api/super-cup", s.handleGetSuperCup)
+	s.mux.HandleFunc("GET /api/competitions", s.handleGetCompetitions)
+	s.mux.HandleFunc("GET /api/competitions/{competition_id}", s.handleGetCompetition)
 	s.mux.HandleFunc("GET /api/ucl/fixtures", s.handleGetUCLFixtures)
 	s.mux.HandleFunc("GET /api/calendar", s.handleGetCalendar)
 	s.mux.HandleFunc("GET /api/fixtures", s.handleGetFixtures)
@@ -223,6 +226,7 @@ func (s *Server) setupRoutes() {
 	// News Wire & Inbox
 	s.mux.HandleFunc("GET /api/inbox", s.handleGetInbox)
 	s.mux.HandleFunc("POST /api/inbox/read", s.handleMarkInboxRead)
+	s.mux.HandleFunc("POST /api/inbox/reply", s.handleInboxReply)
 
 	// Static SPA Fallback
 	s.mux.HandleFunc("/", s.handleStaticSPA)
@@ -322,14 +326,15 @@ func (s *Server) handleWebSocketMatch(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var cmd struct {
-			Action string `json:"action"`
-			HomeID string `json:"home_id"`
-			AwayID string `json:"away_id"`
-			Speed  int    `json:"speed"`
-			Side   string `json:"side"`
-			Stance string `json:"stance"`
-			OutID  string `json:"out_id"`
-			InID   string `json:"in_id"`
+			Action    string `json:"action"`
+			HomeID    string `json:"home_id"`
+			AwayID    string `json:"away_id"`
+			FixtureID string `json:"fixture_id"`
+			Speed     int    `json:"speed"`
+			Side      string `json:"side"`
+			Stance    string `json:"stance"`
+			OutID     string `json:"out_id"`
+			InID      string `json:"in_id"`
 		}
 		if err := json.Unmarshal(msg, &cmd); err != nil {
 			continue
@@ -358,7 +363,15 @@ func (s *Server) handleWebSocketMatch(w http.ResponseWriter, r *http.Request) {
 				if s.TournamentManager.FavouriteClubID == "" {
 					s.TournamentManager.FavouriteClubID = cmd.HomeID
 				}
-				if f := s.findLiveFixture(cmd.HomeID, cmd.AwayID); f != nil {
+				f := s.findLiveFixture(cmd.HomeID, cmd.AwayID)
+				if cmd.FixtureID != "" {
+					if exact := s.TournamentManager.FindFixture(cmd.FixtureID); exact != nil &&
+						exact.Status == "scheduled" && exact.Matchweek == s.TournamentManager.CurrentMatchweek &&
+						exact.HomeID == cmd.HomeID && exact.AwayID == cmd.AwayID {
+						f = exact
+					}
+				}
+				if f != nil {
 					s.liveFixtureID = f.FixtureID
 					if real := s.TournamentManager.FindFixture(f.FixtureID); real != nil {
 						f = real
@@ -735,55 +748,73 @@ func (s *Server) serializePlayer(p *models.Player) map[string]interface{} {
 	careerApps := p.Appearances + p.CareerApps
 
 	return map[string]interface{}{
-		"player_id":          p.PlayerID,
-		"full_name":          p.FullName,
-		"position":           p.Position,
-		"ovr":                p.OVR,
-		"age":                p.Age,
-		"market_value_eur":   p.MarketValueEUR,
-		"universe_wonderkid": p.UniverseWonderkid,
-		"player_source":      p.PlayerSource,
-		"club_id":            p.ClubID,
-		"goals":              p.Goals,
-		"assists":            p.Assists,
-		"appearances":        p.Appearances,
-		"category":           p.Category,
-		"formatted_value":    models.FormatCurrency(p.MarketValueEUR),
-		"wage_eur":           p.WageEUR,
-		"formatted_wage":     models.FormatWage(p.WageEUR),
-		"contract_years":     p.ContractYears,
-		"loyalty":            p.Loyalty,
-		"career_goals":       careerGoals,
-		"career_assists":     careerAssists,
-		"career_apps":        careerApps,
-		"own_goals":          p.OwnGoals,
-		"suspended_matches":  p.SuspendedMatches,
-		"injured_matches":    p.InjuredMatches,
-		"injury":             p.Injury,
-		"availability":       p.AvailabilityNote("super-league", s.TournamentManager.CurrentMatchweek),
-		"effective_ovr":      p.EffectiveOVR(),
-		"consecutive_starts": p.ConsecutiveStarts,
-		"education":          p.Education,
-		"education_label":    p.EducationLabel(),
-		"education_pending":  p.EducationPending,
-		"school_want":        p.SchoolWant,
-		"school_want_label":  p.SchoolWantLine(),
-		"school_track":       p.SchoolTrack,
-		"school_track_label": p.SchoolTrackLabel(),
-		"secondary_position": p.SecondaryPosition,
-		"position_path":      p.PositionPath,
-		"position_xp":        p.PositionXP,
-		"position_options":   p.PositionOptions(),
-		"best_goals":         p.BestGoals,
-		"best_assists":       p.BestAssists,
-		"best_season":        p.BestSeason,
-		"personality":        p.Personality,
-		"personality_title":  p.PersonalityTitle(),
-		"personality_badge":  p.PersonalityBadge(),
-		"personality_desc":   p.PersonalityInfo().Description,
-		"mentor_id":          p.MentorID,
-		"mentor_name":        p.MentorName,
-		"mentor_ovr":         p.MentorOVR,
+		"player_id":           p.PlayerID,
+		"full_name":           p.FullName,
+		"position":            p.Position,
+		"ovr":                 p.OVR,
+		"age":                 p.Age,
+		"market_value_eur":    p.MarketValueEUR,
+		"universe_wonderkid":  p.UniverseWonderkid,
+		"player_source":       p.PlayerSource,
+		"club_id":             p.ClubID,
+		"goals":               p.Goals,
+		"assists":             p.Assists,
+		"appearances":         p.Appearances,
+		"category":            p.Category,
+		"formatted_value":     models.FormatCurrency(p.MarketValueEUR),
+		"wage_eur":            p.WageEUR,
+		"formatted_wage":      models.FormatWage(p.WageEUR),
+		"contract_years":      p.ContractYears,
+		"loyalty":             p.Loyalty,
+		"career_goals":        careerGoals,
+		"career_assists":      careerAssists,
+		"career_apps":         careerApps,
+		"own_goals":           p.OwnGoals,
+		"suspended_matches":   p.SuspendedMatches,
+		"injured_matches":     p.InjuredMatches,
+		"injury":              p.Injury,
+		"availability":        p.AvailabilityNote("super-league", s.TournamentManager.CurrentMatchweek),
+		"effective_ovr":       p.EffectiveOVR(),
+		"consecutive_starts":  p.ConsecutiveStarts,
+		"education":           p.Education,
+		"education_label":     p.EducationLabel(),
+		"education_pending":   p.EducationPending,
+		"school_want":         p.SchoolWant,
+		"school_want_label":   p.SchoolWantLine(),
+		"school_track":        p.SchoolTrack,
+		"school_track_label":  p.SchoolTrackLabel(),
+		"secondary_position":  p.SecondaryPosition,
+		"position_path":       p.PositionPath,
+		"position_xp":         p.PositionXP,
+		"position_options":    p.PositionOptions(),
+		"best_goals":          p.BestGoals,
+		"best_assists":        p.BestAssists,
+		"best_season":         p.BestSeason,
+		"personality":         p.Personality,
+		"personality_title":   p.PersonalityTitle(),
+		"personality_badge":   p.PersonalityBadge(),
+		"personality_desc":    p.PersonalityInfo().Description,
+		"mentor_id":           p.MentorID,
+		"mentor_name":         p.MentorName,
+		"mentor_ovr":          p.MentorOVR,
+		"morale":              p.Morale,
+		"morale_band":         p.MoraleBand(),
+		"squad_role":          p.SquadRole,
+		"fitness":             p.Fitness,
+		"sharpness":           p.Sharpness,
+		"transfer_requested":  p.TransferRequested,
+		"form":                p.FormModifier(),
+		"form_band":           p.FormBand(),
+		"on_loan":             p.OnLoan,
+		"parent_club_id":      p.ParentClubID,
+		"loan_buy_clause_eur": p.LoanBuyClauseEUR,
+		"formatted_buy_clause": func() interface{} {
+			if p.LoanBuyClauseEUR <= 0 {
+				return nil
+			}
+			return models.FormatCurrency(p.LoanBuyClauseEUR)
+		}(),
+		"competition_stats": p.CompetitionStats,
 	}
 }
 
@@ -845,10 +876,17 @@ func (s *Server) serializeClubRecord(c *models.Club, rec *models.CompetitionReco
 			"selling_tendency":        c.Identity.SellingTendency,
 		},
 		"finances": map[string]interface{}{
-			"transfer_budget": c.Finances.TransferBudget,
-			"balance":         c.Finances.Balance,
+			"transfer_budget":  c.Finances.TransferBudget,
+			"balance":          c.Finances.Balance,
+			"wage_budget":      c.Finances.WageBudget,
+			"wage_cap":         c.WageCap(),
+			"wage_bill":        c.WageBill(),
+			"european_revenue": c.Finances.EuropeanRevenue,
 		},
-		"manager":                     s.serializeManager(mgr),
+		"coefficient":     c.Coefficient,
+		"board_objective": c.BoardObjective,
+		"expected_finish": c.ExpectedFinish,
+		"manager":         s.serializeManager(mgr),
 	}
 }
 
@@ -1006,6 +1044,23 @@ func (s *Server) fixturePreview(f *tournament.Fixture, home, away *models.Club) 
 		}
 		return out
 	}
+	serializeSlottedXI := func(slots []models.StartingSlot) []map[string]interface{} {
+		out := make([]map[string]interface{}, 0, len(slots))
+		for _, entry := range slots {
+			p := entry.Player
+			if p == nil {
+				continue
+			}
+			row := s.serializePlayer(p)
+			row["starting_slot"] = entry.Slot
+			row["availability"] = p.AvailabilityNote(f.Competition, f.Matchweek)
+			if note := s.grewNoteFor(p); note != "" {
+				row["grew_note"] = note
+			}
+			out = append(out, row)
+		}
+		return out
+	}
 	missing := func(club *models.Club) []map[string]interface{} {
 		out := make([]map[string]interface{}, 0)
 		for _, p := range club.Squad {
@@ -1036,8 +1091,27 @@ func (s *Server) fixturePreview(f *tournament.Fixture, home, away *models.Club) 
 		}
 		return int(math.Round(float64(sum) / float64(n)))
 	}
-	homeXI := home.GetStartingEleven(fx)
-	awayXI := away.GetStartingEleven(fx)
+	homeStyle, homeFocus, awayStyle, awayFocus := "", "", "", ""
+	if mgr := s.TournamentManager.Managers[home.ClubID]; mgr != nil {
+		homeStyle, homeFocus = mgr.Style, mgr.Focus
+	}
+	if mgr := s.TournamentManager.Managers[away.ClubID]; mgr != nil {
+		awayStyle, awayFocus = mgr.Style, mgr.Focus
+	}
+	homeSlots := home.GetStartingElevenSlotsWithBias(homeStyle, homeFocus, fx)
+	awaySlots := away.GetStartingElevenSlotsWithBias(awayStyle, awayFocus, fx)
+	homeXI := make([]*models.Player, 0, len(homeSlots))
+	awayXI := make([]*models.Player, 0, len(awaySlots))
+	for _, entry := range homeSlots {
+		if entry.Player != nil {
+			homeXI = append(homeXI, entry.Player)
+		}
+	}
+	for _, entry := range awaySlots {
+		if entry.Player != nil {
+			awayXI = append(awayXI, entry.Player)
+		}
+	}
 	homeForm := home.Form
 	if len(homeForm) > 5 {
 		homeForm = homeForm[len(homeForm)-5:]
@@ -1063,8 +1137,8 @@ func (s *Server) fixturePreview(f *tournament.Fixture, home, away *models.Club) 
 		"away_pos":     awayPos,
 		"home_pts":     home.Points,
 		"away_pts":     away.Points,
-		"home_xi":      serializeXI(homeXI),
-		"away_xi":      serializeXI(awayXI),
+		"home_xi":      serializeSlottedXI(homeSlots),
+		"away_xi":      serializeSlottedXI(awaySlots),
 		"home_bench":   serializeXI(home.GetBench(homeXI, 7, fx)),
 		"away_bench":   serializeXI(away.GetBench(awayXI, 7, fx)),
 		"home_missing": missing(home),
@@ -1128,12 +1202,12 @@ func (s *Server) prodigyDrawPayload(homes map[string]string) map[string]interfac
 	}
 }
 
-func resolveNewCareerHomes(shuffle bool, homes map[string]string) map[string]string {
+func resolveNewCareerHomes(shuffle bool, homes map[string]string, rng *rand.Rand) map[string]string {
 	if len(homes) > 0 {
 		return copyStringMap(homes)
 	}
 	if shuffle {
-		return datamanager.ShuffleProdigyHomes(nil)
+		return datamanager.ShuffleProdigyHomes(rng)
 	}
 	return datamanager.DefaultProdigyHomes()
 }
@@ -1163,24 +1237,28 @@ func (s *Server) resetLiveMatchDefault() {
 	s.LiveMatchEngine.SetClubs(home, away, s.TournamentManager.Managers[home.ClubID], s.TournamentManager.Managers[away.ClubID])
 }
 
-func (s *Server) bootFreshCareer(homes map[string]string, shuffle bool) error {
+// bootFreshCareer rebuilds the universe from one explicit seed so identical
+// seeds deal identical careers. Every subsystem draws from an independent
+// SubsystemRNG stream, mirroring cmd/server boot.
+func (s *Server) bootFreshCareer(homes map[string]string, shuffle bool, seed int64) error {
 	datasetPath := ""
 	if s.DataManager != nil {
 		datasetPath = s.DataManager.JSONPath
 	}
 	previousDefault := growth.GetDefaultGrowthEngine()
-	ge := growth.NewGrowthEngine(time.Now().UnixNano())
+	rng := tournament.NewSubsystemRNG(seed)
+	ge := growth.NewGrowthEngine(rng.SeedFor("development"))
 	dm := datamanager.NewDataManager(datasetPath, ge)
-	if dm == nil || len(dm.GetEliteClubs()) != 12 {
+	if dm == nil || len(dm.ClubsList) < 2 {
 		if previousDefault != nil {
 			growth.SetDefaultGrowthEngine(previousDefault)
 		}
 		return errFreshCareer
 	}
+	dm.SetSeed(rng.SeedFor("datamanager"))
 	dm.ApplyProdigyHomes(homes)
-	elite := dm.GetEliteClubs()
-	tm := tournament.NewTournamentManager(elite, ge, time.Now().UnixNano())
-	te := transfers.NewTransferEngine(elite, tm.Managers, time.Now().UnixNano())
+	tm := tournament.NewEuropeanWorldManager(dm.ClubsList, ge, rng.SeedFor("matches"))
+	te := transfers.NewTransferEngine(dm.ClubsList, tm.Managers, rng.SeedFor("transfers"))
 	tm.TransferEngine = te
 	tm.ProdigyHomes = copyStringMap(dm.ProdigyHomes)
 	tm.LastCareerShuffle = shuffle
@@ -1190,6 +1268,9 @@ func (s *Server) bootFreshCareer(homes map[string]string, shuffle bool) error {
 	s.TournamentManager = tm
 	s.TransferEngine = te
 	s.resetLiveMatchDefault()
+	if s.LiveMatchEngine != nil {
+		s.LiveMatchEngine.RNG = rng.New("live_match")
+	}
 	return nil
 }
 
@@ -1285,12 +1366,19 @@ func (s *Server) handleGetClubXI(w http.ResponseWriter, r *http.Request) {
 	club := s.TournamentManager.Clubs[cid]
 	startersJSON := []map[string]interface{}{}
 	if club != nil {
-		starters := club.GetStartingEleven(s.clubFixtureContext(cid))
-		for _, p := range starters {
+		style, focus := "", ""
+		if mgr := s.TournamentManager.Managers[cid]; mgr != nil {
+			style, focus = mgr.Style, mgr.Focus
+		}
+		slots := club.GetStartingElevenSlotsWithBias(style, focus, s.clubFixtureContext(cid))
+		for _, entry := range slots {
+			p := entry.Player
 			if p == nil {
 				continue
 			}
-			startersJSON = append(startersJSON, s.serializePlayer(p))
+			row := s.serializePlayer(p)
+			row["starting_slot"] = entry.Slot
+			startersJSON = append(startersJSON, row)
 		}
 	}
 	s.worldMu.RUnlock()
@@ -1758,8 +1846,28 @@ func (s *Server) handleGetSuperLeague(w http.ResponseWriter, r *http.Request) {
 		"max_matchweeks":    s.TournamentManager.MaxMatchweeks,
 		"season_phase":      s.TournamentManager.SeasonPhase,
 		"recent_results":    append([]string{}, s.TournamentManager.RecentResults...),
+		"world":             s.TournamentManager.World != nil,
 	}
 	s.worldMu.RUnlock()
+	writeJSON(w, payload)
+}
+
+func (s *Server) handleGetCompetitions(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	payload := s.TournamentManager.GetCompetitions()
+	world := s.TournamentManager.World != nil
+	s.worldMu.RUnlock()
+	writeJSON(w, map[string]interface{}{"world": world, "competitions": payload})
+}
+
+func (s *Server) handleGetCompetition(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	payload := s.TournamentManager.GetCompetition(r.PathValue("competition_id"))
+	s.worldMu.RUnlock()
+	if payload == nil {
+		http.Error(w, "Competition not found", http.StatusNotFound)
+		return
+	}
 	writeJSON(w, payload)
 }
 
@@ -2035,7 +2143,6 @@ func (s *Server) serializeFinal(v interface{}) interface{} {
 	}
 }
 
-
 func (s *Server) handleGetScoringRace(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()
 	var all []*models.Player
@@ -2050,7 +2157,10 @@ func (s *Server) handleGetScoringRace(w http.ResponseWriter, r *http.Request) {
 		if all[i].Assists != all[j].Assists {
 			return all[i].Assists > all[j].Assists
 		}
-		return all[i].OVR > all[j].OVR
+		if all[i].OVR != all[j].OVR {
+			return all[i].OVR > all[j].OVR
+		}
+		return all[i].PlayerID < all[j].PlayerID
 	})
 
 	var race []map[string]interface{}
@@ -2237,7 +2347,9 @@ func (s *Server) handleGetDefaultHomes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePreviewShuffle(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()
 	defer s.worldMu.RUnlock()
-	writeJSON(w, s.prodigyDrawPayload(datamanager.ShuffleProdigyHomes(nil)))
+	// Previews are explicitly non-career randomness: each reroll varies.
+	// Career draws always use the universe stream (see handleNewCareer).
+	writeJSON(w, s.prodigyDrawPayload(datamanager.ShuffleProdigyHomes(rand.New(rand.NewSource(time.Now().UnixNano())))))
 }
 
 func (s *Server) handleNewCareer(w http.ResponseWriter, r *http.Request) {
@@ -2255,12 +2367,21 @@ func (s *Server) handleNewCareer(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	homes := resolveNewCareerHomes(req.Shuffle, req.Homes)
-	if err := s.bootFreshCareer(homes, req.Shuffle); err != nil {
+	// A new career is a new universe: drop the old save and seed first so the
+	// fresh universe draws a fresh persisted seed (DeleteCareer removes the
+	// seed sidecar alongside the save).
+	_ = persistence.DeleteCareer(s.savePath)
+	freshSeed, err := persistence.LoadOrCreateUniverseSeed(s.savePath)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_ = persistence.DeleteCareer(s.savePath)
+	universe := tournament.NewSubsystemRNG(freshSeed)
+	homes := resolveNewCareerHomes(req.Shuffle, req.Homes, universe.New("prodigy_draw"))
+	if err := s.bootFreshCareer(homes, req.Shuffle, freshSeed); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	payload := map[string]interface{}{
 		"status":            "success",
@@ -2279,7 +2400,7 @@ func (s *Server) handleNewCareer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) careerWindowOpen() bool {
-	return s.TournamentManager != nil && s.TournamentManager.SeasonPhase == "transfer_window"
+	return s.TransferEngine != nil && s.TransferEngine.IsWindowOpen()
 }
 
 func careerWindowName(open bool, week int) string {
@@ -2371,6 +2492,9 @@ func (s *Server) transfersPayload() map[string]interface{} {
 
 	var warchests []map[string]interface{}
 	for _, club := range s.TournamentManager.ClubsList {
+		if club == nil {
+			continue
+		}
 		mgr := s.TournamentManager.Managers[club.ClubID]
 		if mgr == nil && s.TransferEngine != nil {
 			mgr = s.TransferEngine.Managers[club.ClubID]
@@ -2388,6 +2512,9 @@ func (s *Server) transfersPayload() map[string]interface{} {
 			"budget_eur":       budget,
 			"formatted_budget": models.FormatCurrency(budget),
 			"wage_bill_eur":    mgr.WageBill(club),
+			"wage_cap_eur":     mgr.WageCap(club),
+			"wage_bill":        club.WageBill(),
+			"wage_cap":         club.WageCap(),
 		})
 	}
 	sort.SliceStable(warchests, func(i, j int) bool {
@@ -2399,18 +2526,26 @@ func (s *Server) transfersPayload() map[string]interface{} {
 		warchests = []map[string]interface{}{}
 	}
 
-	week := 1
+	maxWeeks := 0
+	windowName := "Window Closed (Opens at season end)"
+	windowType := transfers.WindowClosed
 	if s.TransferEngine != nil {
-		week = s.TransferEngine.CurrentWeek
+		maxWeeks = s.TransferEngine.WindowWeeks()
+		windowName = s.TransferEngine.GetWindowName()
+		windowType = s.TransferEngine.WindowType
+	}
+	if maxWeeks == 0 {
+		maxWeeks = transfers.TransferWindowWeeks
 	}
 
 	return map[string]interface{}{
-		"window_name":         careerWindowName(open, week),
+		"window_name":         windowName,
 		"is_window_open":      open,
+		"window_type":         windowType,
 		"season_phase":        s.TournamentManager.SeasonPhase,
 		"window_day":          s.TransferEngine.CurrentDay,
 		"window_week":         s.TransferEngine.CurrentWeek,
-		"max_window_weeks":    12,
+		"max_window_weeks":    maxWeeks,
 		"active_negotiations": negs,
 		"transfer_feed":       feed,
 		"completed_transfers": completed,
@@ -2555,6 +2690,23 @@ func (s *Server) handleMarkInboxRead(w http.ResponseWriter, r *http.Request) {
 		"unread": unread,
 		"marked": marked,
 	})
+}
+
+func (s *Server) handleInboxReply(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ItemID   string `json:"item_id"`
+		ChoiceID string `json:"choice_id"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	s.worldMu.Lock()
+	payload := s.TournamentManager.ReplyInboxUnlocked(req.ItemID, req.ChoiceID)
+	s.worldMu.Unlock()
+	if payload["status"] != "success" {
+		msg, _ := payload["message"].(string)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, payload)
 }
 
 func (s *Server) handleStaticSPA(w http.ResponseWriter, r *http.Request) {

@@ -13,6 +13,7 @@ import { MatchdayTab } from './components/MatchdayTab';
 import { SquadTab } from './components/SquadTab';
 import { WonderkidLabTab } from './components/WonderkidLabTab';
 import { StandingsTab } from './components/StandingsTab';
+import { CompetitionHubTab } from './components/CompetitionHubTab';
 import { TransfersTab } from './components/TransfersTab';
 import { HistoryTab } from './components/HistoryTab';
 import { ClubPickerModal } from './components/ClubPickerModal';
@@ -301,6 +302,7 @@ export const App: React.FC = () => {
         seasonName={calendar?.season_name}
         calendarLabel={calendar ? `MW ${Math.min(calendar.current_matchweek, calendar.max_matchweeks)}/${calendar.max_matchweeks} · ${calendar.month}${calendar.year ? ` ${calendar.year}` : ''}` : undefined}
         inboxUnread={inboxUnread}
+        world={!!calendar?.world}
       />
 
       <main id="main" className="flex-1 page-shell py-5 sm:py-6 lg:py-8 scroll-mt-28">
@@ -341,6 +343,24 @@ export const App: React.FC = () => {
             }}
           />
         )}
+        {activeTab === 7 && (
+          <CompetitionHubTab
+            key={`competitions-${careerKey}`}
+            currentMatchweek={calendar?.current_matchweek}
+            onWatchFixture={(fixture) => {
+              const home = clubs.find((c) => c.club_id === fixture.home_id);
+              const away = clubs.find((c) => c.club_id === fixture.away_id);
+              if (!home || !away) return;
+              applyClubs(home, away, fixture.fixture_id);
+              setActiveTab(0);
+              showToast(`Now showing ${home.short_name} against ${away.short_name}.`);
+            }}
+            onViewSquad={(clubId) => {
+              const club = clubs.find((c) => c.club_id === clubId);
+              if (club) viewSquadOf(club);
+            }}
+          />
+        )}
         {activeTab === 6 && (
           <InboxTab key={`inbox-${careerKey}`} careerKey={careerKey} onUnread={setInboxUnread} />
         )}
@@ -352,9 +372,9 @@ export const App: React.FC = () => {
       <footer className="border-t border-line mt-auto">
         <div className="page-shell py-4 flex flex-wrap items-center justify-between gap-3 text-[13px] text-sage">
           <div className="flex items-center gap-3">
-            <p>European Super League, {calendar?.season_name?.replace('-', '–') || '2026–27'}</p>
+            <p>{calendar?.world ? 'Top Five Europe' : 'European Super League'}, {calendar?.season_name?.replace('-', '–') || '2026–27'}</p>
             <span className="text-line">•</span>
-            <p>12 clubs · 44-week Super League</p>
+            <p>{calendar?.world ? '96 clubs · 38-week shared calendar' : '12 clubs · 44-week Super League'}</p>
           </div>
 
           <div

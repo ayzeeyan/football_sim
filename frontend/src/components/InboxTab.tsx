@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { InboxItem } from '../types';
-import { fetchInbox, fetchFixture, markInboxRead } from '../services/api';
+import { fetchInbox, fetchFixture, markInboxRead, replyInbox } from '../services/api';
 import { soundManager } from '../audio/webAudio';
 import { cx } from '../lib/format';
 import { Card, EmptyState, LoadingState, PanelHeader } from './ui/ui';
@@ -19,6 +19,8 @@ const CATEGORIES: Array<{ id: 'all' | InboxItem['category']; label: string }> = 
   { id: 'dugout', label: 'Dugout' },
   { id: 'injury', label: 'Injuries' },
   { id: 'youth', label: 'Academy' },
+  { id: 'nxgn', label: 'NXGN' },
+  { id: 'system', label: 'Season' },
 ];
 
 const TONE: Record<InboxItem['category'], string> = {
@@ -32,6 +34,7 @@ const TONE: Record<InboxItem['category'], string> = {
   injury: 'text-[#D89A84]',
   dugout: 'text-[#B9B3E6]',
   youth: 'text-[#A9CDBB]',
+  nxgn: 'text-brass',
 };
 
 function categoryLabel(c: InboxItem['category']): string {
@@ -54,6 +57,8 @@ function categoryLabel(c: InboxItem['category']): string {
       return 'Dugout';
     case 'youth':
       return 'Academy';
+    case 'nxgn':
+      return 'NXGN';
     default:
       return 'Season';
   }
@@ -74,7 +79,7 @@ export function threadOf(item: InboxItem): InboxThreadId {
   if (item.category === 'cup') return 'cup';
   if (item.category === 'match') return 'match';
   if (item.category === 'race') return 'table';
-  if (item.category === 'wonderkid' || item.category === 'honour' || item.category === 'injury' || item.category === 'dugout') return 'wonderkid';
+  if (item.category === 'wonderkid' || item.category === 'honour' || item.category === 'injury' || item.category === 'dugout' || item.category === 'nxgn') return 'wonderkid';
   if (head.includes('board letter')) return 'board';
   if (
     item.category === 'youth' ||
@@ -152,10 +157,14 @@ export const InboxTab: React.FC<InboxTabProps> = ({ careerKey = 0, onUnread }) =
     soundManager.playClick();
     setNotice(null);
     if (item.unread) {
-      const res = await markInboxRead(item.id);
-      setUnread(res.unread);
-      onUnread?.(res.unread);
-      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, unread: false } : i)));
+      try {
+        const res = await markInboxRead(item.id);
+        setUnread(res.unread);
+        onUnread?.(res.unread);
+        setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, unread: false } : i)));
+      } catch {
+        setNotice('Could not reach the paper. The unread badge is unchanged — try again.');
+      }
     }
     // Jump to the fixture sheet when the route exists (decided games only),
     // else to the kid sheet when a player route exists. Broken targets get a
@@ -182,12 +191,23 @@ export const InboxTab: React.FC<InboxTabProps> = ({ careerKey = 0, onUnread }) =
     }
   };
 
+  const handleReply = async (item: InboxItem, choiceId: string) => {
+    soundManager.playClick();
+    const res = await replyInbox(item.id, choiceId);
+    setNotice(res.message ?? (res.status === 'success' ? 'Reply sent.' : 'Could not reply.'));
+    await load();
+  };
+
   const handleReadAll = async () => {
     soundManager.playClick();
-    const res = await markInboxRead(undefined, true);
-    setUnread(res.unread);
-    onUnread?.(res.unread);
-    setItems((prev) => prev.map((i) => ({ ...i, unread: false })));
+    try {
+      const res = await markInboxRead(undefined, true);
+      setUnread(res.unread);
+      onUnread?.(res.unread);
+      setItems((prev) => prev.map((i) => ({ ...i, unread: false })));
+    } catch {
+      setNotice('Could not reach the paper. Nothing was marked read — try again.');
+    }
   };
 
   if (loading) return <Card><LoadingState message="Loading the paper…" /></Card>;
@@ -273,6 +293,20 @@ export const InboxTab: React.FC<InboxTabProps> = ({ careerKey = 0, onUnread }) =
                         )}
                       </div>
                     </button>
+                    {item.choices && item.choices.length > 0 && !item.resolved && (
+                      <div className="px-5 pb-3 flex flex-wrap gap-2">
+                        {item.choices.map((choice) => (
+                          <button
+                            key={choice.id}
+                            type="button"
+                            onClick={() => void handleReply(item, choice.id)}
+                            className="px-3 py-1.5 text-[12px] font-semibold border border-line text-bone hover:bg-cardLight"
+                          >
+                            {choice.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

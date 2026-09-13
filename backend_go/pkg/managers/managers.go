@@ -219,15 +219,29 @@ func (m *ManagerProfile) FocusLabel() string {
 }
 
 func (m *ManagerProfile) WageBill(club *models.Club) int64 {
+	if club == nil {
+		return 0
+	}
 	var total int64
 	for _, p := range club.Squad {
+		if p == nil {
+			continue
+		}
 		total += int64(p.WageEUR)
 	}
 	return total * 52
 }
 
 func (m *ManagerProfile) WageCap(club *models.Club) int64 {
-	return int64(150_000_000 + (club.OverallTeamRating-78)*25_000_000)
+	if club == nil {
+		return 0
+	}
+	// Financial power is the structural input; fall back to the club's
+	// persisted cap so saves stay consistent.
+	if club.Finances.WageCap > 0 {
+		return club.Finances.WageCap
+	}
+	return models.WageCapForIdentity(club.Identity)
 }
 
 func (m *ManagerProfile) CanAfford(club *models.Club, fee int64, wageEUR int) bool {
@@ -316,7 +330,9 @@ func BuildManagers(clubs []*models.Club) map[string]*ManagerProfile {
 // AppointManager appoints a new manager to a club, replacing the previous one.
 func AppointManager(managers map[string]*ManagerProfile, club *models.Club, rng *rand.Rand) (*ManagerProfile, *ManagerProfile) {
 	if rng == nil {
-		rng = rand.New(rand.NewSource(rand.Int63()))
+		// Fixed fallback seed: nil callers stay deterministic instead of
+		// drawing from the global random stream.
+		rng = rand.New(rand.NewSource(20260802))
 	}
 	old, ok := managers[club.ClubID]
 	if !ok || old == nil {

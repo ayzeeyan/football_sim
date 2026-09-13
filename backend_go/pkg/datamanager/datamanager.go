@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"football_sim/pkg/growth"
 	"football_sim/pkg/models"
@@ -66,7 +65,10 @@ func NewDataManager(jsonPath string, ge *growth.GrowthEngine) *DataManager {
 		Leagues:      make(map[string][]*models.Club),
 		Wonderkids:   make([]*models.Player, 0),
 		ProdigyHomes: DefaultProdigyHomes(),
-		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		// Fixed default seed: deterministic unless SetSeed/SetRNG overrides.
+		// Boot paths (cmd/server, career/new) always seed explicitly from
+		// the universe stream; wall-clock defaults are banned.
+		rng: rand.New(rand.NewSource(20260803)),
 	}
 
 	if jsonPath != "" {
@@ -316,10 +318,10 @@ func (dm *DataManager) DedupePlayers() int {
 		keepPlayer.ClubID = keepClub.ClubID
 
 		if isWonderkid {
-			keepPlayer.Age = 14
-			keepPlayer.Education = "middle_school"
-			keepPlayer.EducationPending = false
+			keepPlayer.Age = wkCfg.Age
 			keepPlayer.UniverseWonderkid = true
+			keepPlayer.Education = keepPlayer.EducationForAge()
+			keepPlayer.EducationPending = false
 		}
 
 		// 1. Merge stats from distinct duplicate instances into keepPlayer via max()

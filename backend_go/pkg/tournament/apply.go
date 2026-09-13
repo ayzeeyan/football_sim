@@ -20,6 +20,10 @@ import (
 // red-card bans from a finished report, then tracks fatigue and decays
 // served suspensions and injuries for unused squad players.
 func ApplyPlayerMatchStats(homeClub, awayClub *models.Club, report *matchreport.MatchReport) {
+	ApplyPlayerMatchStatsInCompetition(homeClub, awayClub, report, "")
+}
+
+func ApplyPlayerMatchStatsInCompetition(homeClub, awayClub *models.Club, report *matchreport.MatchReport, competition string) {
 	if report == nil {
 		return
 	}
@@ -45,12 +49,14 @@ func ApplyPlayerMatchStats(homeClub, awayClub *models.Club, report *matchreport.
 		case "goal", "penalty", "corner_goal", "free_kick_goal":
 			if e.Scorer != nil {
 				if scorer := find(e.Scorer.PlayerID); scorer != nil {
-					scorer.RecordGoal()
+					scorer.RecordCompetitionGoal(competition)
+					scorer.AdjustMorale(2)
 				}
 			}
 			if e.Assister != nil {
 				if a := find(e.Assister.PlayerID); a != nil {
-					a.RecordAssist()
+					a.RecordCompetitionAssist(competition)
+					a.AdjustMorale(1)
 				}
 			}
 		case "own_goal":
@@ -99,6 +105,15 @@ func ApplyPlayerMatchStats(homeClub, awayClub *models.Club, report *matchreport.
 				continue
 			}
 			player.RecordAppearance()
+			player.RecordCompetitionAppearance(competition, row.Minutes, starterIDs[player.PlayerID])
+			if row.Rating != nil {
+				player.RecordRating(*row.Rating)
+			}
+			player.Sharpness = clampDynamics(player.Sharpness+3, 0, 100)
+			player.Fitness = clampDynamics(player.Fitness-minutesFatigue(row.Minutes), 25, 100)
+			if starterIDs[player.PlayerID] {
+				player.AdjustMorale(1)
+			}
 			used[player.PlayerID] = true
 		}
 	}
@@ -116,6 +131,11 @@ func ApplyPlayerMatchStats(homeClub, awayClub *models.Club, report *matchreport.
 			if used[p.PlayerID] {
 				continue
 			}
+			p.Sharpness = clampDynamics(p.Sharpness-1, 20, 100)
+			p.Fitness = clampDynamics(p.Fitness+2, 25, 100)
+			if p.SquadRole == models.RoleCrucial || p.SquadRole == models.RoleImportant {
+				p.AdjustMorale(-1)
+			}
 			if p.SuspendedMatches > 0 {
 				p.SuspendedMatches--
 			}
@@ -128,6 +148,63 @@ func ApplyPlayerMatchStats(homeClub, awayClub *models.Club, report *matchreport.
 			}
 		}
 	}
+
+	homeWin := report.HomeGoals > report.AwayGoals
+	awayWin := report.AwayGoals > report.HomeGoals
+	for _, p := range usedPlayers(homeClub) {
+		if homeWin {
+			p.AdjustMorale(2)
+		} else if awayWin {
+			p.AdjustMorale(-2)
+		}
+		if p.Morale < 35 {
+			p.TransferRequested = true
+		} else if p.Morale >= 60 {
+			p.TransferRequested = false
+		}
+	}
+	for _, p := range usedPlayers(awayClub) {
+		if awayWin {
+			p.AdjustMorale(2)
+		} else if homeWin {
+			p.AdjustMorale(-2)
+		}
+		if p.Morale < 35 {
+			p.TransferRequested = true
+		} else if p.Morale >= 60 {
+			p.TransferRequested = false
+		}
+	}
+}
+
+func usedPlayers(club *models.Club) []*models.Player {
+	if club == nil {
+		return nil
+	}
+	return club.Squad
+}
+
+func clampDynamics(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func minutesFatigue(minutes int) int {
+	if minutes >= 80 {
+		return 8
+	}
+	if minutes >= 45 {
+		return 5
+	}
+	if minutes >= 15 {
+		return 2
+	}
+	return 1
 }
 
 // ApplyMarketMovements shifts valuations with match performance for both
@@ -219,24 +296,25 @@ func (tm *TournamentManager) ApplyMarketMovements(homeClub, awayClub *models.Clu
 	}
 }
 
-// AttributeProdigyPerformance applies real-event match XP to a club's
-// franchise prodigy and syncs his OVR/composure (Python:
-// _attribute_prodigy_performance). Returns growth event lines.
+// AttributeProdigyPerformance applies real-event match XP to every franchise
+// prodigy at a club and syncs OVR/composure (Python:
+// _attribute_prodigy_performance). Returns growth event lines. Squads holding
+// two prodigies (via transfer) develop both, in squad order.
 func AttributeProdigyPerformance(club *models.Club, report *matchreport.MatchReport, side string, ge *growth.GrowthEngine) []string {
 	if club == nil || report == nil || ge == nil {
 		return nil
 	}
-	var prodigy *models.Player
-	for _, p := range club.Squad {
-		if p.UniverseWonderkid {
-			prodigy = p
-			break
+	var out []string
+	for _, prodigy := range club.Squad {
+		if prodigy == nil || !prodigy.UniverseWonderkid {
+			continue
 		}
+		out = append(out, attributeOneProdigyPerformance(prodigy, report, side, ge)...)
 	}
-	if prodigy == nil {
-		return nil
-	}
+	return out
+}
 
+func attributeOneProdigyPerformance(prodigy *models.Player, report *matchreport.MatchReport, side string, ge *growth.GrowthEngine) []string {
 	goals, assists := 0, 0
 	for _, e := range report.Events {
 		if (e.Type == "goal" || e.Type == "penalty" || e.Type == "corner_goal" || e.Type == "free_kick_goal") && e.Side == side {
@@ -434,7 +512,11 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 // prodigy growth, and injuries. Returns growth event lines (newest first,
 // capped the way the Python wire keeps the latest eight).
 func (tm *TournamentManager) ApplyMatchReport(homeClub, awayClub *models.Club, report *matchreport.MatchReport, matchweek int, fixtureID string) []string {
-	ApplyPlayerMatchStats(homeClub, awayClub, report)
+	competition := ""
+	if f := tm.findFixtureUnlocked(fixtureID); f != nil {
+		competition = f.Competition
+	}
+	ApplyPlayerMatchStatsInCompetition(homeClub, awayClub, report, competition)
 	tm.ApplyMarketMovements(homeClub, awayClub, report, matchweek)
 	var growthEvents []string
 	growthEvents = append(growthEvents, AttributeProdigyPerformance(homeClub, report, "home", tm.GrowthEngine)...)

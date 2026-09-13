@@ -2,7 +2,8 @@ import type { Club, Player } from '../types';
 
 /** Central app constants — single source of truth for tabs, leagues, speeds. */
 
-export const LEAGUES_5 = ['Premier League', 'La Liga', 'Serie A', 'Bundesliga', 'Ligue 1'] as const;
+// Prestige order mirrors backend domesticLeagueDefinitions (95/93/91/91/86).
+export const LEAGUES_5 = ['Premier League', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1'] as const;
 
 export const LEAGUE_FILTER_ALL = ['All', ...LEAGUES_5] as const;
 
@@ -25,6 +26,7 @@ export const TABS = [
   { id: 0, slug: 'match', label: 'Match' },
   { id: 1, slug: 'lab', label: 'Wonderkids' },
   { id: 2, slug: 'league', label: 'League' },
+  { id: 7, slug: 'competitions', label: 'Competitions' },
   { id: 6, slug: 'inbox', label: 'Inbox' },
   { id: 5, slug: 'history', label: 'History' },
   { id: 3, slug: 'squads', label: 'Squads' },

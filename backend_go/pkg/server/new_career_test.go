@@ -130,7 +130,7 @@ func TestNewCareerKeepHomesWipesTableAndGrowth(t *testing.T) {
 	if payload["status"] != "success" || payload["season_name"] != "2026-27" {
 		t.Fatalf("new career payload: %v", payload)
 	}
-	if payload["current_matchweek"].(float64) != 1 || payload["max_matchweeks"].(float64) != 44 {
+	if payload["current_matchweek"].(float64) != 1 || payload["max_matchweeks"].(float64) != 38 {
 		t.Fatalf("calendar after new career: %v", payload)
 	}
 

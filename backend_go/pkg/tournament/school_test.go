@@ -65,13 +65,13 @@ func TestSchoolTrackExamBenching(t *testing.T) {
 
 func TestSchoolLettersFireOnlyExamTermWeeks(t *testing.T) {
 	tm := testManagerForSchool(t)
-	for _, mw := range []int{1, 5, 11, 14, 23, 26, 33} {
+	for _, mw := range []int{1, 5, 11, 14, 23, 26} {
 		if got := tm.schoolTrackLetters(mw); len(got) != 0 {
 			t.Fatalf("week %d must produce no school letters, got %d", mw, len(got))
 		}
 	}
 	seenSenders := map[string]bool{}
-	for _, mw := range []int{12, 13, 24, 25} {
+	for _, mw := range []int{12, 13, 24, 25, 32, 33} {
 		letters := tm.schoolTrackLetters(mw)
 		if len(letters) == 0 {
 			t.Fatalf("week %d must produce school/mentor/board letters", mw)

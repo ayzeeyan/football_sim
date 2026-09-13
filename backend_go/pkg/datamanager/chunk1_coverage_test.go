@@ -230,7 +230,7 @@ func TestChunk1CovInitializeEliteProdigiesEdges(t *testing.T) {
 		t.Errorf("nil-engine wonderkids = %d; want %d", len(dm2.Wonderkids), len(EliteProdigyConfigs))
 	}
 	for _, p := range dm2.Wonderkids {
-		if p.Age != 14 || p.Education != "middle_school" || !p.UniverseWonderkid {
+		if p.Age != 17 || p.Education != "high_school" || !p.UniverseWonderkid {
 			t.Errorf("nil-engine prodigy misconfigured: %+v", p)
 		}
 	}
@@ -253,15 +253,15 @@ func TestChunk1CovAdoptU14Edges(t *testing.T) {
 	if !dm.AdoptU14Prodigies() {
 		t.Errorf("tampered prodigy should report change")
 	}
-	if dm.Wonderkids[0].Age != 14 || dm.Wonderkids[0].PlayerID != ProdigyStableID(dm.Wonderkids[0].FullName) {
+	if dm.Wonderkids[0].Age != 17 || dm.Wonderkids[0].PlayerID != ProdigyStableID(dm.Wonderkids[0].FullName) {
 		t.Errorf("prodigy not restored: %+v", dm.Wonderkids[0])
 	}
 	dm.GrowthEngine = nil
-	dm.Wonderkids[1].Age = 17
+	dm.Wonderkids[1].Age = 15
 	if !dm.AdoptU14Prodigies() {
 		t.Errorf("nil-engine adopt should still report change")
 	}
-	if dm.Wonderkids[1].Age != 14 {
+	if dm.Wonderkids[1].Age != 17 {
 		t.Errorf("nil-engine adopt should still reset age")
 	}
 }

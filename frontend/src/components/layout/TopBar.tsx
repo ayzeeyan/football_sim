@@ -20,6 +20,7 @@ interface TopBarProps {
   seasonName?: string;
   calendarLabel?: string;
   inboxUnread?: number;
+  world?: boolean;
 }
 
 function statusCopy(s: ConnectionStatus): { live: boolean; label: string } {
@@ -50,7 +51,7 @@ const MacroControls: React.FC<Pick<TopBarProps, 'onSimWeek' | 'onSimMonth' | 'on
 export const TopBar: React.FC<TopBarProps> = ({
   activeTab, onTab, wsStatus, muted, onToggleMute, onOpenAwards, onNewCareer,
   onSimWeek, onSimMonth, onSimSeason, simulating = false, seasonName = '2026-27',
-  calendarLabel, inboxUnread = 0,
+  calendarLabel, inboxUnread = 0, world = false,
 }) => {
   const status = statusCopy(wsStatus);
   return (
@@ -60,7 +61,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     >
       <div className="page-shell py-3 flex items-center justify-between gap-3">
         <div className="min-w-0 shrink-0">
-          <h1 className="font-display text-[26px] leading-none font-semibold tracking-tight text-bone">Super League</h1>
+          <h1 className="font-display text-[26px] leading-none font-semibold tracking-tight text-bone">{world ? 'Europe' : 'Super League'}</h1>
           <p className="text-[13px] text-sage mt-1">
             {calendarLabel || `Season ${seasonName.replace('-', '–')}`}
           </p>

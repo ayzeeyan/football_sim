@@ -8,6 +8,7 @@ import (
 	"football_sim/pkg/managers"
 	"football_sim/pkg/matchreport"
 	"football_sim/pkg/models"
+	"football_sim/pkg/transfers"
 )
 
 // ManagerHistoryEntry is the persistent audit trail for autonomous manager
@@ -317,8 +318,8 @@ func (tm *TournamentManager) simulateWeekWithDigestUnlocked() MatchweekDigest {
 
 	res := tm.simulateRemainingUnlocked()
 	digest := MatchweekDigest{
-		SeasonName: tm.SeasonName, Matchweek: mw, Month: MonthLabel(mw), Year: CalendarYear(tm.SeasonName, mw),
-		CalendarLabel: CalendarLabel(tm.SeasonName, mw), Results: []DigestFixture{}, TableMovement: []TableMovement{},
+		SeasonName: tm.SeasonName, Matchweek: mw, Month: tm.calendarMonthUnlocked(mw), Year: CalendarYear(tm.SeasonName, mw),
+		CalendarLabel: tm.calendarLabelUnlocked(mw), Results: []DigestFixture{}, TableMovement: []TableMovement{},
 		WonderkidHighlights: []WonderkidHighlight{}, ManagerEvents: []ManagerHistoryEntry{},
 	}
 	if played, ok := res["played"].(int); ok {
@@ -436,7 +437,7 @@ func (tm *TournamentManager) SimulateBatchWeeks(count int) BatchSimResult {
 		result.SeasonFinished = tm.SeasonPhase == "transfer_window"
 		result.AwardsReady = result.SeasonFinished
 		result.Champion = tm.championNameUnlocked()
-		result.CalendarLabel = CalendarLabel(tm.SeasonName, tm.MaxMatchweeks)
+		result.CalendarLabel = tm.calendarLabelUnlocked(tm.MaxMatchweeks)
 		if result.SeasonFinished {
 			result.Message = "Season complete. The awards ceremony is ready."
 		}
@@ -472,10 +473,10 @@ func (tm *TournamentManager) SimulateBatchWeeks(count int) BatchSimResult {
 	result.AwardsReady = result.SeasonFinished
 	if result.SeasonFinished {
 		result.Champion = tm.championNameUnlocked()
-		result.CalendarLabel = CalendarLabel(tm.SeasonName, tm.MaxMatchweeks)
+		result.CalendarLabel = tm.calendarLabelUnlocked(tm.MaxMatchweeks)
 		result.Message = "Season complete. The awards ceremony is ready."
 	} else {
-		result.CalendarLabel = CalendarLabel(tm.SeasonName, tm.CurrentMatchweek)
+		result.CalendarLabel = tm.calendarLabelUnlocked(tm.CurrentMatchweek)
 		result.Message = fmt.Sprintf("Advanced %d matchweek(s).", result.WeeksAdvanced)
 	}
 	return result
@@ -502,13 +503,13 @@ func (tm *TournamentManager) AdvanceOffSeasonWeeks(count int) BatchSimResult {
 		result.OffSeasonComplete = true
 		return result
 	}
-	for i := 0; i < count && tm.TransferEngine.CurrentWeek <= 12; i++ {
+	for i := 0; i < count && tm.TransferEngine.IsWindowOpen(); i++ {
 		tm.TransferEngine.AdvanceOpenWindow()
 		result.OffSeasonWeeksAdvanced++
 		result.WeeksAdvanced++
 	}
-	result.OffSeasonComplete = tm.TransferEngine.CurrentWeek > 12
-	result.CalendarLabel = fmt.Sprintf("Off-season · transfer week %d/12", minInt(tm.TransferEngine.CurrentWeek, 12))
+	result.OffSeasonComplete = !tm.TransferEngine.IsWindowOpen()
+	result.CalendarLabel = fmt.Sprintf("Off-season · transfer week %d/%d", tm.TransferEngine.CurrentWeek, transfers.TransferWindowWeeks)
 	return result
 }
 
@@ -563,8 +564,13 @@ func (tm *TournamentManager) managerSecurityUnlocked(club *models.Club, throughM
 	if club == nil || throughMW < 8 || club.Played < 6 {
 		return "Safe", "Board backing remains firm.", false
 	}
-	positions := standingsPositions(tm.standingsUnlocked())
+	table := tm.clubLeagueTableUnlocked(club)
+	positions := standingsPositions(table)
 	pos := positions[club.ClubID]
+	n := len(table)
+	if n == 0 {
+		n = len(tm.ClubsList)
+	}
 	outcomes := tm.recentLeagueOutcomesUnlocked(club.ClubID, throughMW, 6)
 	if len(outcomes) == 0 {
 		return "Safe", "No recent league sample yet.", false
@@ -587,11 +593,16 @@ func (tm *TournamentManager) managerSecurityUnlocked(club *models.Club, throughM
 		}
 	}
 	ppg := float64(points) / float64(len(outcomes))
-	bottomThree := pos >= len(tm.ClubsList)-2
-	eliteCrisis := club.OverallTeamRating >= 84 && pos >= 8 && ppg < 1.0
+	expected := club.ExpectedFinish
+	if expected <= 0 {
+		expected = n/2 + 1
+	}
+	miss := pos - expected
+	bottomThree := n >= 3 && pos >= n-2
+	titleCrisis := expected <= 2 && pos >= maxInt(6, n/3) && ppg < 1.2
 	resultsCrisis := bottomThree && (lossStreak >= 4 || (len(outcomes) >= 6 && winless >= 6))
-	if eliteCrisis || resultsCrisis {
-		reason := fmt.Sprintf("%dth place; %.2f PPG over the last %d", pos, ppg, len(outcomes))
+	if titleCrisis || resultsCrisis || miss >= 6 {
+		reason := fmt.Sprintf("%dth place vs board target %d; %.2f PPG over the last %d", pos, expected, ppg, len(outcomes))
 		if lossStreak >= 4 {
 			reason += fmt.Sprintf("; %d straight league defeats", lossStreak)
 		} else if winless >= 6 {
@@ -599,10 +610,10 @@ func (tm *TournamentManager) managerSecurityUnlocked(club *models.Club, throughM
 		}
 		return "Hot Seat", reason, true
 	}
-	if pos >= 9 || (club.OverallTeamRating >= 84 && pos >= 7 && ppg < 1.3) || winless >= 4 {
-		return "Under Pressure", fmt.Sprintf("%dth place; %.2f PPG over the last %d", pos, ppg, len(outcomes)), false
+	if miss >= 3 || winless >= 4 {
+		return "Under Pressure", fmt.Sprintf("%dth place vs board target %d; %.2f PPG over the last %d", pos, expected, ppg, len(outcomes)), false
 	}
-	return "Safe", fmt.Sprintf("%dth place; %.2f PPG over the last %d", pos, ppg, len(outcomes)), false
+	return "Safe", fmt.Sprintf("%dth place vs board target %d; %.2f PPG over the last %d", pos, expected, ppg, len(outcomes)), false
 }
 
 // ManagerJobSecurity returns the live board assessment shown in commissioner UI.
@@ -649,7 +660,7 @@ func (tm *TournamentManager) evaluateManagerTenure(completedMW int) {
 			continue
 		}
 		oldStyle := mgr.CanonicalStyle()
-		old, next := managers.AppointManager(tm.Managers, club, tm.RNG)
+		old, next := appointManagerDeterministic(tm.Managers, club, tm.RNG)
 		if old == nil || next == nil {
 			continue
 		}

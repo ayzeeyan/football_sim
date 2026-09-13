@@ -134,6 +134,63 @@ func TestClubStartingEleven433(t *testing.T) {
 	}
 }
 
+func TestGetStartingElevenSlotsUsesUniqueRigid433Places(t *testing.T) {
+	club := &Club{ClubID: "SLOTS", ClubName: "Slots FC"}
+	rows := []struct {
+		id, position, category string
+	}{
+		{"GK", "GK", "GK"}, {"LB", "LB", "DEF"}, {"LCB", "CB", "DEF"}, {"RCB", "CB", "DEF"}, {"RB", "RB", "DEF"},
+		{"LCM", "CM", "MID"}, {"CM", "CDM", "MID"}, {"RCM", "CAM", "MID"},
+		{"LW", "LW", "FWD"}, {"ST", "ST", "FWD"}, {"RW", "RW", "FWD"},
+	}
+	for i, row := range rows {
+		club.Squad = append(club.Squad, &Player{PlayerID: row.id, Position: row.position, Category: row.category, OVR: 90 - i})
+	}
+
+	slots := club.GetStartingElevenSlots("super-league:1")
+	if len(slots) != 11 {
+		t.Fatalf("slot count = %d, want 11", len(slots))
+	}
+	want := []string{"GK", "LB", "LCB", "RCB", "RB", "LCM", "CM", "RCM", "LW", "ST", "RW"}
+	usedPlayers, usedSlots := map[string]bool{}, map[string]bool{}
+	for i, entry := range slots {
+		if entry.Slot != want[i] {
+			t.Fatalf("slot %d = %q, want %q", i, entry.Slot, want[i])
+		}
+		if entry.Player == nil || usedPlayers[entry.PlayerID] || usedSlots[entry.Slot] {
+			t.Fatalf("duplicate or empty assignment at %+v", entry)
+		}
+		usedPlayers[entry.PlayerID] = true
+		usedSlots[entry.Slot] = true
+	}
+}
+
+func TestGetStartingElevenSlotsPrefersNaturalFullbacksOverExtraCentreBacks(t *testing.T) {
+	club := &Club{ClubID: "NATURAL", ClubName: "Natural FC"}
+	// Higher-rated centre-backs must not displace the only natural fullbacks
+	// when a rendered 4-3-3 needs both sides of the defence.
+	for _, p := range []*Player{
+		{PlayerID: "GK", Position: "GK", Category: "GK", OVR: 80},
+		{PlayerID: "CB1", Position: "CB", Category: "DEF", OVR: 90},
+		{PlayerID: "CB2", Position: "CB", Category: "DEF", OVR: 89},
+		{PlayerID: "CB3", Position: "CB", Category: "DEF", OVR: 88},
+		{PlayerID: "LB", Position: "LB", Category: "DEF", OVR: 70},
+		{PlayerID: "RB", Position: "RB", Category: "DEF", OVR: 70},
+		{PlayerID: "M1", Position: "CM", Category: "MID", OVR: 80}, {PlayerID: "M2", Position: "CM", Category: "MID", OVR: 80}, {PlayerID: "M3", Position: "CM", Category: "MID", OVR: 80},
+		{PlayerID: "F1", Position: "LW", Category: "FWD", OVR: 80}, {PlayerID: "F2", Position: "ST", Category: "FWD", OVR: 80}, {PlayerID: "F3", Position: "RW", Category: "FWD", OVR: 80},
+	} {
+		club.Squad = append(club.Squad, p)
+	}
+	slots := club.GetStartingElevenSlots()
+	bySlot := map[string]string{}
+	for _, slot := range slots {
+		bySlot[slot.Slot] = slot.PlayerID
+	}
+	if bySlot["LB"] != "LB" || bySlot["RB"] != "RB" {
+		t.Fatalf("fullback assignments = LB:%s RB:%s", bySlot["LB"], bySlot["RB"])
+	}
+}
+
 func TestClubFatigueAndRotation(t *testing.T) {
 	club := &Club{
 		ClubID: "FATIGUE_TEST",
@@ -167,6 +224,68 @@ func TestClubFatigueAndRotation(t *testing.T) {
 	if startingGK == nil || startingGK.PlayerID != "GK2" {
 		t.Errorf("Fatigued GK1 (eff 76) should rotate out for fresh GK2 (80); started: %v", startingGK)
 	}
+}
+
+func TestEarlyCupRestsTiredStarter(t *testing.T) {
+	club := &Club{ClubID: "CUP_ROT"}
+	star := &Player{PlayerID: "STAR_GK", Category: "GK", OVR: 86, ConsecutiveStarts: 3, Fitness: 58, SquadRole: RoleCrucial}
+	deputy := &Player{PlayerID: "DEP_GK", Category: "GK", OVR: 80, ConsecutiveStarts: 0, Fitness: 88, SquadRole: RoleRotation}
+	club.Squad = append(club.Squad, star, deputy)
+	for i := 1; i <= 4; i++ {
+		club.Squad = append(club.Squad, &Player{PlayerID: fmt.Sprintf("D%d", i), Category: "DEF", OVR: 75})
+	}
+	for i := 1; i <= 3; i++ {
+		club.Squad = append(club.Squad, &Player{PlayerID: fmt.Sprintf("M%d", i), Category: "MID", OVR: 75})
+	}
+	for i := 1; i <= 3; i++ {
+		club.Squad = append(club.Squad, &Player{PlayerID: fmt.Sprintf("F%d", i), Category: "FWD", OVR: 75})
+	}
+
+	leagueXI := club.GetStartingEleven("premier-league:10")
+	cupXI := club.GetStartingEleven("fa-cup:2")
+	leagueGK, cupGK := "", ""
+	for _, p := range leagueXI {
+		if p.Category == "GK" {
+			leagueGK = p.PlayerID
+		}
+	}
+	for _, p := range cupXI {
+		if p.Category == "GK" {
+			cupGK = p.PlayerID
+		}
+	}
+	if cupGK != "DEP_GK" {
+		t.Fatalf("early FA Cup should rest the tired starter, got %s", cupGK)
+	}
+	if leagueGK == "" {
+		t.Fatal("league XI missing a goalkeeper")
+	}
+}
+
+func TestYouthFocusPrefersYoungerForward(t *testing.T) {
+	club := &Club{ClubID: "YOUTH"}
+	club.Squad = append(club.Squad, &Player{PlayerID: "GK1", Category: "GK", OVR: 80})
+	for i := 1; i <= 4; i++ {
+		club.Squad = append(club.Squad, &Player{PlayerID: fmt.Sprintf("D%d", i), Category: "DEF", OVR: 75})
+	}
+	for i := 1; i <= 3; i++ {
+		club.Squad = append(club.Squad, &Player{PlayerID: fmt.Sprintf("M%d", i), Category: "MID", OVR: 75})
+	}
+	vet := &Player{PlayerID: "VET_FWD", Category: "FWD", OVR: 79, Age: 31}
+	kid := &Player{PlayerID: "KID_FWD", Category: "FWD", OVR: 77, Age: 19}
+	spare := &Player{PlayerID: "SPARE_FWD", Category: "FWD", OVR: 78, Age: 26}
+	depth := &Player{PlayerID: "DEPTH_FWD", Category: "FWD", OVR: 76, Age: 29}
+	club.Squad = append(club.Squad, vet, kid, spare, depth)
+	xi := club.GetStartingElevenWithBias("possession", "youth", "premier-league:8")
+	foundKid := false
+	for _, p := range xi {
+		if p.PlayerID == "KID_FWD" {
+			foundKid = true
+		}
+	}
+	if !foundKid {
+		t.Fatal("youth-focused manager should start the younger forward")
+	}
 
 	// Wonderkid with extreme consecutive starts (>= 5) loses priority
 	wkFWD := &Player{
@@ -183,7 +302,7 @@ func TestClubFatigueAndRotation(t *testing.T) {
 		UniverseWonderkid: false,
 		ConsecutiveStarts: 0,
 	}
-	wkPriority, _ := sortKey(wkFWD)
+	wkPriority, _ := sortKey(wkFWD, "super-league", 1)
 	if wkPriority != 0 {
 		t.Errorf("Wonderkid with 5+ consecutive starts should not have priority; got %d", wkPriority)
 	}

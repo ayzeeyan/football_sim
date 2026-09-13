@@ -11,6 +11,15 @@ func TestCalendarLabelIncludesSeasonYear(t *testing.T) {
 	}
 }
 
+func TestWorldCalendarUsesIts38WeekMayFinish(t *testing.T) {
+	if got := CalendarLabelFor("2026-27", 38, 38); got != "MW 38/38 · May 2027" {
+		t.Fatalf("world calendar finale = %q", got)
+	}
+	if got := LeaguePhaseFor(30, 38); got != "Final stretch" {
+		t.Fatalf("world phase at 30 = %q, want final stretch", got)
+	}
+}
+
 func TestMacroMonthProducesDigestAndAdvancesFourWeeks(t *testing.T) {
 	tm, _ := loadTestUniverse(t)
 	result := tm.SimulateBatchWeeks(4)

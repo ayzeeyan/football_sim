@@ -28,6 +28,9 @@ func (tm *TournamentManager) findFixtureUnlocked(id string) *Fixture {
 			return &tm.SuperCupFixtures[i]
 		}
 	}
+	if f := tm.worldFixtureUnlocked(id); f != nil {
+		return f
+	}
 	return nil
 }
 
@@ -71,6 +74,14 @@ func (tm *TournamentManager) slateUnlocked(mw int) []*Fixture {
 			cups = append(cups, f)
 		}
 	}
+	if tm.World != nil {
+		for i := range tm.World.Fixtures {
+			f := &tm.World.Fixtures[i]
+			if f.Matchweek == mw {
+				cups = append(cups, f)
+			}
+		}
+	}
 	view := tm.CurrentMatchweek
 	if view > tm.MaxMatchweeks {
 		view = tm.MaxMatchweeks
@@ -86,6 +97,14 @@ func (tm *TournamentManager) slateUnlocked(mw int) []*Fixture {
 			f := &tm.SuperCupFixtures[i]
 			if f.Status == "scheduled" && f.Matchweek < mw {
 				cups = append(cups, f)
+			}
+		}
+		if tm.World != nil {
+			for i := range tm.World.Fixtures {
+				f := &tm.World.Fixtures[i]
+				if f.Status == "scheduled" && f.Matchweek < mw {
+					cups = append(cups, f)
+				}
 			}
 		}
 	}
@@ -292,6 +311,9 @@ func (tm *TournamentManager) commitLiveFixtureOnFixtureUnlocked(fixture *Fixture
 	if blocked := tm.uclLegBlocked(fixture); blocked != "" {
 		return map[string]interface{}{"status": "error", "recorded": false, "reason": blocked, "message": blocked, "fixture_id": fixture.FixtureID, "terminal": false}
 	}
+	if blocked := tm.worldLegBlocked(fixture); blocked != "" {
+		return map[string]interface{}{"status": "error", "recorded": false, "reason": blocked, "message": blocked, "fixture_id": fixture.FixtureID, "terminal": false}
+	}
 
 	weather := fixture.Weather
 	if weather == "" {
@@ -313,6 +335,8 @@ func (tm *TournamentManager) commitLiveFixtureOnFixtureUnlocked(fixture *Fixture
 		cupEvent = tm.maybeAdvanceUCL()
 	} else if fixture.Competition == "super-cup" {
 		cupEvent = tm.maybeAdvanceSuperCup()
+	} else if tm.worldCompetitionUnlocked(fixture.Competition) != nil {
+		cupEvent = tm.advanceWorldCompetitionUnlocked(fixture.Competition)
 	}
 	if cupEvent != "" {
 		tm.PushInbox("cup", strings.TrimRight(cupEvent, "."), cupEvent, fixture.Matchweek, []string{home.ClubID, away.ClubID}, "", fixture.FixtureID)
@@ -351,6 +375,9 @@ func (tm *TournamentManager) simulateFixtureWithRNGUnlocked(fixtureID string, rn
 		return map[string]interface{}{"status": "error", "message": "That matchweek has not opened yet."}
 	}
 	if blocked := tm.uclLegBlocked(f); blocked != "" {
+		return map[string]interface{}{"status": "error", "message": blocked}
+	}
+	if blocked := tm.worldLegBlocked(f); blocked != "" {
 		return map[string]interface{}{"status": "error", "message": blocked}
 	}
 	computed, errMsg := tm.computeSlateFixture(f, rng)
@@ -404,7 +431,7 @@ func (tm *TournamentManager) applyFinishedFixture(f *Fixture, home, away *models
 	if comp == "" {
 		comp = "super-league"
 	}
-	if comp == "super-league" {
+	if comp == "super-league" || tm.isWorldDomesticLeague(comp) {
 		home.UpdateResult(hg, ag)
 		away.UpdateResult(ag, hg)
 	} else {
@@ -413,6 +440,14 @@ func (tm *TournamentManager) applyFinishedFixture(f *Fixture, home, away *models
 				rec.UpdateResult(hg, ag)
 			}
 			if rec := tm.UCLRecords[away.ClubID]; rec != nil {
+				rec.UpdateResult(ag, hg)
+			}
+		}
+		if worldComp := tm.worldCompetitionUnlocked(comp); worldComp != nil && worldComp.Kind == CompetitionEuropean && f.Stage == "League Phase" {
+			if rec := worldComp.Records[home.ClubID]; rec != nil {
+				rec.UpdateResult(hg, ag)
+			}
+			if rec := worldComp.Records[away.ClubID]; rec != nil {
 				rec.UpdateResult(ag, hg)
 			}
 		}
@@ -494,6 +529,9 @@ func (tm *TournamentManager) applyFinishedFixture(f *Fixture, home, away *models
 		tm.DerbyHeat[f.DerbyName] = cur
 		tm.DerbyHeat[pair] = cur
 		tm.DerbyHeat[rev] = cur
+		// Refresh the fixture snapshot serially (workers must not write it).
+		f.DerbyHeat = cur
+		f.IsHighHeatDerby = cur > 70
 		if tm.DerbiesPlayedThisMW == nil {
 			tm.DerbiesPlayedThisMW = map[string]bool{}
 		}
@@ -523,7 +561,7 @@ func (tm *TournamentManager) inboxMatch(f *Fixture, home, away *models.Club, rep
 		body += " MOTM: " + report.MOTM.FullName + "."
 	}
 	cat := "match"
-	if f.Competition == "ucl" {
+	if f.Competition == "ucl" || tm.worldCompetitionUnlocked(f.Competition) != nil && !tm.isWorldDomesticLeague(f.Competition) {
 		cat = "cup"
 	} else if f.Competition == "super-cup" {
 		cat = "cup"
@@ -614,6 +652,20 @@ func champIf(ok bool, name string) interface{} {
 }
 
 func (tm *TournamentManager) championNameUnlocked() string {
+	if tm.World != nil {
+		leagueID := "premier-league"
+		if favourite := tm.Clubs[tm.FavouriteClubID]; favourite != nil {
+			for _, def := range domesticLeagueDefinitions {
+				if def.League == favourite.League {
+					leagueID = def.ID
+					break
+				}
+			}
+		}
+		if table := tm.worldLeagueStandingsUnlocked(leagueID); len(table) > 0 {
+			return table[0].ClubName
+		}
+	}
 	s := tm.standingsUnlocked()
 	if len(s) == 0 {
 		return ""
@@ -622,6 +674,18 @@ func (tm *TournamentManager) championNameUnlocked() string {
 }
 
 func (tm *TournamentManager) standingsUnlocked() []*models.Club {
+	if tm.World != nil {
+		leagueID := "premier-league"
+		if favourite := tm.Clubs[tm.FavouriteClubID]; favourite != nil {
+			for _, def := range domesticLeagueDefinitions {
+				if def.League == favourite.League {
+					leagueID = def.ID
+					break
+				}
+			}
+		}
+		return tm.worldLeagueStandingsUnlocked(leagueID)
+	}
 	clubsCopy := make([]*models.Club, len(tm.ClubsList))
 	copy(clubsCopy, tm.ClubsList)
 	models.SortClubs(clubsCopy)
@@ -649,34 +713,7 @@ func (tm *TournamentManager) simulateRemainingUnlocked() map[string]interface{} 
 			tm.EnsureFixtureWeather(fx)
 		}
 	}
-	computed := tm.computeSlateWaves(groupSlateWaves(tm, ids), base)
-	// Serial apply in slate order: tables, cup advancement, inbox, and
-	// rollover resolve exactly as the legacy loop did.
-	played, skipped := 0, 0
-	for _, id := range ids {
-		fx := tm.findFixtureUnlocked(id)
-		if fx == nil || fx.Status == "finished" {
-			continue
-		}
-		if fx.Matchweek > tm.CurrentMatchweek && tm.CurrentMatchweek > 0 {
-			skipped++
-			continue
-		}
-		if blocked := tm.uclLegBlocked(fx); blocked != "" {
-			skipped++
-			continue
-		}
-		res, ok := computed[id]
-		if !ok {
-			skipped++
-			continue
-		}
-		if out := tm.applySlateFixture(fx, res); out["status"] == "success" {
-			played++
-		} else {
-			skipped++
-		}
-	}
+	played, skipped := tm.simulateSlateWavesUnlocked(ids, base)
 	return map[string]interface{}{
 		"status":          "success",
 		"played":          played,

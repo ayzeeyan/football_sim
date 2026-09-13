@@ -33,7 +33,10 @@ func (tm *TournamentManager) GetProdigyWatch() []map[string]interface{} {
 		if rows[i].p.OVR != rows[j].p.OVR {
 			return rows[i].p.OVR > rows[j].p.OVR
 		}
-		return rows[i].p.FullName < rows[j].p.FullName
+		if rows[i].p.FullName != rows[j].p.FullName {
+			return rows[i].p.FullName < rows[j].p.FullName
+		}
+		return rows[i].p.PlayerID < rows[j].p.PlayerID
 	})
 	out := make([]map[string]interface{}, 0, len(rows))
 	for i, row := range rows {

@@ -156,7 +156,7 @@ func TestResetLiveMatchDefaultForcesFullSnapshotAfterNewCareer(t *testing.T) {
 	oldAwayIDs := radarIDs(first, "away_coords")
 	homes := datamanager.DefaultProdigyHomes()
 	homes["Maverick Cantalejo"], homes["Izyan Levin Bantol"] = homes["Izyan Levin Bantol"], homes["Maverick Cantalejo"]
-	if err := srv.bootFreshCareer(homes, true); err != nil {
+	if err := srv.bootFreshCareer(homes, true, 424242); err != nil {
 		srv.worldMu.Unlock()
 		t.Fatalf("boot fresh career: %v", err)
 	}

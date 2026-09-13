@@ -45,7 +45,7 @@ function ProbableXi({ players, onOpen }: { players: Player[]; onOpen: (id: strin
               </span>
               <span className="truncate text-[13px] font-semibold text-bone">
                 {p.full_name}
-                {p.universe_wonderkid && <span className="ml-1.5 text-brass font-medium">U-14</span>}
+                {p.universe_wonderkid && <span className="ml-1.5 text-brass font-medium">U-17</span>}
               </span>
             </span>
             <span className={cx('font-mono font-bold text-[13px] shrink-0', ovrTone(p.ovr))}>{p.ovr}</span>

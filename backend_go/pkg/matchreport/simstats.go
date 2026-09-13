@@ -18,10 +18,12 @@ import (
 // RNG primitives
 // --------------------------------------------------------------------------
 
-// ensureRNG substitutes a fresh source when no RNG is supplied.
+// ensureRNG substitutes a fixed source when no RNG is supplied. Production
+// callers always pass a stream; the fixed fallback keeps tools and tests
+// deterministic instead of drawing from the contended global RNG.
 func ensureRNG(rng *rand.Rand) *rand.Rand {
 	if rng == nil {
-		return rand.New(rand.NewSource(rand.Int63()))
+		return rand.New(rand.NewSource(1))
 	}
 	return rng
 }
@@ -722,23 +724,26 @@ func AssembleReport(payload InstantPayload, method string, rng *rand.Rand) Match
 			if row.Rating != nil {
 				rating = *row.Rating
 			}
-			bestRating := -1.0
-			bestGoals := -1
-			bestOVR := -1
-			if motmRow != nil {
-				if motmRow.Rating != nil {
-					bestRating = *motmRow.Rating
-				}
-				bestGoals = motmRow.MatchGoals
-				bestOVR = motmRow.OVR
+		bestRating := -1.0
+		bestGoals := -1
+		bestOVR := -1
+		bestID := ""
+		if motmRow != nil {
+			if motmRow.Rating != nil {
+				bestRating = *motmRow.Rating
 			}
-			if motmRow == nil ||
-				rating > bestRating ||
-				(rating == bestRating && row.MatchGoals > bestGoals) ||
-				(rating == bestRating && row.MatchGoals == bestGoals && row.OVR > bestOVR) {
-				motmRow = row
-				motmSide = side
-			}
+			bestGoals = motmRow.MatchGoals
+			bestOVR = motmRow.OVR
+			bestID = motmRow.PlayerID
+		}
+		if motmRow == nil ||
+			rating > bestRating ||
+			(rating == bestRating && row.MatchGoals > bestGoals) ||
+			(rating == bestRating && row.MatchGoals == bestGoals && row.OVR > bestOVR) ||
+			(rating == bestRating && row.MatchGoals == bestGoals && row.OVR == bestOVR && row.PlayerID < bestID) {
+			motmRow = row
+			motmSide = side
+		}
 		}
 	}
 	consider("home", homeRows)

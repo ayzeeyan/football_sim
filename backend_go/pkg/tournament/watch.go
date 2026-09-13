@@ -43,7 +43,7 @@ func (tm *TournamentManager) WeekWatch() (favID string, fav *Fixture, cups []Fix
 	for _, f := range slate {
 		if favID != "" && (f.HomeID == favID || f.AwayID == favID) {
 			// Prefer the league fixture when the favourite has two (league + cup).
-			if favPtr == nil || (favPtr.Competition != "super-league" && f.Competition == "super-league") {
+			if favPtr == nil || ((!tm.isWorldDomesticLeague(favPtr.Competition) && favPtr.Competition != "super-league") && (tm.isWorldDomesticLeague(f.Competition) || f.Competition == "super-league")) {
 				favPtr = f
 			}
 		}
@@ -53,7 +53,7 @@ func (tm *TournamentManager) WeekWatch() (favID string, fav *Fixture, cups []Fix
 		fav = &cp
 	}
 	for _, f := range slate {
-		if f.Competition != "ucl" && f.Competition != "super-cup" {
+		if f.Competition != "ucl" && f.Competition != "super-cup" && !tm.isWorldKnockoutFixture(f) && tm.worldCompetitionUnlocked(f.Competition) == nil {
 			continue
 		}
 		if fav != nil && f.FixtureID == fav.FixtureID {
@@ -94,32 +94,7 @@ func (tm *TournamentManager) simulateRemainingExcludingUnlocked(excludeID string
 			tm.EnsureFixtureWeather(fx)
 		}
 	}
-	computed := tm.computeSlateWaves(groupSlateWaves(tm, filtered), base)
-	played, skipped := 0, 0
-	for _, id := range filtered {
-		fx := tm.findFixtureUnlocked(id)
-		if fx == nil || fx.Status == "finished" {
-			continue
-		}
-		if fx.Matchweek > tm.CurrentMatchweek && tm.CurrentMatchweek > 0 {
-			skipped++
-			continue
-		}
-		if blocked := tm.uclLegBlocked(fx); blocked != "" {
-			skipped++
-			continue
-		}
-		res, ok := computed[id]
-		if !ok {
-			skipped++
-			continue
-		}
-		if out := tm.applySlateFixture(fx, res); out["status"] == "success" {
-			played++
-		} else {
-			skipped++
-		}
-	}
+	played, skipped := tm.simulateSlateWavesUnlocked(filtered, base)
 	if excludeID != "" {
 		skipped++
 	}

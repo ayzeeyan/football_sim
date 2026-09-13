@@ -79,7 +79,7 @@ export const AwardsModal: React.FC<AwardsModalProps> = ({ open, data, onClose, o
 
       <div className="p-4 bg-cardLight border border-line rounded-xl flex justify-between items-center gap-3">
         <div>
-          <div className="text-sage font-semibold text-[11px] uppercase tracking-[0.14em]">Golden boy · best U-14</div>
+          <div className="text-sage font-semibold text-[11px] uppercase tracking-[0.14em]">Golden boy · best U-17</div>
           <div className="font-display text-lg font-semibold text-bone mt-1">{data?.golden_boy?.full_name || 'Under review'}</div>
         </div>
         <div className="text-bone font-semibold text-sm">{data?.golden_boy?.ovr ? `${data.golden_boy.ovr} OVR` : '—'}</div>

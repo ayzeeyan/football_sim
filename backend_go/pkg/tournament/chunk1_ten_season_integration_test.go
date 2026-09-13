@@ -129,7 +129,7 @@ func TestChunk1TenSeasonIntegrationSoak(t *testing.T) {
 				}
 			}
 		}
-		if te.CurrentWeek != transfers.TransferWindowWeeks+1 || te.IsWindowOpen() {
+		if te.CurrentWeek != transfers.TransferWindowWeeks || te.IsWindowOpen() {
 			t.Fatalf("season %d transfer window completion state wrong: week=%d open=%v", season, te.CurrentWeek, te.IsWindowOpen())
 		}
 

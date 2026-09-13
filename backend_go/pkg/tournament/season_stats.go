@@ -44,7 +44,10 @@ func (tm *TournamentManager) GetSeasonStats() map[string]interface{} {
 		if byGoals[i].Assists != byGoals[j].Assists {
 			return byGoals[i].Assists > byGoals[j].Assists
 		}
-		return byGoals[i].OVR > byGoals[j].OVR
+		if byGoals[i].OVR != byGoals[j].OVR {
+			return byGoals[i].OVR > byGoals[j].OVR
+		}
+		return byGoals[i].PlayerID < byGoals[j].PlayerID
 	})
 	byAssists := append([]*models.Player{}, all...)
 	sort.Slice(byAssists, func(i, j int) bool {
@@ -54,7 +57,10 @@ func (tm *TournamentManager) GetSeasonStats() map[string]interface{} {
 		if byAssists[i].Goals != byAssists[j].Goals {
 			return byAssists[i].Goals > byAssists[j].Goals
 		}
-		return byAssists[i].OVR > byAssists[j].OVR
+		if byAssists[i].OVR != byAssists[j].OVR {
+			return byAssists[i].OVR > byAssists[j].OVR
+		}
+		return byAssists[i].PlayerID < byAssists[j].PlayerID
 	})
 	scorers := []map[string]interface{}{}
 	for i := 0; i < 10 && i < len(byGoals); i++ {

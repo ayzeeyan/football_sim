@@ -338,14 +338,12 @@ func TestInitializeEliteProdigies_CanonicalWonderkids(t *testing.T) {
 	}
 
 	for _, w := range dm.Wonderkids {
-		// Age 14 invariant
-		if w.Age != 14 {
-			t.Errorf("wonderkid %s has age %d, expected 14", w.FullName, w.Age)
+		if w.Age != 17 {
+			t.Errorf("wonderkid %s has age %d, expected 17", w.FullName, w.Age)
 		}
 
-		// Middle school invariant
-		if w.Education != "middle_school" || w.EducationPending {
-			t.Errorf("wonderkid %s education not middle_school or pending true: %s, %v", w.FullName, w.Education, w.EducationPending)
+		if w.Education != "high_school" || w.EducationPending {
+			t.Errorf("wonderkid %s education not high_school or pending true: %s, %v", w.FullName, w.Education, w.EducationPending)
 		}
 
 		// Category FWD invariant (including CAMs)
@@ -401,51 +399,49 @@ func TestInitializeEliteProdigies_CanonicalWonderkids(t *testing.T) {
 	}
 }
 
-func TestRelocation_JhedAnthonyGuinita(t *testing.T) {
+func TestGuinitaIsNotPinnedToTottenhamAfterShuffle(t *testing.T) {
 	ge := newTestGrowthEngine()
 	dm := NewDataManager("dataset.json", ge)
-	if err := dm.LoadDataset(); err != nil {
-		t.Fatalf("LoadDataset failed: %v", err)
+	if dm == nil || len(dm.Clubs) == 0 {
+		t.Fatal("dataset not loaded")
 	}
 
-	marseille := dm.Clubs["FL1-OM"]
-	tottenham := dm.Clubs["EPL-TOT"]
-	if marseille == nil || tottenham == nil {
-		t.Fatal("FL1-OM or EPL-TOT missing from dataset")
-	}
-
-	dm.DedupePlayers()
-	if err := dm.InitializeEliteProdigies(); err != nil {
-		t.Fatalf("InitializeEliteProdigies failed: %v", err)
-	}
-
-	var jhed *models.Player
-	for _, p := range tottenham.Squad {
-		if strings.EqualFold(p.FullName, "Jhed Anthony Guinita") {
-			jhed = p
+	rng := rand.New(rand.NewSource(7))
+	var homes map[string]string
+	moved := false
+	for i := 0; i < 24; i++ {
+		homes = ShuffleProdigyHomes(rng)
+		if homes["Jhed Anthony Guinita"] != "" && homes["Jhed Anthony Guinita"] != "EPL-TOT" {
+			moved = true
 			break
 		}
 	}
-	if jhed == nil {
-		t.Fatal("Jhed Anthony Guinita is not in the EPL-TOT squad")
+	if !moved {
+		t.Fatal("shuffle never placed Jhed Anthony Guinita off Tottenham")
 	}
-	if jhed.ClubID != "EPL-TOT" {
-		t.Errorf("Jhed Anthony Guinita ClubID = %q, expected 'EPL-TOT'", jhed.ClubID)
+	dm.ApplyProdigyHomes(homes)
+	want := homes["Jhed Anthony Guinita"]
+	dest := dm.Clubs[want]
+	if dest == nil {
+		t.Fatalf("missing destination club %s", want)
 	}
-
-	// Check that he is NO LONGER in Marseille
-	for _, p := range marseille.Squad {
+	var found *models.Player
+	for _, p := range dest.Squad {
 		if strings.EqualFold(p.FullName, "Jhed Anthony Guinita") {
-			t.Errorf("Jhed Anthony Guinita still present in Marseille squad!")
+			found = p
+			break
 		}
 	}
-
-	// Check squad sizes match
-	if marseille.SquadSize != len(marseille.Squad) {
-		t.Errorf("Marseille SquadSize %d != len(Squad) %d", marseille.SquadSize, len(marseille.Squad))
+	if found == nil || found.ClubID != want {
+		t.Fatalf("Guinita was not moved with shuffled homes: club=%s found=%v", want, found != nil)
 	}
-	if tottenham.SquadSize != len(tottenham.Squad) {
-		t.Errorf("Tottenham SquadSize %d != len(Squad) %d", tottenham.SquadSize, len(tottenham.Squad))
+	if want != "EPL-TOT" {
+		tot := dm.Clubs["EPL-TOT"]
+		for _, p := range tot.Squad {
+			if strings.EqualFold(p.FullName, "Jhed Anthony Guinita") {
+				t.Fatal("Guinita remained at Tottenham after a non-TOT shuffle")
+			}
+		}
 	}
 }
 
@@ -465,18 +461,18 @@ func TestAdoptU14Prodigies(t *testing.T) {
 	wk := dm.Wonderkids[0]
 	// Artificially change age and education
 	wk.Age = 16
-	wk.Education = "high_school"
+	wk.Education = "middle_school"
 	wk.PlayerID = "TEMPORARY_ID"
 
 	changed := dm.AdoptU14Prodigies()
 	if !changed {
 		t.Errorf("expected AdoptU14Prodigies to return true after mutation")
 	}
-	if wk.Age != 14 {
-		t.Errorf("expected age 14, got %d", wk.Age)
+	if wk.Age != 17 {
+		t.Errorf("expected age 17, got %d", wk.Age)
 	}
-	if wk.Education != "middle_school" {
-		t.Errorf("expected education middle_school, got %q", wk.Education)
+	if wk.Education != "high_school" {
+		t.Errorf("expected education high_school, got %q", wk.Education)
 	}
 	if !strings.HasPrefix(wk.PlayerID, "WK_") {
 		t.Errorf("expected ID prefix WK_, got %q", wk.PlayerID)
@@ -587,7 +583,7 @@ func TestNewDatasetCareerBoot(t *testing.T) {
 				continue
 			}
 			found = true
-			if wk.Age != 14 || wk.Education != "middle_school" || !strings.HasPrefix(wk.PlayerID, "WK_") {
+			if wk.Age != 17 || wk.Education != "high_school" || !strings.HasPrefix(wk.PlayerID, "WK_") {
 				t.Errorf("%s not snapped to career prodigy: age=%d edu=%q id=%q", cfg.FullName, wk.Age, wk.Education, wk.PlayerID)
 			}
 			if wk.ClubID != cfg.ClubID && dm.ProdigyHomes[cfg.FullName] != wk.ClubID {

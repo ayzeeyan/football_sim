@@ -293,8 +293,17 @@ func NewLiveMatchEngine(
 	return engine
 }
 
+func managerBias(mgr *managers.ManagerProfile) (string, string) {
+	if mgr == nil {
+		return "", ""
+	}
+	return mgr.Style, mgr.Focus
+}
+
 func (e *LiveMatchEngine) initPlayers() {
-	e.initPlayersForXI(e.HomeClub.GetStartingEleven(), e.AwayClub.GetStartingEleven())
+	hs, hf := managerBias(e.HomeManager)
+	as, af := managerBias(e.AwayManager)
+	e.initPlayersForXI(e.HomeClub.GetStartingElevenWithBias(hs, hf), e.AwayClub.GetStartingElevenWithBias(as, af))
 }
 
 func (e *LiveMatchEngine) initPlayersForXI(homeXI, awayXI []*models.Player) {
@@ -334,8 +343,8 @@ func (e *LiveMatchEngine) syncRadarActor(side, oldID string, replacement *models
 			OVR: replacement.OVR, X: x, Y: y,
 			IsWonderkid:       replacement.UniverseWonderkid,
 			UniverseWonderkid: replacement.UniverseWonderkid, Number: number,
-			BaseX:             x,
-			BaseY:             y,
+			BaseX: x,
+			BaseY: y,
 		}
 		return
 	}
@@ -647,8 +656,10 @@ func (e *LiveMatchEngine) ResetMatch() {
 		return
 	}
 	fx := models.FixtureContext(e.Competition, e.Matchweek)
-	e.HomeStarters = e.HomeClub.GetStartingEleven(fx)
-	e.AwayStarters = e.AwayClub.GetStartingEleven(fx)
+	hs, hf := managerBias(e.HomeManager)
+	as, af := managerBias(e.AwayManager)
+	e.HomeStarters = e.HomeClub.GetStartingElevenWithBias(hs, hf, fx)
+	e.AwayStarters = e.AwayClub.GetStartingElevenWithBias(as, af, fx)
 	e.HomeKickoffXI = append([]*models.Player(nil), e.HomeStarters...)
 	e.AwayKickoffXI = append([]*models.Player(nil), e.AwayStarters...)
 	e.HomeBench = e.HomeClub.GetBench(e.HomeKickoffXI, 7, fx)

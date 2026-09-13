@@ -196,7 +196,8 @@ func (tm *TournamentManager) drawSuperCup(ordered []*models.Club) {
 func sortClubsByRating(clubs []*models.Club) {
 	for i := 0; i < len(clubs); i++ {
 		for j := i + 1; j < len(clubs); j++ {
-			if clubs[j].OverallTeamRating > clubs[i].OverallTeamRating {
+			if clubs[j].OverallTeamRating > clubs[i].OverallTeamRating ||
+				(clubs[j].OverallTeamRating == clubs[i].OverallTeamRating && clubs[j].ClubID < clubs[i].ClubID) {
 				clubs[i], clubs[j] = clubs[j], clubs[i]
 			}
 		}
@@ -260,6 +261,8 @@ func (tm *TournamentManager) uclStandingsUnlocked() (groupA, groupB []*models.Cl
 					continue
 				}
 				if out[j].OverallTeamRating > out[i].OverallTeamRating {
+					out[i], out[j] = out[j], out[i]
+				} else if out[j].OverallTeamRating == out[i].OverallTeamRating && out[j].ClubID < out[i].ClubID {
 					out[i], out[j] = out[j], out[i]
 				}
 			}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Club, Player } from '../types';
-import { fetchClubSquad, fetchClubXi } from '../services/api';
+import { fetchClubSquad, fetchClubXi, fetchFavourite } from '../services/api';
 import { Search, ArrowUpDown, Shield, Sparkle, Eye } from 'lucide-react';
 import { soundManager } from '../audio/webAudio';
 import { LEAGUES_5 } from '../lib/constants';
@@ -25,8 +25,30 @@ interface SquadTabProps {
 
 export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
   const { openPlayer } = usePlayerSheet();
-  const [selectedLeague, setSelectedLeague] = useState<string>('All twelve');
+  const [selectedLeague, setSelectedLeague] = useState<string>('All clubs');
+  const [leagueSeeded, setLeagueSeeded] = useState(false);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
+
+  // Open on the favourite club's league once, mirroring the League tab.
+  useEffect(() => {
+    if (leagueSeeded || clubs.length === 0) return;
+    let cancelled = false;
+    fetchFavourite()
+      .then((f) => {
+        if (cancelled) return;
+        const fav = clubs.find((c) => c.club_id === f.favourite_club_id);
+        if (fav && (LEAGUES_5 as readonly string[]).includes(fav.league)) {
+          setSelectedLeague(fav.league);
+        }
+        setLeagueSeeded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLeagueSeeded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clubs, leagueSeeded]);
   const [squad, setSquad] = useState<Player[]>([]);
   const [xi, setXi] = useState<Player[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,7 +57,7 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
   const [loading, setLoading] = useState(false);
 
   const clubsInLeague = useMemo(
-    () => (selectedLeague === 'All twelve' ? clubs : clubs.filter((c) => c.league === selectedLeague)),
+    () => (selectedLeague === 'All clubs' ? clubs : clubs.filter((c) => c.league === selectedLeague)),
     [clubs, selectedLeague],
   );
 
@@ -103,7 +125,7 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
         />
         <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
           <div className="flex gap-1.5 overflow-x-auto" role="tablist" aria-label="League filter">
-            {['All twelve', ...LEAGUES_5].map((lg) => (
+            {['All clubs', ...LEAGUES_5].map((lg) => (
               <button
                 key={lg}
                 onClick={() => {
@@ -305,6 +327,8 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                       ['full_name', 'Player'],
                       ['ovr', 'OVR'],
                       ['age', 'Age'],
+                      ['squad_role', 'Role'],
+                      ['morale', 'Morale'],
                       ['market_value_eur', 'Valuation'],
                     ] as Array<[keyof Player, string]>
                   ).map(([col, label]) => (
@@ -360,6 +384,8 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                         <span className={ovrTone(player.ovr)}>{player.ovr}</span>
                       </td>
                       <td className="py-3 px-3 text-sage font-mono">{player.age}</td>
+                      <td className="py-3 px-3 text-sage text-[12px]">{player.squad_role || '—'}</td>
+                      <td className="py-3 px-3 font-mono text-[12px] text-bone/85">{player.morale ?? '—'}</td>
                       <td className="py-3 px-3 font-mono text-[#A9CDBB] font-semibold whitespace-nowrap">{player.formatted_value}</td>
                       <td className="py-3 px-3 text-sage font-mono">{player.appearances}</td>
                       <td className="py-3 px-3 text-bone font-semibold font-mono">{player.goals}</td>
@@ -390,9 +416,20 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, onWatchClub }) => {
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        {isWk ? (
+                        {player.on_loan ? (
+                          <span className="flex flex-col gap-1">
+                            <span className="px-2 py-0.5 rounded-md bg-[#8AB4C8]/10 text-[#A9CBDD] border border-[#8AB4C8]/30 font-semibold text-[11px] w-fit uppercase tracking-[0.06em]">
+                              Loan
+                            </span>
+                            {(player.loan_buy_clause_eur ?? 0) > 0 && (
+                              <span className="font-mono text-[10px] text-sage" title="Permanent-transfer fee agreed with the parent club">
+                                Buy {player.formatted_buy_clause ?? 'clause agreed'}
+                              </span>
+                            )}
+                          </span>
+                        ) : isWk ? (
                           <span className="px-2 py-0.5 rounded-md bg-brass/10 text-brass border border-brass/40 font-semibold text-[11px] flex items-center gap-1 w-fit uppercase tracking-[0.06em]">
-                            <Sparkle size={11} /> U-14 prodigy
+                            <Sparkle size={11} /> U-17 prodigy
                           </span>
                         ) : player.player_source === 'academy' ? (
                           <span className="px-2 py-0.5 rounded-md bg-pitchtone/10 text-[#A9CDBB] border border-pitchtone/30 font-semibold text-[11px] w-fit uppercase tracking-[0.06em]">

@@ -65,7 +65,10 @@ func GenerateNXGN50(clubs []*models.Club, ge *growth.GrowthEngine) []NXGNRanking
 		if candidates[i].OVR != candidates[j].OVR {
 			return candidates[i].OVR > candidates[j].OVR
 		}
-		return candidates[i].Age < candidates[j].Age
+		if candidates[i].Age != candidates[j].Age {
+			return candidates[i].Age < candidates[j].Age
+		}
+		return candidates[i].PlayerID < candidates[j].PlayerID
 	})
 
 	var rankings []NXGNRankingItem

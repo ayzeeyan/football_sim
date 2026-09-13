@@ -2,6 +2,8 @@ import type {
   AwardsCeremony,
   Club,
   CompletedTransfer,
+  CompetitionDetail,
+  CompetitionsResponse,
   Fixture,
   FixturesResponse,
   GrowthMilestoneItem,
@@ -110,7 +112,7 @@ export function fetchProdigyTimeline(playerId: string): Promise<ProdigyTimelineR
   return apiFetch<ProdigyTimelineResponse>(`/prodigies/${encodeURIComponent(playerId)}/timeline`, undefined, {
     player_id: playerId,
     full_name: playerId,
-    age: 14,
+    age: 17,
     current_height_cm: 165,
     baseline_height_cm: 165,
     current_weight_kg: 55,
@@ -118,7 +120,7 @@ export function fetchProdigyTimeline(playerId: string): Promise<ProdigyTimelineR
     height_gain_cm: 0,
     weight_gain_kg: 0,
     ovr: 60,
-    potential: 90,
+    potential: 94,
     progression_history: [],
     milestones: [],
   });
@@ -213,7 +215,16 @@ export function fetchSuperLeague(): Promise<SuperLeagueState> {
     season_name: '2026-27',
     clubs: [],
     recent_results: [],
+    world: false,
   });
+}
+
+export function fetchCompetitions(): Promise<CompetitionsResponse> {
+  return apiFetch<CompetitionsResponse>('/competitions', undefined, { world: false, competitions: [] });
+}
+
+export function fetchCompetition(id: string): Promise<CompetitionDetail | null> {
+  return apiFetch<CompetitionDetail>(`/competitions/${encodeURIComponent(id)}`);
 }
 
 export function fetchUCL(): Promise<UCLTournamentState> {
@@ -435,18 +446,31 @@ export function fetchInbox(limit = 80): Promise<InboxFeed> {
   });
 }
 
-export async function markInboxRead(itemId?: string, all = false): Promise<{ unread: number; marked: number }> {
+export async function replyInbox(itemId: string, choiceId: string): Promise<{ status: string; message?: string }> {
   try {
-    const res = await fetch(`${API_BASE}/inbox/read`, {
+    const res = await fetch(`${API_BASE}/inbox/reply`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item_id: itemId ?? null, all }),
+      body: JSON.stringify({ item_id: itemId, choice_id: choiceId }),
     });
     const data = await res.json();
-    return { unread: data.unread ?? 0, marked: data.marked ?? 0 };
+    if (!res.ok) return { status: 'error', message: data.detail || data.message || 'Could not reply.' };
+    return { status: data.status ?? 'success', message: data.message };
   } catch {
-    return { unread: 0, marked: 0 };
+    return { status: 'error', message: 'Network error sending the reply.' };
   }
+}
+
+export async function markInboxRead(itemId?: string, all = false): Promise<{ unread: number; marked: number }> {
+  // Network failures throw: callers must not clear local unread state when
+  // the server never confirmed the read.
+  const res = await fetch(`${API_BASE}/inbox/read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item_id: itemId ?? null, all }),
+  });
+  const data = await res.json();
+  return { unread: data.unread ?? 0, marked: data.marked ?? 0 };
 }
 
 export function fetchSeasonAwards(): Promise<SeasonAwards> {
@@ -721,6 +745,7 @@ export interface CalendarState {
   this_week?: number;
   next_cup_night?: number | null;
   weeks: CalendarWeek[];
+  world?: boolean;
 }
 
 export function fetchCalendar(): Promise<CalendarState> {

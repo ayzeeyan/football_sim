@@ -2,9 +2,8 @@
 
 ## Overview
 A career football simulator featuring:
-- **Super League**: 12 elite clubs in a 44-week quadruple round-robin format (four cycles, two home and two away meetings per opponent).
-- **Tournaments**: Champions Cup (2 groups of 6, two-legged knockouts, one-off final) and Super Cup (bracket play-in for seeds 5–12, top 4 byes).
-- **Wonderkids**: 12 canonical U-14 prodigies with biometric progression, puberty curves, academic exams, mentors, and XP.
+- **European world**: 96 clubs across the Premier League, La Liga, Bundesliga, Serie A, and Ligue 1, plus domestic cups and three UEFA competitions on a shared calendar.
+- **Wonderkids**: 12 canonical U-17 prodigies with biometric progression, puberty curves, academy/high-school tracks, mentors, and XP.
 - **Matchday**: Live 60 FPS WebSocket pitch simulation engine with ball physics and tactical controls, plus instant simulation for the remainder of the slate.
 - **Transfers**: Transfer window, AI bidding, wage budgets, and contract negotiations.
 - **Persistence**: Real-time snapshot saving to `saves/career.json`.
@@ -45,10 +44,10 @@ football_sim/
    - The backend is written in pure Go using the toolchain version declared in `backend_go/go.mod`. There is **no Python runtime**.
    - The frontend is React 18 with TypeScript and Tailwind CSS and is managed with Bun. Do not add npm/yarn lockfiles to the repository.
 2. **Wonderkids**:
-   - Exactly 12 canonical wonderkids start at age 14, in middle school, with category `FWD` and IDs prefixed with `WK_`.
+   - Exactly 12 canonical wonderkids start at age 17 (U-17), in high school, with category `FWD` and IDs prefixed with `WK_`.
    - Wonderkid potentials must stay strictly within the `[93, 96]` range (never 99).
-   - Jhed Anthony Guinita belongs to Tottenham Hotspur (`EPL-TOT`).
-   - Wonderkids have exam unavailability during matchweeks 12, 13, 24, 25, 32, and 33.
+   - Default clubs come from `dataset.json` and may be shuffled; no prodigy is pinned to a club (including Jhed Anthony Guinita).
+   - High-school exam unavailability still applies during matchweeks 12, 13, 24, 25, 32, and 33 unless the player is on a football-first track.
 3. **Data Integrity & Economics**:
    - Exactly 0 duplicate players across and within club squads at all times.
    - Player valuations adhere strictly to valuation clamping (€300k minimum floor, €500M maximum ceiling; dynamic corridor [0.35 * anchor, 3.0 * anchor]).

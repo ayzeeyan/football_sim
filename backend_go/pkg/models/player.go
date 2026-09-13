@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -58,6 +59,39 @@ type Player struct {
 	MentorOVR         int    `json:"mentor_ovr,omitempty"`
 	Composure         int    `json:"composure"`
 	ConsecutiveStarts int    `json:"consecutive_starts"`
+
+	// Squad dynamics (career-mode world). Zero values are filled on unmarshal.
+	Morale            int                                `json:"morale"`
+	SquadRole         string                             `json:"squad_role"`
+	Fitness           int                                `json:"fitness"`
+	Sharpness         int                                `json:"sharpness"`
+	TransferRequested bool                               `json:"transfer_requested,omitempty"`
+	CompetitionStats  map[string]*CompetitionSeasonStats `json:"competition_stats,omitempty"`
+	RecentRatings     []float64                          `json:"recent_ratings,omitempty"`
+	OnLoan            bool                               `json:"on_loan,omitempty"`
+	ParentClubID      string                             `json:"parent_club_id,omitempty"`
+	// LoanBuyClauseEUR is an optional permanent-transfer fee agreed when a
+	// loan starts (0 = no clause). Set only for non-wonderkid loans and
+	// always inside valuation clamps; cleared on return or purchase.
+	LoanBuyClauseEUR int64 `json:"loan_buy_clause_eur,omitempty"`
+}
+
+const (
+	RoleCrucial   = "Crucial"
+	RoleImportant = "Important"
+	RoleRotation  = "Rotation"
+	RoleSquad     = "Squad"
+	RoleProspect  = "Prospect"
+)
+
+// CompetitionSeasonStats is one player's record inside a single competition.
+type CompetitionSeasonStats struct {
+	CompetitionID string `json:"competition_id"`
+	Appearances   int    `json:"appearances"`
+	Starts        int    `json:"starts"`
+	Minutes       int    `json:"minutes"`
+	Goals         int    `json:"goals"`
+	Assists       int    `json:"assists"`
 }
 
 // playerAlias is used for JSON deserialization to avoid recursion.
@@ -157,6 +191,17 @@ func (p *Player) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	if p.Morale == 0 {
+		p.Morale = 70
+	}
+	if p.Fitness == 0 {
+		p.Fitness = 80
+	}
+	if p.Sharpness == 0 {
+		p.Sharpness = 65
+	}
+	p.ClampDynamics()
+
 	// Default personality
 	if p.Personality == "" {
 		if p.UniverseWonderkid {
@@ -174,6 +219,11 @@ func (p *Player) UnmarshalJSON(data []byte) error {
 	// Default original club ID
 	if p.OriginalClubID == "" {
 		p.OriginalClubID = p.ClubID
+	}
+
+	// Buy clauses must never go negative; 0 means no clause.
+	if p.LoanBuyClauseEUR < 0 {
+		p.LoanBuyClauseEUR = 0
 	}
 
 	return nil
@@ -516,4 +566,153 @@ func (p *Player) RecordGoal() {
 // RecordAssist increments current assists.
 func (p *Player) RecordAssist() {
 	p.Assists++
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// ClampDynamics keeps morale, fitness, and sharpness in 0–100.
+func (p *Player) ClampDynamics() {
+	if p == nil {
+		return
+	}
+	p.Morale = clampInt(p.Morale, 0, 100)
+	p.Fitness = clampInt(p.Fitness, 0, 100)
+	p.Sharpness = clampInt(p.Sharpness, 0, 100)
+}
+
+// AdjustMorale applies a bounded morale swing.
+func (p *Player) AdjustMorale(delta int) {
+	if p == nil {
+		return
+	}
+	if p.Morale == 0 {
+		p.Morale = 70
+	}
+	p.Morale = clampInt(p.Morale+delta, 0, 100)
+}
+
+func (p *Player) competitionBucket(competitionID string) *CompetitionSeasonStats {
+	if p == nil {
+		return nil
+	}
+	if competitionID == "" {
+		competitionID = "unknown"
+	}
+	if p.CompetitionStats == nil {
+		p.CompetitionStats = map[string]*CompetitionSeasonStats{}
+	}
+	row := p.CompetitionStats[competitionID]
+	if row == nil {
+		row = &CompetitionSeasonStats{CompetitionID: competitionID}
+		p.CompetitionStats[competitionID] = row
+	}
+	return row
+}
+
+// RecordCompetitionAppearance stores per-competition minutes and start count.
+func (p *Player) RecordCompetitionAppearance(competitionID string, minutes int, started bool) {
+	row := p.competitionBucket(competitionID)
+	if row == nil {
+		return
+	}
+	row.Appearances++
+	row.Minutes += minutes
+	if started {
+		row.Starts++
+	}
+}
+
+// RecordCompetitionGoal credits a goal to one competition and the season total.
+func (p *Player) RecordCompetitionGoal(competitionID string) {
+	p.RecordGoal()
+	if row := p.competitionBucket(competitionID); row != nil {
+		row.Goals++
+	}
+}
+
+// RecordCompetitionAssist credits an assist to one competition and the season total.
+func (p *Player) RecordCompetitionAssist(competitionID string) {
+	p.RecordAssist()
+	if row := p.competitionBucket(competitionID); row != nil {
+		row.Assists++
+	}
+}
+
+// ResetSeasonCompetitionStats clears per-competition counters for a new campaign.
+func (p *Player) ResetSeasonCompetitionStats() {
+	if p == nil {
+		return
+	}
+	p.CompetitionStats = nil
+	p.TransferRequested = false
+	p.RecentRatings = nil
+}
+
+// RecordRating stores a rolling window of match ratings used for form.
+func (p *Player) RecordRating(rating float64) {
+	if p == nil || rating <= 0 {
+		return
+	}
+	p.RecentRatings = append(p.RecentRatings, rating)
+	if len(p.RecentRatings) > 8 {
+		p.RecentRatings = p.RecentRatings[len(p.RecentRatings)-8:]
+	}
+}
+
+// FormModifier is a small OVR adjustment from recent ratings. 6.5 is neutral.
+func (p *Player) FormModifier() int {
+	if p == nil || len(p.RecentRatings) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, r := range p.RecentRatings {
+		sum += r
+	}
+	avg := sum / float64(len(p.RecentRatings))
+	mod := int(math.Round((avg - 6.5) * 4))
+	return clampInt(mod, -8, 8)
+}
+
+// FormBand is a short label for UI.
+func (p *Player) FormBand() string {
+	mod := p.FormModifier()
+	switch {
+	case mod >= 4:
+		return "Excellent"
+	case mod >= 2:
+		return "Good"
+	case mod <= -4:
+		return "Poor"
+	case mod <= -2:
+		return "Off"
+	default:
+		return "Average"
+	}
+}
+
+// MoraleBand is a short label for UI.
+func (p *Player) MoraleBand() string {
+	if p == nil {
+		return "Content"
+	}
+	switch {
+	case p.Morale >= 90:
+		return "Excellent"
+	case p.Morale >= 75:
+		return "Happy"
+	case p.Morale >= 55:
+		return "Content"
+	case p.Morale >= 35:
+		return "Unhappy"
+	default:
+		return "Very Unhappy"
+	}
 }

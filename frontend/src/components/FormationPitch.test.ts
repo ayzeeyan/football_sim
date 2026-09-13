@@ -67,4 +67,15 @@ describe('formation pitch slot assignment', () => {
     expect(first.position).toBe('CB');
     expect(second.position).toBe('CB');
   });
+
+  test('uses the backend tactical slot rather than duplicating a natural position', () => {
+    const slots = assignFormationSlots([
+      { ...player('CB-left', 'CB', 'DEF'), starting_slot: 'LCB' },
+      { ...player('CB-right', 'CB', 'DEF'), starting_slot: 'RCB' },
+    ]);
+
+    expect(slots.map((slot) => slot.slot)).toEqual(['LCB', 'RCB']);
+    expect(slots[0].x).toBe(38);
+    expect(slots[1].x).toBe(62);
+  });
 });

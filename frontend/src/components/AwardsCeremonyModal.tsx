@@ -52,8 +52,11 @@ const CategoryStage: React.FC<{
   index: number;
   total: number;
   onNext: () => void;
+  onPrev?: () => void;
+  onJump?: (i: number) => void;
+  categories?: AwardsCategory[];
   isLast: boolean;
-}> = ({ category, index, total, onNext, isLast }) => {
+}> = ({ category, index, total, onNext, onPrev, onJump, categories, isLast }) => {
   const [revealed, setRevealed] = useState(false);
 
   useEffect(() => {
@@ -71,6 +74,27 @@ const CategoryStage: React.FC<{
       <p className="eyebrow text-center">Award {index + 1} of {total}</p>
       <h3 className="font-display text-[26px] font-semibold text-bone text-center mt-1">{category.title}</h3>
       <p className="text-center text-[13px] text-sage mt-1">{category.blurb}</p>
+      {total > 5 && categories && onJump && (
+        <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3" role="tablist" aria-label="Award categories">
+          {categories.map((c, i) => (
+            <button
+              key={c.key}
+              type="button"
+              role="tab"
+              aria-selected={i === index}
+              title={c.title}
+              onClick={() => {
+                soundManager.playClick();
+                onJump(i);
+              }}
+              className={cx(
+                'h-2 rounded-full transition-colors',
+                i === index ? 'w-6 bg-brass' : 'w-2 bg-line hover:bg-sage',
+              )}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-5">
         {category.nominees.map((n, i) => (
@@ -102,17 +126,30 @@ const CategoryStage: React.FC<{
         ) : (
           <div className="space-y-3 animate-fade-in">
             <p className="font-display text-[19px] text-brass font-semibold flex items-center justify-center gap-2">
-              <Trophy size={18} /> {category.winner?.full_name} takes it
+              <Trophy size={18} /> {category.winner ? `${category.winner.full_name} takes it` : 'No winner this season'}
             </p>
-            <button
-              onClick={() => {
-                soundManager.playClick();
-                onNext();
-              }}
-              className="px-8 py-3 rounded-xl bg-brass hover:bg-[#D4AF4D] text-ink text-[14px] font-bold transition-colors inline-flex items-center gap-2"
-            >
-              {isLast ? 'Advance to Ballon d\'Or Gala' : 'Next award'} <ChevronRight size={16} />
-            </button>
+            <div className="flex items-center justify-center gap-2">
+              {onPrev && index > 0 && (
+                <button
+                  onClick={() => {
+                    soundManager.playClick();
+                    onPrev();
+                  }}
+                  className="px-5 py-3 rounded-xl bg-cardLight hover:bg-cardHover text-bone border border-line text-[14px] font-bold transition-colors"
+                >
+                  Prev
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  soundManager.playClick();
+                  onNext();
+                }}
+                className="px-8 py-3 rounded-xl bg-brass hover:bg-[#D4AF4D] text-ink text-[14px] font-bold transition-colors inline-flex items-center gap-2"
+              >
+                {isLast ? 'Advance to Ballon d\'Or Gala' : 'Next award'} <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -196,7 +233,7 @@ const BallonDorPodiumView: React.FC<{ rankings: BallonDorRankItem[]; onNext: () 
                   <div>
                     <span className="font-semibold text-bone">{item.full_name}</span>
                     <span className="text-[11px] text-sage font-mono ml-2">({item.club_short} · {item.position})</span>
-                    {item.is_wonderkid && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-mono bg-brass/15 text-brass font-bold">U-14</span>}
+                    {item.is_wonderkid && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-mono bg-brass/15 text-brass font-bold">U-17</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-3 font-mono text-[12px]">
@@ -218,7 +255,7 @@ const BallonDorPodiumView: React.FC<{ rankings: BallonDorRankItem[]; onNext: () 
   );
 };
 
-const TeamOfTheSeasonView: React.FC<{ tots: TeamOfTheSeason; onNext: () => void }> = ({ tots, onNext }) => {
+const TeamOfTheSeasonView: React.FC<{ tots: TeamOfTheSeason; leagues?: Record<string, TeamOfTheSeason>; onNext: () => void }> = ({ tots, leagues, onNext }) => {
   const formation = tots.formation || '4-3-3';
   const lines = [
     { label: 'Attacking Trio', players: [tots.fwd1, tots.fwd2, tots.fwd3].filter(Boolean) },
@@ -230,7 +267,7 @@ const TeamOfTheSeasonView: React.FC<{ tots: TeamOfTheSeason; onNext: () => void 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="text-center">
-        <span className="px-3 py-1 rounded-full bg-brass/15 border border-brass/40 text-brass text-[11px] font-mono font-bold uppercase tracking-wider">Super League All-Stars</span>
+        <span className="px-3 py-1 rounded-full bg-brass/15 border border-brass/40 text-brass text-[11px] font-mono font-bold uppercase tracking-wider">Season All-Stars</span>
         <h3 className="font-display text-[26px] font-semibold text-bone mt-2">Team of the Season</h3>
         <p className="text-[13px] text-sage mt-1">Official {formation} Continental Best XI based on seasonal ratings and impact.</p>
       </div>
@@ -266,6 +303,20 @@ const TeamOfTheSeasonView: React.FC<{ tots: TeamOfTheSeason; onNext: () => void 
           </div>
         ))}
       </div>
+
+      {leagues && Object.keys(leagues).length > 0 && (
+        <div className="border border-line bg-ink/40 p-3">
+          <p className="eyebrow mb-2">Domestic teams of the season</p>
+          <ul className="space-y-1 text-[13px] text-sage">
+            {Object.entries(leagues).map(([id, side]) => (
+              <li key={id} className="flex justify-between gap-2">
+                <span className="text-bone capitalize">{id.replace(/-/g, ' ')}</span>
+                <span className="font-mono truncate">{side.fwd1?.full_name ?? side.gk?.full_name ?? '—'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="text-center pt-2">
         <button onClick={onNext} className="px-8 py-3 rounded-xl bg-brass hover:bg-[#D4AF4D] text-ink text-[14px] font-bold transition-colors inline-flex items-center gap-2">
@@ -342,7 +393,7 @@ export const AwardsCeremonyModal: React.FC<AwardsCeremonyModalProps> = ({ open, 
         subtitle="The continental gala of prestige and legacy."
         onClose={onClose}
       />
-      <div className="p-6">
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
         {loading && <LoadingState message="Sealing the envelopes…" />}
         {!loading && !data && <EmptyState message="The votes are still being counted. Finish the season first." />}
 
@@ -372,15 +423,22 @@ export const AwardsCeremonyModal: React.FC<AwardsCeremonyModalProps> = ({ open, 
                 category={categories[catIndex]}
                 index={catIndex}
                 total={categories.length}
+                categories={categories}
                 onNext={() => {
                   if (catIndex < categories.length - 1) setCatIndex((i) => i + 1);
                   else setStage('ballondor');
+                }}
+                onPrev={() => {
+                  if (catIndex > 0) setCatIndex((i) => i - 1);
+                }}
+                onJump={(i) => {
+                  if (i >= 0 && i < categories.length) setCatIndex(i);
                 }}
                 isLast={catIndex === categories.length - 1}
               />
             )}
             {stage === 'ballondor' && <BallonDorPodiumView rankings={ballonDorList} onNext={() => setStage('tots')} />}
-            {stage === 'tots' && tots && <TeamOfTheSeasonView tots={tots} onNext={() => setStage('manager')} />}
+            {stage === 'tots' && tots && <TeamOfTheSeasonView tots={tots} leagues={data.league_teams_of_the_season} onNext={() => setStage('manager')} />}
             {stage === 'manager' && moty && <ManagerOfTheYearView manager={moty} onClose={onClose} />}
           </div>
         )}

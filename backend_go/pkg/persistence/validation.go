@@ -5,6 +5,7 @@ import (
 
 	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
+	"football_sim/pkg/transfers"
 )
 
 // ValidateCareerSnapshot rejects malformed critical save state before it is
@@ -16,6 +17,12 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 	}
 	if snap.Version < 0 {
 		return fmt.Errorf("career snapshot has invalid version %d", snap.Version)
+	}
+	if snap.Version > SaveVersion {
+		return fmt.Errorf("career snapshot version %d is newer than supported %d", snap.Version, SaveVersion)
+	}
+	if snap.CurrentMatchweek > 1 && snap.MaxMatchweeks <= 0 {
+		return fmt.Errorf("career snapshot matchweek %d needs a positive max matchweeks", snap.CurrentMatchweek)
 	}
 	if snap.CurrentMatchweek < 0 {
 		return fmt.Errorf("career snapshot has negative matchweek %d", snap.CurrentMatchweek)
@@ -32,13 +39,29 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 	if snap.Transfers.CurrentDay < 0 || snap.Transfers.CurrentMatchweek < 0 || snap.Transfers.CurrentWeek < 0 {
 		return fmt.Errorf("career snapshot has negative transfer counters")
 	}
-	if snap.Transfers.CurrentWeek > 13 {
-		return fmt.Errorf("career snapshot transfer week %d exceeds legal maximum 13", snap.Transfers.CurrentWeek)
+	if snap.Transfers.CurrentWeek > transfers.TransferWindowWeeks {
+		return fmt.Errorf("career snapshot transfer week %d exceeds legal maximum %d", snap.Transfers.CurrentWeek, transfers.TransferWindowWeeks)
+	}
+	if snap.Transfers.WindowType != "" && snap.Transfers.WindowType != transfers.WindowClosed && snap.Transfers.WindowType != transfers.WindowSummer && snap.Transfers.WindowType != transfers.WindowWinter {
+		return fmt.Errorf("career snapshot has unknown transfer window type %q", snap.Transfers.WindowType)
+	}
+	if snap.Transfers.WindowOpen {
+		weeks := transfers.TransferWindowWeeks
+		if snap.Transfers.WindowType == transfers.WindowWinter {
+			weeks = transfers.WinterTransferWindowWeeks
+		}
+		if snap.Transfers.CurrentWeek < 1 || snap.Transfers.CurrentWeek > weeks {
+			return fmt.Errorf("career snapshot open %s window has invalid week %d", snap.Transfers.WindowType, snap.Transfers.CurrentWeek)
+		}
 	}
 
-	// Super League invariant: exactly 12 clubs
-	if len(snap.Clubs) != 12 {
+	// Legacy saves are exactly twelve clubs. World saves are intentionally
+	// larger and validate membership through their persisted competitions.
+	if snap.World == nil && len(snap.Clubs) != 12 {
 		return fmt.Errorf("career snapshot must contain exactly 12 clubs, got %d", len(snap.Clubs))
+	}
+	if snap.World != nil && len(snap.Clubs) < 2 {
+		return fmt.Errorf("world career snapshot needs at least two clubs, got %d", len(snap.Clubs))
 	}
 
 	clubIDs := make(map[string]struct{}, len(snap.Clubs))
@@ -60,6 +83,12 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		if club.Played < 0 || club.Won < 0 || club.Drawn < 0 || club.Lost < 0 || club.GoalsFor < 0 || club.GoalsAgainst < 0 || club.Points < 0 {
 			return fmt.Errorf("career snapshot club %q has negative standings values", club.ClubID)
 		}
+		if club.Coefficient < 0 || club.Finances.TransferBudget < 0 || club.Finances.Balance < 0 || club.Finances.WageCap < 0 || club.Finances.EuropeanRevenue < 0 {
+			return fmt.Errorf("career snapshot club %q has negative coefficient or finances", club.ClubID)
+		}
+		if club.Finances.TransferBudget > club.Finances.Balance {
+			return fmt.Errorf("career snapshot club %q transfer budget %d exceeds balance %d", club.ClubID, club.Finances.TransferBudget, club.Finances.Balance)
+		}
 		for _, player := range club.Squad {
 			if player == nil {
 				return fmt.Errorf("career snapshot club %q contains nil player", club.ClubID)
@@ -71,11 +100,30 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 				return fmt.Errorf("career snapshot duplicate player id %q in clubs %q and %q", player.PlayerID, previous, club.ClubID)
 			}
 			playerIDs[player.PlayerID] = club.ClubID
+			// Squad membership is authoritative by map position: restore
+			// trusts the embedded ClubID to relocate transfers, so a mismatch
+			// here means corruption, not a pending move.
+			if player.ClubID != "" && player.ClubID != club.ClubID {
+				return fmt.Errorf("career snapshot player %q claims club %q but is filed under %q", player.PlayerID, player.ClubID, club.ClubID)
+			}
+			if player.UniverseWonderkid && player.OnLoan {
+				return fmt.Errorf("career snapshot canonical wonderkid %q must not be on loan", player.PlayerID)
+			}
+			if player.UniverseWonderkid && !transfers.IsDesignatedSuperLeagueClub(player.ClubID) {
+				return fmt.Errorf("career snapshot canonical wonderkid %q is outside the designated 12-club ecosystem at %q", player.PlayerID, player.ClubID)
+			}
 			if player.Goals < 0 || player.Assists < 0 || player.Appearances < 0 || player.CareerGoals < 0 || player.CareerAssists < 0 || player.CareerApps < 0 {
 				return fmt.Errorf("career snapshot player %q has negative statistics", player.PlayerID)
 			}
 			if player.OVR < 0 || player.OVR > 100 || player.Age < 0 || player.MarketValueEUR < 0 || player.WageEUR < 0 {
 				return fmt.Errorf("career snapshot player %q has invalid rating, age, value, or wage", player.PlayerID)
+			}
+			if player.LoanBuyClauseEUR < 0 || player.LoanBuyClauseEUR > 500_000_000 ||
+				(player.LoanBuyClauseEUR > 0 && player.LoanBuyClauseEUR < 300_000) {
+				return fmt.Errorf("career snapshot player %q has out-of-bounds loan buy clause %d", player.PlayerID, player.LoanBuyClauseEUR)
+			}
+			if player.UniverseWonderkid && player.LoanBuyClauseEUR > 0 {
+				return fmt.Errorf("career snapshot canonical wonderkid %q must not carry a loan buy clause", player.PlayerID)
 			}
 		}
 	}
@@ -128,6 +176,76 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
+	// Shared-calendar world registry: same fixture discipline as the legacy
+	// lists (shared duplicate-ID space), plus competition cross-references.
+	if snap.World != nil {
+		for _, fixture := range fixtureViews(snap.World.Fixtures) {
+			if fixture.ID != "" {
+				if _, exists := fixtureIDs[fixture.ID]; exists {
+					return fmt.Errorf("career snapshot contains duplicate fixture id %q", fixture.ID)
+				}
+				fixtureIDs[fixture.ID] = struct{}{}
+			}
+			if fixture.HomeID == "" || fixture.AwayID == "" || fixture.HomeID == fixture.AwayID {
+				return fmt.Errorf("career snapshot world fixture %q has invalid home/away clubs", fixture.ID)
+			}
+			if len(clubIDs) > 0 {
+				if _, ok := clubIDs[fixture.HomeID]; !ok {
+					return fmt.Errorf("career snapshot world fixture %q references unknown home club %q", fixture.ID, fixture.HomeID)
+				}
+				if _, ok := clubIDs[fixture.AwayID]; !ok {
+					return fmt.Errorf("career snapshot world fixture %q references unknown away club %q", fixture.ID, fixture.AwayID)
+				}
+			}
+			if fixture.Status != "" && fixture.Status != "scheduled" && fixture.Status != "playing" && fixture.Status != "finished" {
+				return fmt.Errorf("career snapshot world fixture %q has unknown status %q", fixture.ID, fixture.Status)
+			}
+			if fixture.OneScoreOnly || (fixture.Status == "finished" && !fixture.HasScore) || fixture.NegativeScore {
+				return fmt.Errorf("career snapshot world fixture %q has impossible result state", fixture.ID)
+			}
+		}
+		if len(snap.World.Competitions) == 0 {
+			return fmt.Errorf("career snapshot world has no competition registry")
+		}
+		for compID, comp := range snap.World.Competitions {
+			if comp == nil {
+				return fmt.Errorf("career snapshot world competition %q is nil", compID)
+			}
+			if compID != comp.ID {
+				return fmt.Errorf("career snapshot world competition key %q does not match id %q", compID, comp.ID)
+			}
+			for _, pid := range comp.ParticipantIDs {
+				if len(clubIDs) > 0 {
+					if _, ok := clubIDs[pid]; !ok {
+						return fmt.Errorf("career snapshot world competition %q references unknown participant %q", compID, pid)
+					}
+				}
+			}
+			if len(comp.Pots) > 0 {
+				if len(comp.Pots) != 4 {
+					return fmt.Errorf("career snapshot world competition %q has %d pots, want 4", compID, len(comp.Pots))
+				}
+				for _, pot := range comp.Pots {
+					if len(pot) != 9 {
+						return fmt.Errorf("career snapshot world competition %q has a pot of %d clubs, want 9", compID, len(pot))
+					}
+				}
+			}
+			for _, round := range comp.Rounds {
+				for _, fid := range round.FixtureIDs {
+					if _, ok := fixtureIDs[fid]; !ok {
+						return fmt.Errorf("career snapshot world competition %q round %q references unknown fixture %q", compID, round.Stage, fid)
+					}
+				}
+				for _, tid := range round.TieIDs {
+					if tid == "" {
+						return fmt.Errorf("career snapshot world competition %q round %q has an empty tie id", compID, round.Stage)
+					}
+				}
+			}
+		}
+	}
+
 	// Knockout cup structure validation
 	if snap.UCLFinal.WinnerID != "" && snap.UCLFinal.WinnerID != snap.UCLFinal.HomeID && snap.UCLFinal.WinnerID != snap.UCLFinal.AwayID {
 		return fmt.Errorf("career snapshot ucl final winner %q must be one of finalists (%s, %s)", snap.UCLFinal.WinnerID, snap.UCLFinal.HomeID, snap.UCLFinal.AwayID)
@@ -147,7 +265,7 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		if bio == nil {
 			continue
 		}
-		if bio.Potential < 50 || bio.Potential > 99 {
+		if bio.Potential < 0 || bio.Potential > 100 {
 			return fmt.Errorf("career snapshot player %q has invalid potential %d", pid, bio.Potential)
 		}
 		canonical := pid

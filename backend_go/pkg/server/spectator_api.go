@@ -19,6 +19,8 @@ type progressSignature struct {
 	Phase        string
 	Matchweek    int
 	TransferWeek int
+	WindowOpen   bool
+	Processed    int
 	Completed    int
 }
 
@@ -50,14 +52,23 @@ func (s *Server) macroProgressSignatureLocked() progressSignature {
 		completed = len(s.TransferEngine.CompletedTransfers)
 	}
 	return progressSignature{
-		Season:       s.TournamentManager.SeasonName,
-		Phase:        s.TournamentManager.SeasonPhase,
-		Matchweek:    s.TournamentManager.CurrentMatchweek,
+		Season:    s.TournamentManager.SeasonName,
+		Phase:     s.TournamentManager.SeasonPhase,
+		Matchweek: s.TournamentManager.CurrentMatchweek,
 		TransferWeek: func() int {
 			if s.TransferEngine == nil {
 				return 0
 			}
 			return s.TransferEngine.CurrentWeek
+		}(),
+		WindowOpen: func() bool {
+			return s.TransferEngine != nil && s.TransferEngine.IsWindowOpen()
+		}(),
+		Processed: func() int {
+			if s.TransferEngine == nil {
+				return 0
+			}
+			return s.TransferEngine.ProcessedWeeks
 		}(),
 		Completed: completed,
 	}
@@ -137,24 +148,28 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 		}
 		s.TransferEngine.BeginOffSeasonWindow()
 	}
-	if s.TransferEngine.CurrentWeek < 1 {
-		s.TransferEngine.CurrentWeek = 1
-	}
 	advance := 1
 	switch mode {
 	case "month":
 		advance = 4
+		// Do not let a four-week macro skip past the final open deadline
+		// day. From Week 10, for example, it processes Weeks 10–11 and
+		// leaves Week 12 open for inspection; a later click processes that
+		// final week and performs the season transition.
+		if current := s.TransferEngine.CurrentWeek; current < s.TransferEngine.WindowWeeks() {
+			remainingBeforeDeadline := s.TransferEngine.WindowWeeks() - current
+			if advance > remainingBeforeDeadline {
+				advance = remainingBeforeDeadline
+			}
+		}
 	case "season":
-		advance = 13 - s.TransferEngine.CurrentWeek
-	}
-	if remaining := 13 - s.TransferEngine.CurrentWeek; advance > remaining {
-		advance = remaining
+		advance = s.TransferEngine.WindowWeeks() - s.TransferEngine.ProcessedWeeks
 	}
 	if advance < 0 {
 		advance = 0
 	}
 
-	for i := 0; i < advance && s.TransferEngine.CurrentWeek <= 12; i++ {
+	for i := 0; i < advance && s.TransferEngine.IsWindowOpen(); i++ {
 		beforeSig := s.macroProgressSignatureLocked()
 		beforeTransfers := len(s.TransferEngine.CompletedTransfers)
 		s.TransferEngine.AdvanceOpenWindow()
@@ -172,7 +187,7 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 			tournament.PairSeniorMentors(tm.ClubsList, s.GrowthEngine)
 		}
 	}
-	if s.TransferEngine.CurrentWeek > 12 {
+	if !s.TransferEngine.IsWindowOpen() {
 		transition := tm.FinalizeSeasonTransition()
 		if transition["status"] != "success" {
 			out.Status = "error"
@@ -195,7 +210,7 @@ func (s *Server) runMacroSimulationLocked(mode string) (tournament.BatchSimResul
 	out.SeasonName = tm.SeasonName
 	out.SeasonPhase = tm.SeasonPhase
 	out.CurrentMatchweek = tm.CurrentMatchweek
-	out.Message = fmt.Sprintf("Transfer window advanced to week %d of 12.", s.TransferEngine.CurrentWeek)
+	out.Message = fmt.Sprintf("Transfer window advanced to week %d of %d.", s.TransferEngine.CurrentWeek, s.TransferEngine.WindowWeeks())
 	s.clearLiveFixtureSelection()
 	s.lastCommittedLiveInstance = -1
 	return out, http.StatusOK

@@ -42,17 +42,98 @@ func TestTransferEngine_TriggerSpecificBidIsIdempotent(t *testing.T) {
 		t.Fatalf("bid not initialized: %+v", first)
 	}
 	second := te.TriggerSpecificBid(madrid.ClubID, barca.ClubID, p.PlayerID)
-	if second != first { t.Fatal("second bid should return the live negotiation") }
-	if len(te.ActiveNegotiations) != 1 { t.Fatalf("duplicate talks: %d", len(te.ActiveNegotiations)) }
+	if second != first {
+		t.Fatal("second bid should return the live negotiation")
+	}
+	if len(te.ActiveNegotiations) != 1 {
+		t.Fatalf("duplicate talks: %d", len(te.ActiveNegotiations))
+	}
 }
 
 func TestTransferEngine_WindowStatus(t *testing.T) {
 	te, _, _ := createTransferTestUniverse()
-	if te.IsWindowOpen() { t.Fatal("transfer market must be closed during the league season") }
+	if te.IsWindowOpen() {
+		t.Fatal("transfer market must be closed during the league season")
+	}
 	te.BeginOffSeasonWindow()
-	if !te.IsWindowOpen() || te.CurrentWeek != 1 { t.Fatalf("new offseason should open at week 1, got open=%v week=%d", te.IsWindowOpen(), te.CurrentWeek) }
-	for te.CurrentWeek <= TransferWindowWeeks { te.AdvanceOpenWindow() }
-	if te.IsWindowOpen() || te.CurrentWeek != TransferWindowWeeks+1 { t.Fatalf("window should close after exactly %d processed weeks; week=%d", TransferWindowWeeks, te.CurrentWeek) }
+	if !te.IsWindowOpen() || te.CurrentWeek != 1 {
+		t.Fatalf("new offseason should open at week 1, got open=%v week=%d", te.IsWindowOpen(), te.CurrentWeek)
+	}
+	for i := 0; i < TransferWindowWeeks; i++ {
+		te.AdvanceOpenWindow()
+	}
+	if te.IsWindowOpen() || te.CurrentWeek != TransferWindowWeeks {
+		t.Fatalf("window should close after exactly %d processed weeks without exposing an extra week; week=%d", TransferWindowWeeks, te.CurrentWeek)
+	}
+}
+
+func TestTransferEngine_SummerWindowNeverExposesWeekThirteen(t *testing.T) {
+	te, _, _ := createTransferTestUniverse()
+	te.BeginOffSeasonWindow()
+	for want := 1; want <= TransferWindowWeeks; want++ {
+		if !te.IsWindowOpen() || te.CurrentWeek != want {
+			t.Fatalf("before processing: open=%v week=%d, want open Week %d", te.IsWindowOpen(), te.CurrentWeek, want)
+		}
+		te.AdvanceOpenWindow()
+		if te.CurrentWeek > TransferWindowWeeks {
+			t.Fatalf("processed Week %d exposed illegal Week %d", want, te.CurrentWeek)
+		}
+	}
+	if te.IsWindowOpen() || te.CurrentWeek != TransferWindowWeeks || te.ProcessedWeeks != TransferWindowWeeks {
+		t.Fatalf("closed summer state = open:%v week:%d processed:%d", te.IsWindowOpen(), te.CurrentWeek, te.ProcessedWeeks)
+	}
+	// Closing is terminal and idempotent; it cannot manufacture another week.
+	te.AdvanceOpenWindow()
+	if te.CurrentWeek != TransferWindowWeeks || te.ProcessedWeeks != TransferWindowWeeks {
+		t.Fatalf("closed window mutated to week=%d processed=%d", te.CurrentWeek, te.ProcessedWeeks)
+	}
+}
+
+func TestTransferEngine_RepeatedSummerOpenDoesNotResetProgress(t *testing.T) {
+	te, _, _ := createTransferTestUniverse()
+	te.BeginOffSeasonWindow()
+	te.AdvanceOpenWindow()
+	te.AdvanceOpenWindow()
+	if te.CurrentWeek != 3 {
+		t.Fatalf("before repeated open, week=%d want 3", te.CurrentWeek)
+	}
+	te.BeginOffSeasonWindow()
+	if te.CurrentWeek != 3 || te.ProcessedWeeks != 2 || !te.IsWindowOpen() {
+		t.Fatalf("repeated summer open reset state: week=%d processed=%d open=%v", te.CurrentWeek, te.ProcessedWeeks, te.IsWindowOpen())
+	}
+}
+
+func TestTransferEngine_WinterWindowHasIndependentFiniteState(t *testing.T) {
+	te, _, _ := createTransferTestUniverse()
+	te.BeginWinterWindow()
+	if te.IsOffSeason || te.WindowType != WindowWinter || te.WindowWeeks() != WinterTransferWindowWeeks {
+		t.Fatalf("winter setup invalid: off=%v type=%s weeks=%d", te.IsOffSeason, te.WindowType, te.WindowWeeks())
+	}
+	for i := 0; i < WinterTransferWindowWeeks; i++ {
+		te.AdvanceOpenWindow()
+	}
+	if te.IsWindowOpen() || te.CurrentWeek != WinterTransferWindowWeeks || te.CurrentWeek >= TransferWindowWeeks {
+		t.Fatalf("winter close invalid: open=%v week=%d", te.IsWindowOpen(), te.CurrentWeek)
+	}
+}
+
+func TestTransferEngine_WinterCalendarAdvanceIsFiniteAndIdempotent(t *testing.T) {
+	te, _, _ := createTransferTestUniverse()
+	for mw := 1; mw <= WinterWindowStartMatchweek+WinterTransferWindowWeeks; mw++ {
+		te.AdvanceWinterForMatchweek(mw)
+		if te.CurrentWeek > WinterTransferWindowWeeks {
+			t.Fatalf("matchweek %d exposed winter week %d", mw, te.CurrentWeek)
+		}
+	}
+	if te.WindowType != WindowWinter || te.IsWindowOpen() || te.CurrentWeek != WinterTransferWindowWeeks {
+		t.Fatalf("winter calendar did not close cleanly: type=%s open=%v week=%d", te.WindowType, te.IsWindowOpen(), te.CurrentWeek)
+	}
+	for i := 0; i < 4; i++ {
+		te.AdvanceWinterForMatchweek(WinterWindowStartMatchweek + WinterTransferWindowWeeks + i)
+	}
+	if te.CurrentWeek != WinterTransferWindowWeeks || te.ProcessedWeeks != WinterTransferWindowWeeks {
+		t.Fatalf("closed winter market advanced or reopened: week=%d processed=%d", te.CurrentWeek, te.ProcessedWeeks)
+	}
 }
 
 func TestTransferEngine_NegotiationAndExecution(t *testing.T) {
@@ -66,17 +147,38 @@ func TestTransferEngine_NegotiationAndExecution(t *testing.T) {
 		StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20,
 	}
 	te.ActiveNegotiations = append(te.ActiveNegotiations, neg)
-	for step := 2; step <= 5; step++ { te.UpdateDailyMarket() }
-	if len(te.CompletedTransfers) == 0 { t.Fatalf("expected completed transfer after 4 updates") }
+	for step := 2; step <= 5; step++ {
+		te.UpdateDailyMarket()
+	}
+	if len(te.CompletedTransfers) == 0 {
+		t.Fatalf("expected completed transfer after 4 updates")
+	}
 	done := te.CompletedTransfers[0]
-	if done.PlayerID != p.PlayerID { t.Errorf("expected player %s to be transferred, got %s", p.PlayerID, done.PlayerID) }
+	if done.PlayerID != p.PlayerID {
+		t.Errorf("expected player %s to be transferred, got %s", p.PlayerID, done.PlayerID)
+	}
 	foundInBuyer := false
-	for _, pl := range madrid.Squad { if pl.PlayerID == p.PlayerID { foundInBuyer = true; break } }
-	if !foundInBuyer { t.Errorf("expected player to be present in buyer squad") }
-	for _, pl := range barca.Squad { if pl.PlayerID == p.PlayerID { t.Errorf("expected player to be removed from seller squad") } }
+	for _, pl := range madrid.Squad {
+		if pl.PlayerID == p.PlayerID {
+			foundInBuyer = true
+			break
+		}
+	}
+	if !foundInBuyer {
+		t.Errorf("expected player to be present in buyer squad")
+	}
+	for _, pl := range barca.Squad {
+		if pl.PlayerID == p.PlayerID {
+			t.Errorf("expected player to be removed from seller squad")
+		}
+	}
 	records := te.GetTransferRecords()
-	if len(records.TopSignings) != 1 { t.Errorf("expected 1 top signing, got %d", len(records.TopSignings)) }
-	if records.NetSpend["LAL-RMA"].Spent != done.FeeEUR { t.Errorf("expected Madrid net spend %d, got %d", done.FeeEUR, records.NetSpend["LAL-RMA"].Spent) }
+	if len(records.TopSignings) != 1 {
+		t.Errorf("expected 1 top signing, got %d", len(records.TopSignings))
+	}
+	if records.NetSpend["LAL-RMA"].Spent != done.FeeEUR {
+		t.Errorf("expected Madrid net spend %d, got %d", done.FeeEUR, records.NetSpend["LAL-RMA"].Spent)
+	}
 }
 
 func createDeterministicTestUniverse(seed int64) *TransferEngine {

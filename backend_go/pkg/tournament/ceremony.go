@@ -67,6 +67,13 @@ func rankPlayers(pool []*models.Player, score func(*models.Player) float64, n in
 	return rows
 }
 
+func goldenBootBlurb(world bool) string {
+	if world {
+		return "Most goals across the European season."
+	}
+	return "Most Super League goals this season."
+}
+
 func goalScore(p *models.Player) float64 {
 	if p == nil {
 		return 0
@@ -85,7 +92,36 @@ func seasonScore(p *models.Player) float64 {
 	if p == nil {
 		return 0
 	}
-	return float64(p.Goals)*3 + float64(p.Assists)*2 + float64(p.Appearances)*0.5 + float64(p.OVR)
+	return float64(p.Goals)*3 + float64(p.Assists)*2 + float64(p.Appearances)*0.5 + float64(p.OVR) + float64(p.FormModifier())
+}
+
+func leagueGoalScoreFor(compID string) func(*models.Player) float64 {
+	return func(p *models.Player) float64 {
+		if p == nil {
+			return 0
+		}
+		goals := p.Goals
+		if p.CompetitionStats != nil {
+			if row := p.CompetitionStats[compID]; row != nil {
+				goals = row.Goals
+			}
+		}
+		return float64(goals)*10000 + float64(p.Assists)*10 + float64(p.OVR)/100
+	}
+}
+
+func (tm *TournamentManager) playersInLeagueUnlocked(league string) []*models.Player {
+	out := make([]*models.Player, 0)
+	for _, p := range tm.allPlayersUnlocked() {
+		if p == nil {
+			continue
+		}
+		club := tm.Clubs[p.ClubID]
+		if club != nil && club.League == league {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (tm *TournamentManager) ballonScoreUnlocked(p *models.Player) float64 {
@@ -102,6 +138,12 @@ func (tm *TournamentManager) ballonScoreUnlocked(p *models.Player) float64 {
 	standings := tm.standingsUnlocked()
 	for i, c := range standings {
 		if c.ClubID == p.ClubID {
+			// The original Super League is a title competition in its own
+			// right. Keep its champion distinct from the graduated standings
+			// points below; world careers use their competition-specific awards.
+			if tm.World == nil && i == 0 {
+				teamBonus += 10
+			}
 			teamBonus += float64(maxInt(0, len(standings)-i)) * 0.75
 			break
 		}
@@ -177,7 +219,10 @@ func (tm *TournamentManager) totsCardUnlocked(p *models.Player, role string) map
 }
 
 func (tm *TournamentManager) teamOfTheSeasonUnlocked() map[string]interface{} {
-	all := tm.allPlayersUnlocked()
+	return tm.teamOfTheSeasonForUnlocked(tm.allPlayersUnlocked())
+}
+
+func (tm *TournamentManager) teamOfTheSeasonForUnlocked(all []*models.Player) map[string]interface{} {
 	ranked := rankPlayers(all, seasonScore, 0)
 	used := make(map[string]bool)
 
@@ -253,33 +298,37 @@ func (tm *TournamentManager) teamOfTheSeasonUnlocked() map[string]interface{} {
 }
 
 func (tm *TournamentManager) managerOfTheYearUnlocked() map[string]interface{} {
-	standings := tm.standingsUnlocked()
 	actualFinish := map[string]int{}
-	for i, c := range standings {
-		actualFinish[c.ClubID] = i + 1
-	}
-
-	expectedClubs := append([]*models.Club(nil), tm.ClubsList...)
-	sort.SliceStable(expectedClubs, func(i, j int) bool {
-		repI := expectedClubs[i].Identity.Reputation
-		repJ := expectedClubs[j].Identity.Reputation
-		if repI != repJ {
-			return repI > repJ
-		}
-		if expectedClubs[i].Identity.HistoricalPrestige != expectedClubs[j].Identity.HistoricalPrestige {
-			return expectedClubs[i].Identity.HistoricalPrestige > expectedClubs[j].Identity.HistoricalPrestige
-		}
-		return expectedClubs[i].ClubID < expectedClubs[j].ClubID
-	})
-
 	expectedFinish := map[string]int{}
-	for i, c := range expectedClubs {
-		expectedFinish[c.ClubID] = i + 1
+	for _, club := range tm.ClubsList {
+		if club == nil {
+			continue
+		}
+		table := tm.clubLeagueTableUnlocked(club)
+		for i, c := range table {
+			if c.ClubID == club.ClubID {
+				actualFinish[club.ClubID] = i + 1
+				break
+			}
+		}
+		if club.ExpectedFinish > 0 {
+			expectedFinish[club.ClubID] = club.ExpectedFinish
+		} else if actualFinish[club.ClubID] == 0 {
+			expectedFinish[club.ClubID] = len(table)/2 + 1
+		} else {
+			expectedFinish[club.ClubID] = actualFinish[club.ClubID]
+		}
 	}
 
 	trophiesWon := map[string]int{}
-	if len(standings) > 0 {
-		trophiesWon[standings[0].ClubID]++
+	if tm.World != nil {
+		for _, id := range tm.World.CompetitionOrder {
+			if comp := tm.World.Competitions[id]; comp != nil && comp.ChampionID != "" {
+				trophiesWon[comp.ChampionID]++
+			}
+		}
+	} else if table := tm.standingsUnlocked(); len(table) > 0 {
+		trophiesWon[table[0].ClubID]++
 	}
 	if tm.UCLChampionID != "" {
 		trophiesWon[tm.UCLChampionID]++
@@ -289,34 +338,37 @@ func (tm *TournamentManager) managerOfTheYearUnlocked() map[string]interface{} {
 	}
 
 	type managerCandidate struct {
-		club                *models.Club
-		actualFinish        int
-		expectedFinish      int
+		club               *models.Club
+		actualFinish       int
+		expectedFinish     int
 		outperformedPlaces int
-		trophiesWon         int
-		score               float64
+		trophiesWon        int
+		score              float64
 	}
 
 	candidates := make([]managerCandidate, 0, len(tm.ClubsList))
 	for _, c := range tm.ClubsList {
 		act := actualFinish[c.ClubID]
 		if act == 0 {
-			act = 12
+			act = len(tm.clubLeagueTableUnlocked(c))
+			if act == 0 {
+				act = len(tm.ClubsList)
+			}
 		}
 		exp := expectedFinish[c.ClubID]
 		if exp == 0 {
-			exp = 12
+			exp = act
 		}
 		out := exp - act
 		tWon := trophiesWon[c.ClubID]
 		score := float64(out)*10.0 + float64(c.Points)*0.5 + float64(tWon)*25.0
 		candidates = append(candidates, managerCandidate{
-			club:                c,
-			actualFinish:        act,
-			expectedFinish:      exp,
+			club:               c,
+			actualFinish:       act,
+			expectedFinish:     exp,
 			outperformedPlaces: out,
-			trophiesWon:         tWon,
-			score:               score,
+			trophiesWon:        tWon,
+			score:              score,
 		})
 	}
 
@@ -395,7 +447,7 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 			"ovr": p.OVR, "age": p.Age, "goals": p.Goals, "assists": p.Assists,
 			"appearances": p.Appearances, "club_name": clubName, "short_name": short,
 			"is_wonderkid": p.UniverseWonderkid,
-			"stats_line": fmt.Sprintf("%d G · %d A · %d OVR", p.Goals, p.Assists, p.OVR),
+			"stats_line":   fmt.Sprintf("%d G · %d A · %d OVR", p.Goals, p.Assists, p.OVR),
 		}
 	}
 
@@ -444,17 +496,37 @@ func (tm *TournamentManager) awardsCeremonyUnlocked() map[string]interface{} {
 	}
 
 	categories := []map[string]interface{}{
-		category("golden_boot", "Golden Boot", "Most Super League goals this season.", rankPlayers(all, goalScore, 4)),
+		category("golden_boot", "Golden Boot", goldenBootBlurb(tm.World != nil), rankPlayers(all, goalScore, 4)),
 		category("playmaker", "Playmaker Award", "Most assists this season.", rankPlayers(all, assistScore, 4)),
 		category("golden_boy", "Golden Boy", "Best eligible U-21 franchise wonderkid this season.", rankPlayers(goldenBoyPool, tm.goldenBoyScoreUnlocked, 4)),
 		category("player_of_the_season", "Player of the Season", "Best overall season performance.", rankPlayers(all, seasonScore, 4)),
 		category("ballon_dor", "European Ballon d'Or", "Top overall player across performance and team achievement.", rankPlayers(all, tm.ballonScoreUnlocked, 4)),
 	}
-	return map[string]interface{}{
+	if tm.World != nil {
+		for _, def := range domesticLeagueDefinitions {
+			pool := tm.playersInLeagueUnlocked(def.League)
+			categories = append(categories, category(
+				def.ID+"-golden-boot",
+				def.Name+" Golden Boot",
+				"Most league goals in "+def.Name+" this season.",
+				rankPlayers(pool, leagueGoalScoreFor(def.ID), 4),
+			))
+		}
+	}
+	payload := map[string]interface{}{
 		"season_name":         tm.SeasonName,
 		"categories":          categories,
 		"ballon_dor":          tm.ballonDorUnlocked(),
 		"team_of_the_season":  tm.teamOfTheSeasonUnlocked(),
 		"manager_of_the_year": tm.managerOfTheYearUnlocked(),
+		"world":               tm.World != nil,
 	}
+	if tm.World != nil {
+		leagueTOTS := map[string]interface{}{}
+		for _, def := range domesticLeagueDefinitions {
+			leagueTOTS[def.ID] = tm.teamOfTheSeasonForUnlocked(tm.playersInLeagueUnlocked(def.League))
+		}
+		payload["league_teams_of_the_season"] = leagueTOTS
+	}
+	return payload
 }

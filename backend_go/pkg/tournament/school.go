@@ -8,8 +8,9 @@ import (
 
 // School letter weeks (Feature 4): exam-term correspondence from the school,
 // the mentor, and the board. These fire only when one of these matchweeks
-// completes — never on other weeks.
-var schoolLetterWeeks = map[int]bool{12: true, 13: true, 24: true, 25: true}
+// completes — never on other weeks. The set mirrors ExamWeeks so every
+// benching term (winter 12–13, spring 24–25, summer 32–33) is explained.
+var schoolLetterWeeks = map[int]bool{12: true, 13: true, 24: true, 25: true, 32: true, 33: true}
 
 // isSchoolLetterWeek reports whether exam letters fire for a completed week.
 func isSchoolLetterWeek(completedMW int) bool {
@@ -17,7 +18,7 @@ func isSchoolLetterWeek(completedMW int) bool {
 }
 
 // schoolTrackLetters builds the exam-term inbox letters for one completed
-// matchweek. Returns nil outside weeks 12–13 and 24–25. One school letter
+// matchweek. Returns nil outside exam-term weeks. One school letter
 // per benched enrolled prodigy, one mentor letter per benched mentored
 // prodigy, and a single board letter per week. A breakout kid (10+ apps) is
 // moved to the club-forced track by the board letter.

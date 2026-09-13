@@ -3,7 +3,6 @@ package datamanager
 import (
 	"math/rand"
 	"strings"
-	"time"
 
 	"football_sim/pkg/models"
 )
@@ -21,14 +20,14 @@ type EliteProdigyConfig struct {
 	AdultHeightAge int     `json:"adult_height_age"`
 }
 
-// EliteProdigyConfigs lists the 12 canonical Under-14 Outfield Franchise Prodigies.
+// EliteProdigyConfigs lists the 12 canonical Under-17 Outfield Franchise Prodigies.
 // Notice potentials are strictly clamped in [93, 96] and are never 99.
 var EliteProdigyConfigs = []EliteProdigyConfig{
 	{
 		ClubID:         "LAL-BAR",
 		FullName:       "Venjamin Valerio",
 		Position:       "ST",
-		Age:            14,
+		Age:            17,
 		HeightCM:       173.0,
 		WeightKG:       61.0,
 		BaselineOVR:    78,
@@ -39,7 +38,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "LAL-RMA",
 		FullName:       "Maverick Cantalejo",
 		Position:       "CAM",
-		Age:            14,
+		Age:            17,
 		HeightCM:       169.0,
 		WeightKG:       57.0,
 		BaselineOVR:    77,
@@ -50,7 +49,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "LAL-ATM",
 		FullName:       "Yeshua Emmanuel Gocotano",
 		Position:       "CF",
-		Age:            14,
+		Age:            17,
 		HeightCM:       171.0,
 		WeightKG:       60.0,
 		BaselineOVR:    75,
@@ -61,7 +60,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "EPL-ARS",
 		FullName:       "Izyan Levin Bantol",
 		Position:       "CAM",
-		Age:            14,
+		Age:            17,
 		HeightCM:       170.0,
 		WeightKG:       58.0,
 		BaselineOVR:    76,
@@ -72,7 +71,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "EPL-LIV",
 		FullName:       "James Bernard Rizon",
 		Position:       "RW",
-		Age:            14,
+		Age:            17,
 		HeightCM:       178.0,
 		WeightKG:       66.0,
 		BaselineOVR:    76,
@@ -83,7 +82,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "BUN-BAY",
 		FullName:       "Reid Randell Libatan",
 		Position:       "LW",
-		Age:            14,
+		Age:            17,
 		HeightCM:       176.0,
 		WeightKG:       64.0,
 		BaselineOVR:    76,
@@ -94,7 +93,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "BUN-DOR",
 		FullName:       "Ashle Zylle Baguio",
 		Position:       "CAM",
-		Age:            14,
+		Age:            17,
 		HeightCM:       168.0,
 		WeightKG:       57.0,
 		BaselineOVR:    75,
@@ -105,7 +104,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "SEA-INT",
 		FullName:       "Cliergy Jave Lanticse",
 		Position:       "RW",
-		Age:            14,
+		Age:            17,
 		HeightCM:       169.0,
 		WeightKG:       58.0,
 		BaselineOVR:    75,
@@ -116,7 +115,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "SEA-NAP",
 		FullName:       "Ezail Zamora",
 		Position:       "ST",
-		Age:            14,
+		Age:            17,
 		HeightCM:       172.0,
 		WeightKG:       61.0,
 		BaselineOVR:    77,
@@ -127,7 +126,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "SEA-MIL",
 		FullName:       "Earl Josh Hernando",
 		Position:       "LW",
-		Age:            14,
+		Age:            17,
 		HeightCM:       170.0,
 		WeightKG:       59.0,
 		BaselineOVR:    75,
@@ -138,7 +137,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "FL1-PSG",
 		FullName:       "Rich Lorenz Suico",
 		Position:       "LW",
-		Age:            14,
+		Age:            17,
 		HeightCM:       170.0,
 		WeightKG:       59.0,
 		BaselineOVR:    75,
@@ -149,7 +148,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		ClubID:         "EPL-TOT",
 		FullName:       "Jhed Anthony Guinita",
 		Position:       "CF",
-		Age:            14,
+		Age:            17,
 		HeightCM:       174.0,
 		WeightKG:       62.0,
 		BaselineOVR:    75,
@@ -199,7 +198,9 @@ func ShuffleProdigyHomes(r *rand.Rand) map[string]string {
 	}
 
 	if r == nil {
-		r = rand.New(rand.NewSource(time.Now().UnixNano()))
+		// Fixed fallback seed: explicit callers (career/new) pass a
+		// universe-derived stream; wall-clock defaults are banned.
+		r = rand.New(rand.NewSource(20260804))
 	}
 	r.Shuffle(len(clubs), func(i, j int) {
 		clubs[i], clubs[j] = clubs[j], clubs[i]
@@ -227,10 +228,11 @@ type ProdigyDrawRow struct {
 	ShortName string `json:"short_name"`
 }
 
-// InitializeEliteProdigies configures the 12 canonical U-14 outfield franchise wonderkids.
-// Relocates Jhed Anthony Guinita from Marseille (FL1-OM) to Tottenham Hotspur (EPL-TOT).
-// Enforces age 14, middle school status, category FWD, WK_ ID, exact potential [93, 96],
+// InitializeEliteProdigies configures the 12 canonical U-17 outfield franchise wonderkids.
+// Enforces age 17, high-school/academy status, category FWD, WK_ ID, exact potential [93, 96],
 // registers with GrowthEngine, and recalculates clamped baseline valuations.
+// Default club homes come from the dataset; they are not pinned (Guinita included)
+// and can be reshuffled onto any of the twelve designated clubs.
 func (dm *DataManager) InitializeEliteProdigies() error {
 	dm.Wonderkids = make([]*models.Player, 0, len(EliteProdigyConfigs))
 	homes := dm.ProdigyHomes
@@ -293,7 +295,7 @@ func (dm *DataManager) InitializeEliteProdigies() error {
 				ClubID:            cid,
 				ContractYears:     3,
 				Loyalty:           70,
-				Education:         "middle_school",
+				Education:         "high_school",
 			}
 			club.Squad = append([]*models.Player{prodigy}, club.Squad...)
 			club.SquadSize = len(club.Squad)
@@ -336,14 +338,14 @@ func (dm *DataManager) InitializeEliteProdigies() error {
 			}
 		}
 
-		// Set exact under-17 biometrics & attributes
+		// Set exact U-17 biometrics & attributes
 		prodigy.Age = cfg.Age
 		prodigy.Position = cfg.Position
 		prodigy.OVR = cfg.BaselineOVR
 		prodigy.UniverseWonderkid = true
 		// Every franchise prodigy is an attacker, CAMs included
 		prodigy.Category = "FWD"
-		prodigy.Education = "middle_school"
+		prodigy.Education = prodigy.EducationForAge()
 		prodigy.EducationPending = false
 		prodigy.SchoolWant = models.SchoolWantFor(prodigy.FullName)
 
@@ -395,10 +397,15 @@ func (dm *DataManager) InitializeEliteProdigies() error {
 	return nil
 }
 
-// AdoptU14Prodigies resets all franchise wonderkids back to age 14, middle school status,
-// and regenerates their biometric profiles in the GrowthEngine.
-// Returns true if any changes were made.
+// AdoptU14Prodigies is retained as a name for existing tests; it now restores
+// canonical U-17 age and education from EliteProdigyConfigs.
 func (dm *DataManager) AdoptU14Prodigies() bool {
+	return dm.AdoptCanonicalProdigies()
+}
+
+// AdoptCanonicalProdigies resets franchise wonderkids to their configured U-17
+// age, matching education, and regenerates biometric profiles.
+func (dm *DataManager) AdoptCanonicalProdigies() bool {
 	byName := make(map[string]EliteProdigyConfig, len(EliteProdigyConfigs))
 	for _, cfg := range EliteProdigyConfigs {
 		byName[strings.ToLower(cfg.FullName)] = cfg
@@ -411,16 +418,21 @@ func (dm *DataManager) AdoptU14Prodigies() bool {
 			continue
 		}
 		expectedID := ProdigyStableID(cfg.FullName)
-		if p.Age != 14 || p.Education != "middle_school" || p.PlayerID != expectedID {
-			p.Age = 14
-			p.Education = "middle_school"
+		wantEdu := (&models.Player{UniverseWonderkid: true, Age: cfg.Age}).EducationForAge()
+		if p.Age != cfg.Age || p.Education != wantEdu || p.PlayerID != expectedID || p.Category != "FWD" {
+			p.Age = cfg.Age
+			p.Education = wantEdu
 			p.EducationPending = false
 			p.PlayerID = expectedID
+			// Every franchise prodigy is an attacker, CAMs included; the
+			// category feeds attribute seeding below, so fix it first.
+			// Potential always comes from EliteProdigyConfigs ([93, 96]).
+			p.Category = "FWD"
 			if dm.GrowthEngine != nil {
 				_, attrs := dm.GrowthEngine.RegisterProdigy(
 					p.PlayerID,
 					p.FullName,
-					14,
+					cfg.Age,
 					cfg.HeightCM,
 					cfg.WeightKG,
 					p.Category,
@@ -437,6 +449,18 @@ func (dm *DataManager) AdoptU14Prodigies() bool {
 		}
 	}
 	return changed
+}
+
+// CanonicalPotential returns the configured potential for a franchise
+// wonderkid by full name. Used where only the player record (not its
+// biometric profile) is at hand; keeps bioless edge states inside [93, 96].
+func CanonicalPotential(fullName string) (int, bool) {
+	for _, cfg := range EliteProdigyConfigs {
+		if cfg.FullName == fullName {
+			return cfg.Potential, true
+		}
+	}
+	return 0, false
 }
 
 // ApplyProdigyHomes redistributes each franchise wonderkid to an elite club (one per club).

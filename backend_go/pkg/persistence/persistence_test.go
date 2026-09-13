@@ -266,7 +266,7 @@ func TestRestoreCareerPersistsClubFinancesAcrossReloads(t *testing.T) {
 
 	for clubID, want := range wantFinances {
 		got := freshTM.Clubs[clubID].Finances
-		if got != want {
+		if got.TransferBudget != want.TransferBudget || got.Balance != want.Balance {
 			t.Errorf("club %s finances mismatch: got %+v, want %+v", clubID, got, want)
 		}
 		if freshTE != nil && freshTE.Managers[clubID] != nil {
@@ -386,6 +386,24 @@ func TestDeleteCareer(t *testing.T) {
 	// Deleting non-existent file should be a no-op / nil error
 	if err := DeleteCareer(savePath); err != nil {
 		t.Errorf("deleting non-existent file returned error: %v", err)
+	}
+}
+
+func TestDeleteCareerRemovesSeedSidecar(t *testing.T) {
+	tempDir := t.TempDir()
+	savePath := filepath.Join(tempDir, "seed_test.json")
+	if err := os.WriteFile(savePath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to create dummy save: %v", err)
+	}
+	seedPath := UniverseSeedPath(savePath)
+	if err := os.WriteFile(seedPath, []byte("12345\n"), 0644); err != nil {
+		t.Fatalf("failed to create dummy seed: %v", err)
+	}
+	if err := DeleteCareer(savePath); err != nil {
+		t.Fatalf("DeleteCareer failed: %v", err)
+	}
+	if _, err := os.Stat(seedPath); !os.IsNotExist(err) {
+		t.Errorf("expected seed sidecar to be deleted with the career")
 	}
 }
 

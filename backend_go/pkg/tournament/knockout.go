@@ -3,10 +3,50 @@ package tournament
 import (
 	"math"
 	"math/rand"
+	"sort"
 
 	"football_sim/pkg/matchreport"
 	"football_sim/pkg/models"
 )
+
+// worldTieLevelOnAggregate reports whether a two-legged tie is level on
+// aggregate given leg 1's finished scoreline and leg 2's live payload totals.
+// Venues swap between legs, so goals are summed per club, not per venue.
+// There is no away-goals rule: level aggregates go to extra time.
+// Club order is sorted, never Go map iteration, keeping draws deterministic.
+func worldTieLevelOnAggregate(leg1 *Fixture, leg2HomeID, leg2AwayID string, leg2HG, leg2AG int) bool {
+	if leg1 == nil || leg1.HomeGoals == nil || leg1.AwayGoals == nil {
+		return leg2HG == leg2AG
+	}
+	ids := []string{leg1.HomeID, leg1.AwayID, leg2HomeID, leg2AwayID}
+	sort.Strings(ids)
+	uniq := ids[:0]
+	for _, id := range ids {
+		if len(uniq) == 0 || uniq[len(uniq)-1] != id {
+			uniq = append(uniq, id)
+		}
+	}
+	if len(uniq) != 2 {
+		return leg2HG == leg2AG
+	}
+	total := func(id string) int {
+		t := 0
+		if leg1.HomeID == id {
+			t += *leg1.HomeGoals
+		}
+		if leg1.AwayID == id {
+			t += *leg1.AwayGoals
+		}
+		if leg2HomeID == id {
+			t += leg2HG
+		}
+		if leg2AwayID == id {
+			t += leg2AG
+		}
+		return t
+	}
+	return total(uniq[0]) == total(uniq[1])
+}
 
 func (tm *TournamentManager) applyKnockoutDecider(f *Fixture, home, away *models.Club, payload *matchreport.InstantPayload) {
 	rng := tm.RNG
@@ -24,7 +64,8 @@ func (tm *TournamentManager) applyKnockoutDeciderWithRNG(f *Fixture, home, away 
 	if f == nil || payload == nil {
 		return
 	}
-	if f.Competition != "ucl" && f.Competition != "super-cup" {
+	worldKnockout := tm.isWorldKnockoutFixture(f)
+	if f.Competition != "ucl" && f.Competition != "super-cup" && !worldKnockout {
 		return
 	}
 	if rng == nil {
@@ -32,7 +73,31 @@ func (tm *TournamentManager) applyKnockoutDeciderWithRNG(f *Fixture, home, away 
 	}
 
 	needsET := false
-	if f.Competition == "super-cup" && payload.HomeGoals == payload.AwayGoals {
+	if worldKnockout && f.TieID != "" {
+		legs := tm.worldTieLegsUnlocked(f.TieID)
+		if len(legs) == 2 {
+			// Two-legged European tie: first leg never goes to extra time;
+			// the decider goes to ET only when the aggregate is level.
+			if f.Leg == 2 {
+				var leg1 *Fixture
+				for _, l := range legs {
+					if l.Leg == 1 {
+						leg1 = l
+						break
+					}
+				}
+				if leg1 != nil && leg1.Status == "finished" && leg1.HomeGoals != nil && leg1.AwayGoals != nil {
+					needsET = worldTieLevelOnAggregate(leg1, f.HomeID, f.AwayID, payload.HomeGoals, payload.AwayGoals)
+				}
+			} else {
+				return
+			}
+		} else if payload.HomeGoals == payload.AwayGoals {
+			needsET = true
+		}
+	} else if worldKnockout && payload.HomeGoals == payload.AwayGoals {
+		needsET = true
+	} else if f.Competition == "super-cup" && payload.HomeGoals == payload.AwayGoals {
 		needsET = true
 	} else if f.Stage == "Final" && payload.HomeGoals == payload.AwayGoals {
 		needsET = true
@@ -67,7 +132,27 @@ func (tm *TournamentManager) applyKnockoutDeciderWithRNG(f *Fixture, home, away 
 	}
 
 	stillLevel := false
-	if f.Competition == "super-cup" || f.Stage == "Final" {
+	if worldKnockout && f.TieID != "" {
+		legs := tm.worldTieLegsUnlocked(f.TieID)
+		if len(legs) == 2 && f.Leg == 2 {
+			var leg1 *Fixture
+			for _, l := range legs {
+				if l.Leg == 1 {
+					leg1 = l
+					break
+				}
+			}
+			if leg1 != nil && leg1.HomeGoals != nil && leg1.AwayGoals != nil {
+				stillLevel = worldTieLevelOnAggregate(leg1, f.HomeID, f.AwayID, payload.HomeGoals, payload.AwayGoals)
+			} else {
+				stillLevel = payload.HomeGoals == payload.AwayGoals
+			}
+		} else if len(legs) == 2 && f.Leg == 1 {
+			stillLevel = false
+		} else {
+			stillLevel = payload.HomeGoals == payload.AwayGoals
+		}
+	} else if worldKnockout || f.Competition == "super-cup" || f.Stage == "Final" {
 		stillLevel = payload.HomeGoals == payload.AwayGoals
 	} else {
 		leg1 := tm.uclLeg(f.TieID, 1)
@@ -285,10 +370,12 @@ func (tm *TournamentManager) resolveTwoLegged(tie *CupTie, tieID string) {
 	tie.DecidedBy = leg2.DecidedBy
 	tie.Penalties = append([]int(nil), leg2.Penalties...)
 	if len(leg2.Penalties) >= 2 {
+		// Penalties[0] belongs to the leg-2 home side, which is tie.AwayID:
+		// return legs always swap venues (see makeUCLLeg call sites).
 		if leg2.Penalties[0] > leg2.Penalties[1] {
-			tie.WinnerID = tie.HomeID
-		} else {
 			tie.WinnerID = tie.AwayID
+		} else {
+			tie.WinnerID = tie.HomeID
 		}
 	} else {
 		tie.WinnerID = tie.HomeID
