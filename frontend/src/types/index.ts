@@ -1783,3 +1783,39 @@ export interface ClubScoutingResponse {
   shortlist: ScoutingReport[];
 }
 
+
+export interface Achievement {
+  id: string;
+  kind: 'club' | 'player' | 'manager';
+  title: string;
+  description: string;
+  subject_id: string;
+  subject_name: string;
+  season: string;
+  matchweek: number;
+  unlock_key: string;
+}
+
+export interface AchievementDefinition {
+  id: string;
+  kind: 'club' | 'player' | 'manager';
+  title: string;
+  description: string;
+  unlocked: boolean;
+}
+
+export interface YoungestScorerRecord {
+  player_id: string;
+  player_name: string;
+  club_id: string;
+  age: number;
+  season: string;
+  matchweek: number;
+}
+
+export interface AchievementsResponse {
+  definitions: AchievementDefinition[];
+  achievements: Achievement[];
+  youngest_scorer_record: YoungestScorerRecord | null;
+}
+

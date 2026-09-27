@@ -35,6 +35,10 @@ type TournamentManager struct {
 	DerbyHeat             map[string]int
 	DerbiesPlayedThisMW   map[string]bool
 	MilestonesFired       map[string]map[string]bool
+	Achievements          []Achievement
+	AchievementsFired     map[string]bool
+	ClubUnbeatenRuns      map[string]int
+	YoungestScorer        *YoungestScorerRecord
 	ManagerConsecutiveHot map[string]int
 	ManagerLastChange     map[string]int
 	ManagerHistory        []ManagerHistoryEntry
@@ -130,6 +134,9 @@ func NewTournamentManager(eliteClubs []*models.Club, ge *growth.GrowthEngine, se
 		DerbyHeat:             heat,
 		DerbiesPlayedThisMW:   map[string]bool{},
 		MilestonesFired:       make(map[string]map[string]bool),
+		Achievements:          make([]Achievement, 0),
+		AchievementsFired:     map[string]bool{},
+		ClubUnbeatenRuns:      map[string]int{},
 		ManagerConsecutiveHot: make(map[string]int),
 		ManagerLastChange:     make(map[string]int),
 		ManagerHistory:        make([]ManagerHistoryEntry, 0),

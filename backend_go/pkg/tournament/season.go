@@ -112,6 +112,7 @@ func (tm *TournamentManager) archiveSeasonUnlocked() {
 			"trophies": trophies,
 		})
 	}
+	tm.evaluateSeasonAchievementsUnlocked()
 }
 
 func composeSeasonRecap(row map[string]interface{}) string {

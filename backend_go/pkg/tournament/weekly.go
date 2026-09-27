@@ -83,6 +83,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 		tm.Inbox = append([]InboxItem{n}, tm.Inbox...)
 	}
 	tm.generateWatchlistDigestUnlocked(completedMW)
+	tm.evaluateWeeklyAchievementsUnlocked(completedMW)
 	tm.DerbiesPlayedThisMW = map[string]bool{}
 }
 

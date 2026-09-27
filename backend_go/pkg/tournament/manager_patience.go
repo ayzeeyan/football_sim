@@ -82,6 +82,7 @@ func (tm *TournamentManager) evaluateManagerTenureWithPatience(completedMW int) 
 		tm.ManagerHistory = append(tm.ManagerHistory, entry)
 		tm.ManagerLastChange[club.ClubID] = completedMW
 		tm.ManagerConsecutiveHot[club.ClubID] = 0
+		tm.unlockSackingAchievementUnlocked(club, old.Name, completedMW)
 		tm.PushInbox(
 			"manager",
 			fmt.Sprintf("BREAKING: %s sack %s; %s appointed", club.ClubName, old.Name, next.Name),

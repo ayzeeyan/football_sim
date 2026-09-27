@@ -1,5 +1,5 @@
 import { apiFetch } from './core';
-import type { Club, SeasonAwards, TrophyCabinetClub, AllTimeRecordsData, NXGNPlayer } from '../../types';
+import type { Club, SeasonAwards, TrophyCabinetClub, AllTimeRecordsData, NXGNPlayer, AchievementsResponse } from '../../types';
 
 
 export interface ScoringRaceRow {
@@ -299,3 +299,12 @@ export function fetchAdvancedSeasonStats(): Promise<AdvancedSeasonStats> {
     shot_detail_note: '',
   });
 }
+
+export function fetchAchievements(): Promise<AchievementsResponse> {
+  return apiFetch<AchievementsResponse>('/achievements', undefined, {
+    definitions: [],
+    achievements: [],
+    youngest_scorer_record: null,
+  });
+}
+

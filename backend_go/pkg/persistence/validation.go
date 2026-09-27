@@ -347,6 +347,47 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
+	// Achievement ledger (SaveVersion 11): entries must be well-formed and
+	// reference known entities; unbeaten runs must not be negative.
+	knownAchievements := map[string]bool{}
+	for _, def := range tournament.AchievementDefinitions() {
+		knownAchievements[def.ID] = true
+	}
+	for _, a := range snap.Achievements {
+		if !knownAchievements[a.ID] {
+			return fmt.Errorf("career snapshot achievement references unknown id %q", a.ID)
+		}
+		if a.UnlockKey == "" {
+			return fmt.Errorf("career snapshot achievement %q has no unlock key", a.ID)
+		}
+		if !snap.AchievementsFired[a.UnlockKey] {
+			return fmt.Errorf("career snapshot achievement %q is not marked fired", a.UnlockKey)
+		}
+		switch a.Kind {
+		case "club":
+			if _, ok := clubIDs[a.SubjectID]; !ok {
+				return fmt.Errorf("career snapshot achievement %q references unknown club %q", a.ID, a.SubjectID)
+			}
+		case "player":
+			if _, ok := playerIDs[a.SubjectID]; !ok {
+				return fmt.Errorf("career snapshot achievement %q references unknown player %q", a.ID, a.SubjectID)
+			}
+		}
+	}
+	for clubID, run := range snap.ClubUnbeatenRuns {
+		if run < 0 {
+			return fmt.Errorf("career snapshot has negative unbeaten run %d for club %q", run, clubID)
+		}
+	}
+	if snap.YoungestScorer != nil {
+		if snap.YoungestScorer.Age <= 0 {
+			return fmt.Errorf("career snapshot youngest scorer has invalid age %d", snap.YoungestScorer.Age)
+		}
+		if _, ok := playerIDs[snap.YoungestScorer.PlayerID]; !ok {
+			return fmt.Errorf("career snapshot youngest scorer references unknown player %q", snap.YoungestScorer.PlayerID)
+		}
+	}
+
 	return nil
 }
 

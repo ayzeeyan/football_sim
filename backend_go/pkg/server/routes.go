@@ -76,6 +76,7 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/scoring-race", Handler: s.handleGetScoringRace, Summary: "Scoring race"},
 		{Method: "GET", Path: "/api/trophies", Handler: s.handleGetTrophies, Summary: "Trophy cabinet"},
 		{Method: "GET", Path: "/api/records", Handler: s.handleGetRecords, Summary: "All-time records"},
+		{Method: "GET", Path: "/api/achievements", Handler: s.handleGetAchievements, Summary: "Milestone ledger: catalogue, unlocked achievements, youngest-scorer record"},
 		{Method: "GET", Path: "/api/export/standings", Handler: s.handleExportStandings, Summary: "CSV export of one domestic league table (?league=)"},
 		{Method: "GET", Path: "/api/export/squad", Handler: s.handleExportSquad, Summary: "CSV export of one club squad (?club_id=)"},
 		{Method: "GET", Path: "/api/export/fixtures", Handler: s.handleExportFixtures, Summary: "CSV export of every fixture with its scoreline"},

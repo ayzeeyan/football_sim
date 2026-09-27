@@ -5,6 +5,7 @@ import type { Fixture, NXGNPlayer } from '../../types';
 import { Card, ClubCrest, EmptyState, LoadingState, PanelHeader } from '../ui/ui';
 import { cx } from '../../lib/format';
 import { downloadJSON } from '../../lib/export';
+import { AchievementsPanel } from '../career/AchievementsPanel';
 import { PlayerNameButton } from '../clubs/PlayerSheet';
 import { PostMatchModal } from '../postmatch/PostMatchBroadcast';
 import { soundManager } from '../../audio/webAudio';
@@ -103,7 +104,7 @@ const SeasonCard: React.FC<{ row: SeasonHistoryRow }> = ({ row }) => (
 export const HistoryTab: React.FC = () => {
   const [data, setData] = useState<CareerHistory | null>(null);
   const [loading, setLoading] = useState(true);
-  const [subTab, setSubTab] = useState<'seasons' | 'cabinet' | 'records' | 'nxgn'>('seasons');
+  const [subTab, setSubTab] = useState<'seasons' | 'cabinet' | 'records' | 'nxgn' | 'achievements'>('seasons');
   const [nxgnList, setNxgnList] = useState<NXGNPlayer[]>([]);
   const [nxgnLoading, setNxgnLoading] = useState(false);
   const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
@@ -150,7 +151,7 @@ export const HistoryTab: React.FC = () => {
           right={
             <div className="flex items-center gap-2">
               <div className="section-tabs border rounded-sm" role="tablist">
-              {(['seasons', 'cabinet', 'records', 'nxgn'] as const).map((t) => (
+              {(['seasons', 'cabinet', 'records', 'nxgn', 'achievements'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => {
@@ -162,7 +163,7 @@ export const HistoryTab: React.FC = () => {
                     subTab === t ? 'section-tab-active' : ''
                   )}
                 >
-                  {t === 'seasons' ? 'Campaigns' : t === 'cabinet' ? 'Trophy Cabinet' : t === 'records' ? 'Record Book' : 'NXGN 50'}
+                  {t === 'seasons' ? 'Campaigns' : t === 'cabinet' ? 'Trophy Cabinet' : t === 'records' ? 'Record Book' : t === 'nxgn' ? 'NXGN 50' : 'Milestones'}
                 </button>
               ))}
               </div>
@@ -441,6 +442,9 @@ export const HistoryTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 5. MILESTONE LEDGER VIEW */}
+      {subTab === 'achievements' && <AchievementsPanel />}
 
       {/* 4. NXGN 50 VIEW */}
       {subTab === 'nxgn' && (
