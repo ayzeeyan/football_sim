@@ -5,6 +5,7 @@ import { usePlayerSheet } from '../clubs/PlayerSheet';
 import { Activity, ArrowRight, BarChart3, List, Table2, Users } from 'lucide-react';
 import { soundManager } from '../../audio/webAudio';
 import { cx } from '../../lib/format';
+import { focusTabAt, nextTabIndex } from '../../lib/rovingTabindex';
 import { composeMatchStory, normalizeTeamStats, otherResultsFor } from '../../lib/matchStory';
 import { fetchFixture, fetchFixtureSummaries } from '../../services/api';
 import { MatchResultHeader } from './MatchResultHeader';
@@ -53,11 +54,10 @@ const TABS: Array<{ id: PostTab; label: string; icon: React.ElementType }> = [
 function handlePostTabKey(event: React.KeyboardEvent<HTMLDivElement>) {
   const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
   const index = tabs.indexOf(event.target as HTMLButtonElement);
-  if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const next = index < 0 ? null : nextTabIndex(event.key, index, tabs.length);
+  if (next == null) return;
   event.preventDefault();
-  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-  tabs[next]?.focus();
-  tabs[next]?.click();
+  focusTabAt(event.currentTarget, next);
 }
 
 export const PostMatchBroadcast: React.FC<PostMatchBroadcastProps> = ({

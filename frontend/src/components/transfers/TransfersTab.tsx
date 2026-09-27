@@ -6,6 +6,7 @@ import { soundManager } from '../../audio/webAudio';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { formatMillions, cx, stripEmojis } from '../../lib/format';
 import { getClubCrestUrlByShort } from '../../lib/clubLogos';
+import { focusTabAt, nextTabIndex } from '../../lib/rovingTabindex';
 import { Badge, Card, ClubDot, ConfirmBar, EmptyState, ErrorState, LoadingState, PanelHeader, PrimaryButton, ProgressBar } from '../ui/ui';
 import { usePlayerSheet } from '../clubs/PlayerSheet';
 
@@ -141,20 +142,14 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
   const startNextSeason = canStartNextSeason(data);
   const isDeadlineDay = !!data.deadline_day || (windowOpen && windowWeek === maxWeeks);
   const handleSubTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     const tablist = event.currentTarget.closest('[role="tablist"]');
     if (!tablist) return;
     const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-    if (tabs.length === 0) return;
-    event.preventDefault();
     const current = tabs.indexOf(event.currentTarget);
-    const next = event.key === 'Home'
-      ? 0
-      : event.key === 'End'
-        ? tabs.length - 1
-        : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-    tabs[next]?.focus();
-    tabs[next]?.click();
+    const next = current < 0 ? null : nextTabIndex(event.key, current, tabs.length);
+    if (next == null) return;
+    event.preventDefault();
+    focusTabAt(tablist, next);
   };
 
   return (

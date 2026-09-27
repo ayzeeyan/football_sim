@@ -13,6 +13,7 @@ import { FormationPitch } from '../matches/FormationPitch';
 import { FormGuide, HeadToHeadSummary, MatchPulseCard, PlayersToWatch } from './MatchCentreInsights';
 import { HeadToHeadPanel } from './HeadToHeadPanel';
 import { LeagueContextCard } from './LeagueContextCard';
+import { focusTabAt, nextTabIndex } from '../../lib/rovingTabindex';
 
 type PreMatchTab = 'overview' | 'lineups' | 'tactics' | 'news' | 'h2h' | 'context';
 
@@ -49,11 +50,10 @@ function importance(fixture: Fixture): string {
 export function handleFixtureTabKey(event: React.KeyboardEvent<HTMLDivElement>) {
   const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
   const index = tabs.indexOf(event.target as HTMLButtonElement);
-  if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const next = index < 0 ? null : nextTabIndex(event.key, index, tabs.length);
+  if (next == null) return;
   event.preventDefault();
-  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-  tabs[next]?.focus();
-  tabs[next]?.click();
+  focusTabAt(event.currentTarget, next);
 }
 
 function AbsenceList({ players }: { players: Player[] }) {
