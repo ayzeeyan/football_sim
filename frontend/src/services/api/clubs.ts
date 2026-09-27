@@ -1,5 +1,5 @@
 import { apiFetch } from './core';
-import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity } from '../../types';
+import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity, ClubScoutingResponse } from '../../types';
 
 
 // --- Clubs & squads ---------------------------------------------------------
@@ -63,4 +63,13 @@ export function fetchHeadToHead(clubA: string, clubB: string): Promise<HeadToHea
     derby_heat: 50,
     recent_matches: [],
   });
-}
+}
+
+export function fetchClubScouting(clubId: string, limit = 12): Promise<ClubScoutingResponse | null> {
+  return apiFetch<ClubScoutingResponse | null>(
+    `/clubs/${encodeURIComponent(clubId)}/scouting?limit=${limit}`,
+    undefined,
+    null,
+  );
+}
+

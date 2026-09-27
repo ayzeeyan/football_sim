@@ -397,6 +397,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/health` — `{ "backend": "go", "status": "ok" }`
 - `GET /api/stats` — Diagnostics snapshot (`DiagnosticsSnapshot`)
 - `GET /api/clubs`, `/api/clubs/{club_id}/squad`, `/api/clubs/{club_id}/xi`, `/api/clubs/{club_id}/history`, `/api/clubs/{club_id}/profile`, `/api/clubs/{club_id}/fixtures`, `/api/clubs/{club_id}/transfers`
+- `GET /api/clubs/{club_id}/scouting?limit=` — deterministic AI recruitment shortlist (consistency, ceiling, form, value trend, risk); observational only
 - `GET /api/h2h/{club_a}/{club_b}`, `/api/players/{player_id}`, `/api/search?q=...`
 - `GET /api/prodigies`, `/api/prodigies/watch`, `/api/wonderkids` (legacy alias)
 - `GET /api/prodigies/{player_id}/timeline`, `/api/growth/milestones`, `/api/training/status`, `/api/training/projection/{player_id}`, `/api/nxgn50`

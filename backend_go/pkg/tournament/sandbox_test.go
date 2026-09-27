@@ -6,18 +6,20 @@ import (
 	"testing"
 )
 
-// sandboxSnapshot captures every observable the sandbox must not touch:
-// the fixture itself, the full league table, and per-player season stats.
+// sandboxSnapshot captures every observable a read-only path must not touch:
+// an optional fixture, the full league table, and per-player season stats.
+// An empty fixtureID skips the fixture section (for non-fixture paths).
 func sandboxSnapshot(t *testing.T, tm *TournamentManager, fixtureID string) []byte {
 	t.Helper()
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
-	f := tm.findFixtureUnlocked(fixtureID)
-	if f == nil {
-		t.Fatalf("fixture %s vanished", fixtureID)
-	}
-	snapshot := map[string]interface{}{
-		"fixture": f,
+	snapshot := map[string]interface{}{}
+	if fixtureID != "" {
+		f := tm.findFixtureUnlocked(fixtureID)
+		if f == nil {
+			t.Fatalf("fixture %s vanished", fixtureID)
+		}
+		snapshot["fixture"] = f
 	}
 	if tm.World != nil {
 		tables := map[string]interface{}{}

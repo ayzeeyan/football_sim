@@ -1752,3 +1752,34 @@ export interface WhatIfResult {
   table?: WhatIfTable;
 }
 
+
+export interface ScoutingReport {
+  player_id: string;
+  full_name: string;
+  position: string;
+  category: string;
+  age: number;
+  ovr: number;
+  club_id: string;
+  club_name: string;
+  club_short: string;
+  league: string;
+  region: string;
+  on_loan: boolean;
+  market_value_eur: number;
+  potential_ceiling: number;
+  ceiling_delta: number;
+  consistency: number;
+  form: string;
+  value_trend: string;
+  risk: number;
+  risk_factors?: string[];
+  verdict: string;
+  scout_score: number;
+}
+
+export interface ClubScoutingResponse {
+  club_id: string;
+  shortlist: ScoutingReport[];
+}
+

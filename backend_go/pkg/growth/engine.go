@@ -419,6 +419,20 @@ func (ge *GrowthEngine) GetProgressionHistory(playerID string) []TimelineEntry {
 	return result
 }
 
+// PotentialFor returns the tracked biometric potential for a player when one
+// exists (prodigies and other registered profiles). The boolean reports
+// whether a tracked value was found; callers fall back to their own
+// projection otherwise.
+func (ge *GrowthEngine) PotentialFor(playerID string) (int, bool) {
+	ge.mu.Lock()
+	defer ge.mu.Unlock()
+	bio := ge.Biometrics[playerID]
+	if bio == nil || bio.Potential <= 0 {
+		return 0, false
+	}
+	return bio.Potential, true
+}
+
 // GetProdigyData returns a snapshot view for the Wonderkid Lab UI.
 func (ge *GrowthEngine) GetProdigyData(playerID, posCat string) (map[string]interface{}, bool) {
 	ge.mu.Lock()

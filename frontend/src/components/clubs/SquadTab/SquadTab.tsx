@@ -13,6 +13,7 @@ import { FormationPitch } from '../../matches/FormationPitch';
 
 import { CLUB_PROFILE_TABS, FIXTURE_COMP_FILTERS, formatWageBill, isSquadFatigued, isSquadInForm, isSquadUnhappy, passesSquadStatus, squadStatusCounts, type ClubProfileTab, type SquadStatusFilter, type SquadTabProps, type SquadViewMode } from './status';
 import { ClubFinancesPanel, ClubFixturesPanel, ClubHistoryPanel, ClubOverviewPanel, ClubTransfersPanel } from './panels';
+import { RecruitmentPanel } from './RecruitmentPanel';
 
 export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatchClub, onWatchFixture }) => {
   const { openPlayer } = usePlayerSheet();
@@ -833,6 +834,10 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatc
 
       {selectedClub && profileTab === 'history' && (
         <ClubHistoryPanel history={clubHistory} />
+      )}
+
+      {selectedClub && profileTab === 'recruitment' && (
+        <RecruitmentPanel club={selectedClub} onOpenPlayer={(id) => openPlayer(id)} />
       )}
 
       {/* Dynamic View Mode Content */}

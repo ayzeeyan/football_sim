@@ -34,6 +34,7 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/clubs/{club_id}/profile", Handler: s.handleGetClubProfile, Summary: "Club identity and finances"},
 		{Method: "GET", Path: "/api/clubs/{club_id}/fixtures", Handler: s.handleGetClubFixtures, Summary: "Club fixture list"},
 		{Method: "GET", Path: "/api/clubs/{club_id}/transfers", Handler: s.handleGetClubTransfers, Summary: "Club transfer activity"},
+		{Method: "GET", Path: "/api/clubs/{club_id}/scouting", Handler: s.handleGetClubScouting, Summary: "AI recruitment shortlist for one club (?limit=)"},
 		{Method: "GET", Path: "/api/h2h/{club_a}/{club_b}", Handler: s.handleGetH2H, Summary: "Head-to-head record"},
 		{Method: "GET", Path: "/api/players/{player_id}", Handler: s.handleGetPlayerProfile, Summary: "Player profile"},
 
