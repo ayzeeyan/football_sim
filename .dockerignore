@@ -1,0 +1,10 @@
+.git
+.github
+.skills
+saves
+frontend/node_modules
+frontend/dist
+backend_go/cover*
+backend_go/coverage*
+**/*_test.go
+*.md
