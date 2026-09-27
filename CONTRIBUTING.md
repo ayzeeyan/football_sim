@@ -23,13 +23,16 @@ cd backend_go
 go test ./...
 go vet ./...
 go test -race -p=1 ./...
+gofmt -l .        # must print nothing
 
 cd ../frontend
+bun run lint      # Biome linter (CI enforces it)
 bun test
 bun run build
 ```
 
-Or from the repo root: `make check`.
+Or from the repo root: `make check`. CI also reports Go coverage and
+enforces a 25% frontend line-coverage floor.
 
 All gates must be green. Do not weaken or delete a failing test to make CI
 pass — if a test encodes a wrong assumption, say so explicitly in your PR and
@@ -71,7 +74,9 @@ fails the build if the docs and the registry drift.
 ## Frontend changes
 
 - Keep components in their domain directory (`components/<domain>/`).
-- Run `bun test` and `bun run build`; both must pass.
+- Run `bun run lint`, `bun test`, and `bun run build`; all must pass.
+- Format files you touch with `bunx biome format --write <files>`; do not
+  reformat the whole tree in the same change.
 - The UI is a neutral football-world viewer: every club is AI-controlled.
   Features that hand the user control of AI entities require an AGENTS.md
   amendment first — open an issue to discuss before implementing.

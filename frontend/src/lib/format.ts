@@ -59,6 +59,7 @@ export function loyaltyLabel(loyalty: number): string {
 /** Strips emoji/pictograph ranges from server-fed text so the UI stays word-led. */
 export function stripEmojis(text: string): string {
   return text
+    // biome-ignore lint/suspicious/noMisleadingCharacterClass: each combining mark is stripped individually, which is the intent
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]/gu, '')
     .replace(/\s{2,}/g, ' ')
     .trim();

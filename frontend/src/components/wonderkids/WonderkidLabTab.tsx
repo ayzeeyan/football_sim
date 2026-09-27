@@ -315,8 +315,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
               ) : selected.still_growing !== false ? (
                 <p className="text-[13px] text-sage">A second position opens after adult height ({selected.adult_height_age ?? 19}).</p>
               ) : (
-                <>
-                  {selected.position_path ? (
+                  selected.position_path ? (
                     <div>
                       <p className="text-[13px] text-bone">Learning {selected.position_path}</p>
                       <ProgressBar pct={selected.position_xp ?? 0} toneClass="bg-brass" className="h-1.5 mt-2" />
@@ -343,8 +342,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
                         <p className="text-[13px] text-sage">No path from this position.</p>
                       )}
                     </div>
-                  )}
-                </>
+                  )
               )}
             </div>
 

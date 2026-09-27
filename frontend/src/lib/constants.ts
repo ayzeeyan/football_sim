@@ -65,7 +65,6 @@ export function positionTone(category: Player['category']): string {
       return 'bg-[#5B7FA6]/15 text-[#9DBBDC] border border-[#5B7FA6]/30';
     case 'MID':
       return 'bg-[#8E86C8]/15 text-[#B9B3E6] border border-[#8E86C8]/30';
-    case 'FWD':
     default:
       return 'bg-pitchtone/15 text-[#A9CDBB] border border-pitchtone/30';
   }

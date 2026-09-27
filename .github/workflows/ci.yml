@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   backend:
-    name: Go tests, vet, and race detector
+    name: Go tests, vet, format, race, coverage
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,15 +23,23 @@ jobs:
         with:
           go-version-file: backend_go/go.mod
           cache-dependency-path: backend_go/go.sum
-      - name: Test
-        run: go test ./...
+      - name: Format check (gofmt)
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && echo "Run gofmt -w on the listed files" && exit 1)
+      - name: Format check (goimports)
+        run: |
+          go run golang.org/x/tools/cmd/goimports@latest -l . > /tmp/goimports.out
+          if [ -s /tmp/goimports.out ]; then cat /tmp/goimports.out && exit 1; fi
+      - name: Test with coverage
+        run: go test ./... -coverprofile=coverage.out -covermode=atomic
+      - name: Report coverage
+        run: go tool cover -func=coverage.out | tail -1
       - name: Vet
         run: go vet ./...
       - name: Race detector
         run: go test -race -p=1 ./...
 
   frontend:
-    name: React tests, typecheck, and build
+    name: React lint, tests, coverage, typecheck, build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,7 +53,13 @@ jobs:
           bun-version: latest
       - name: Install dependencies
         run: bun install
-      - name: Test
-        run: bun test
+      - name: Lint (Biome)
+        run: bun run lint
+      - name: Test with coverage threshold
+        run: |
+          bun test --coverage 2>&1 | tee coverage.txt
+          pct=$(grep "All files" coverage.txt | awk '{print $(NF-3)}' | cut -d. -f1)
+          echo "Frontend line coverage: ${pct}%"
+          if [ "${pct:-0}" -lt 25 ]; then echo "Coverage ${pct}% is below the 25% threshold" && exit 1; fi
       - name: Build
         run: bun run build

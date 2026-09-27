@@ -1,0 +1,72 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**/*.{ts,tsx,js,jsx,json}"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 140
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "useExhaustiveDependencies": {
+          "level": "off"
+        },
+        "noUnusedImports": "off",
+        "noUnusedFunctionParameters": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useImportType": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off",
+        "noTemplateCurlyInString": "off"
+      },
+      "a11y": {
+        "useButtonType": "off",
+        "useSemanticElements": "off",
+        "useAriaPropsSupportedByRole": "off",
+        "noNoninteractiveTabindex": "off"
+      },
+      "complexity": {
+        "useOptionalChain": "off",
+        "noImportantStyles": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ],
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
+}
