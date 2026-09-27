@@ -176,7 +176,7 @@ Clubs are governed by a 9-dimensional identity profile (all 0–100): reputation
 | 4-2-3-1 | GK, LB, LCB, RCB, RB, LDM, RDM, LW, CAM, RW, ST |
 | 4-4-2 | GK, LB, LCB, RCB, RB, LM, LCM, RCM, RM, LST, RST |
 
-Position fit hierarchy: **Natural** (+3000 selection score), **Good** (+2400, direct compatible lane), **Acceptable** (+1600, adjacent category role), **Emergency** (+0). Backend slot assignment (`models.ResolveTacticalSlots`) and the frontend pitch (`frontend/src/lib/tactics.ts`) are kept in exact sync.
+Position fit hierarchy: **Natural** (+3000 selection score), **Good** (+2400, direct compatible lane), **Acceptable** (+1600, adjacent category role), **Emergency** (+0). Backend slot assignment (`models.AssignPlayersToFormation` / `Club.GetStartingElevenSlotsForFormation`, with `models.NormalizeFormation`, `models.FormationSlots`, `models.PlayersFromStartingSlots`, and `models.PositionFitForPlayer`) and the frontend pitch (`frontend/src/lib/tactics.ts`) are kept in exact sync.
 
 ### Personalities
 
