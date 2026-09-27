@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { TABS, tabFromSlug, slugFromTab } from '../../lib/constants';
 
 const appSource = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-const apiSource = readFileSync(new URL('../../services/api.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const readApi = (name: string) => readFileSync(new URL(`../../services/api/${name}.ts`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const apiSource = ['competitions', 'world', 'transfers'].map(readApi).join('\n');
 const topBar = readFileSync(new URL('../layout/TopBar.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 describe('career home dashboard', () => {

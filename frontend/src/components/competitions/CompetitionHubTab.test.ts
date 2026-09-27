@@ -5,7 +5,7 @@ import { tieGroups, aggregateLine } from './CompetitionHubTab';
 import type { CompetitionFixtureRow } from '../../types';
 
 const appSource = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-const apiSource = readFileSync(new URL('../../services/api.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const apiSource = readFileSync(new URL('../../services/api/competitions.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 describe('competition hub navigation', () => {
   test('adds a competitions tab without replacing league compatibility', () => {
