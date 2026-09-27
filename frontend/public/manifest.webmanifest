@@ -1,0 +1,24 @@
+{
+  "name": "Top Five European Football Sim",
+  "short_name": "Top Five Sim",
+  "description": "Simulate a 96-club European football world with national teams, wonderkids, transfers, awards, and detailed match reports.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#12261C",
+  "theme_color": "#12261C",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import { AwardsCeremonyModal } from './components/career/AwardsCeremonyModal';
 import { ToastHost } from './components/layout/ToastHost';
 import { NewCareerModal } from './components/career/NewCareerModal';
 import { SaveSlotsModal } from './components/career/SaveSlotsModal';
+import { OfflineBanner } from './components/layout/OfflineBanner';
 import { PlayerSheetProvider } from './components/clubs/PlayerSheet';
 import { MatchweekDigestModal } from './components/postmatch/MatchweekDigestModal';
 import { soundManager } from './audio/webAudio';
@@ -254,6 +255,7 @@ export const App: React.FC = () => {
       <a href="#main" className="skip-link">
         Skip to content
       </a>
+      <OfflineBanner />
       <TopBar
         activeTab={activeTab}
         onTab={handleTab}
