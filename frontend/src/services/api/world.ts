@@ -1,5 +1,5 @@
 import { apiFetch, invalidateApiCache, API_BASE } from './core';
-import type { Fixture, WorldDashboard } from '../../types';
+import type { Fixture, WhatIfResult, WorldDashboard } from '../../types';
 
 export interface WorldSearchClub {
   club_id: string;
@@ -164,3 +164,13 @@ export async function toggleWatchlist(entity: WatchlistEntity, id: string): Prom
     return { status: 'error', watched: false };
   }
 }
+
+
+export function fetchWhatIf(fixtureId: string, seed = 0): Promise<WhatIfResult | null> {
+  return apiFetch<WhatIfResult | null>(
+    `/fixtures/${encodeURIComponent(fixtureId)}/whatif?seed=${seed}`,
+    undefined,
+    null,
+  );
+}
+

@@ -18,6 +18,7 @@ import { OtherResults } from './OtherResults';
 import { MatchMomentum, MatchSnapshot, ShotMap, TerritoryCard, TopPerformers, XGFlow } from './MatchInsights';
 import { DuelOfTheMatch } from './DuelOfTheMatch';
 import { PressConference } from './PressConference';
+import { WhatIfPanel } from '../matches/WhatIfPanel';
 
 type PostTab = 'overview' | 'stats' | 'lineups' | 'events' | 'table';
 
@@ -199,6 +200,7 @@ export const PostMatchBroadcast: React.FC<PostMatchBroadcastProps> = ({
               </section>
               {fixture && <MatchMomentum fixture={fixture} events={events} />}
               {fixture && <PressConference fixture={fixture} home={home} away={away} />}
+              <WhatIfPanel fixtureId={fixture?.id || fixture?.fixture_id || ''} home={home} away={away} />
               <section className="console-card p-4 sm:p-5">
                 <p className="match-section-title">Key moments</p>
                 <KeyMoments events={events} fixture={fixture} home={home} away={away} onOpenPlayer={onOpenPlayer} />

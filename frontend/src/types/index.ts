@@ -1713,3 +1713,42 @@ export interface NXGNPlayer {
   is_wonderkid: boolean;
   scout_verdict: string;
 }
+
+export interface WhatIfScoreline {
+  home_goals: number;
+  away_goals: number;
+  home_xg: number;
+  away_xg: number;
+  decided_by?: string;
+  penalties?: number[];
+}
+
+export interface WhatIfClubDelta {
+  club_id: string;
+  short_name: string;
+  before_pos: number;
+  before_pts: number;
+  before_gd: number;
+  after_pos: number;
+  after_pts: number;
+  after_gd: number;
+}
+
+export interface WhatIfTable {
+  applicable: boolean;
+  home?: WhatIfClubDelta;
+  away?: WhatIfClubDelta;
+}
+
+export interface WhatIfResult {
+  fixture_id: string;
+  competition: string;
+  matchweek: number;
+  scratch_seed: number;
+  home_id: string;
+  away_id: string;
+  actual?: WhatIfScoreline;
+  hypothetical: WhatIfScoreline;
+  table?: WhatIfTable;
+}
+

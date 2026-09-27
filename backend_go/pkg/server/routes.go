@@ -64,6 +64,7 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/fixtures", Handler: s.handleGetFixtures, Summary: "Matchweek fixture summaries"},
 		{Method: "GET", Path: "/api/fixtures/{fixture_id}", Handler: s.handleGetFixture, Summary: "Full fixture with report"},
 		{Method: "POST", Path: "/api/fixtures/{fixture_id}/simulate", Handler: s.handleSimulateFixture, Summary: "Simulate one fixture"},
+		{Method: "GET", Path: "/api/fixtures/{fixture_id}/whatif", Handler: s.handleGetWhatIf, Summary: "Read-only what-if replay of one fixture under a scratch seed (?seed=)"},
 		{Method: "POST", Path: "/api/fixtures/simulate-remaining", Handler: s.handleSimulateRemaining, Summary: "Simulate the whole slate"},
 		{Method: "POST", Path: "/api/sim/week", Handler: s.handleSimWeek, Summary: "Advance one matchweek"},
 		{Method: "POST", Path: "/api/sim/month", Handler: s.handleSimMonth, Summary: "Advance one month"},

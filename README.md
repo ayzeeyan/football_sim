@@ -407,6 +407,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/openapi.json` — OpenAPI 3.1 spec generated from the server's route table
 - `GET /api/super-league` (compatibility: selected domestic-league view in world careers; optional `?league=` accepts a league name or competition ID and falls back to the default view), `/api/ucl`, `/api/ucl/fixtures`, `/api/super-cup`
 - `POST /api/fixtures/{fixture_id}/simulate`, `POST /api/fixtures/simulate-remaining`
+- `GET /api/fixtures/{fixture_id}/whatif?seed=` — read-only sandbox: alternative scoreline, xG, and hypothetical table movement under a scratch seed; the recorded result always stands
 - `POST /api/sim/continue`, `POST /api/sim/week`, `POST /api/sim/month`, `POST /api/sim/season`
 - `GET /api/world/dashboard`, `/api/scoring-race`, `/api/trophies`, `/api/records`
 - `GET /api/season/awards`, `/api/season/awards/ceremony`, `/api/season/history`, `/api/season/stats`, `/api/season/stats/advanced`

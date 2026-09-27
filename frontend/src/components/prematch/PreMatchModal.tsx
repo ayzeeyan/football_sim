@@ -12,6 +12,7 @@ import { normalizeFormation } from '../../lib/tactics';
 import { FormationPitch } from '../matches/FormationPitch';
 import { FormGuide, HeadToHeadSummary, MatchPulseCard, PlayersToWatch } from './MatchCentreInsights';
 import { HeadToHeadPanel } from './HeadToHeadPanel';
+import { WhatIfPanel } from '../matches/WhatIfPanel';
 import { LeagueContextCard } from './LeagueContextCard';
 import { focusTabAt, nextTabIndex } from '../../lib/rovingTabindex';
 
@@ -152,6 +153,9 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 </section>
                 <PlayersToWatch fixture={fixture} onOpen={openPlayer} />
                 <HeadToHeadSummary fixture={fixture} />
+                <div className="lg:col-span-12">
+                  <WhatIfPanel fixtureId={fixture.id || fixture.fixture_id || ''} home={fixture.home} away={fixture.away} />
+                </div>
               </div>
             )}
 
