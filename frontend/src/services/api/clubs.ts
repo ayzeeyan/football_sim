@@ -123,3 +123,25 @@ export async function clearClubLineup(clubId: string): Promise<{ status: string 
   }
 }
 
+
+// Tier B (B4): set a club's transfer budget, wage cap, and board objective.
+// The backend enforces budget <= balance and cap >= wage bill.
+export async function setClubBoard(
+  clubId: string,
+  settings: { transfer_budget?: number; wage_cap?: number; board_objective?: string },
+): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/board`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, message: data.detail || 'The board rejected the request.' };
+    invalidateApiCache();
+    return { ok: true };
+  } catch {
+    return { ok: false, message: 'Network error saving board settings.' };
+  }
+}
+

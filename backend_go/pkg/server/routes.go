@@ -38,6 +38,7 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/clubs/{club_id}/set-pieces", Handler: s.handleGetClubSetPieces, Summary: "Set-piece briefing for the probable XI (penalty, free-kick, corner, aerial picks and why)"},
 		{Method: "GET", Path: "/api/clubs/{club_id}/medical", Handler: s.handleGetClubMedical, Summary: "Club medical view: injuries with rehab roadmaps, risk assessments, season history"},
 		{Method: "POST", Path: "/api/clubs/{club_id}/lineup", Handler: s.handleSetClubLineup, Summary: "Set the viewer lineup override (formation + player per rigid tactical slot)"},
+		{Method: "POST", Path: "/api/clubs/{club_id}/board", Handler: s.handleSetClubBoard, Summary: "Set transfer budget, wage cap, and board objective (Tier B; budget <= balance, cap >= wage bill)"},
 		{Method: "DELETE", Path: "/api/clubs/{club_id}/lineup", Handler: s.handleClearClubLineup, Summary: "Clear the viewer lineup override and return the club to AI selection"},
 		{Method: "GET", Path: "/api/h2h/{club_a}/{club_b}", Handler: s.handleGetH2H, Summary: "Head-to-head record"},
 		{Method: "GET", Path: "/api/players/{player_id}", Handler: s.handleGetPlayerProfile, Summary: "Player profile"},

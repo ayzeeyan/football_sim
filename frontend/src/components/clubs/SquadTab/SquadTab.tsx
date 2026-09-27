@@ -17,6 +17,7 @@ import { RecruitmentPanel } from './RecruitmentPanel';
 import { SetPiecesPanel } from './SetPiecesPanel';
 import { MedicalPanel } from './MedicalPanel';
 import { LineupEditorPanel } from './LineupEditorPanel';
+import { BoardControlPanel } from './BoardControlPanel';
 
 export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatchClub, onWatchFixture, onShowToast }) => {
   const { openPlayer } = usePlayerSheet();
@@ -853,6 +854,10 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatc
 
       {selectedClub && profileTab === 'lineup' && (
         <LineupEditorPanel club={selectedClub} squad={squad} onToast={(m) => onShowToast?.(m)} onOpenPlayer={(id) => openPlayer(id)} />
+      )}
+
+      {selectedClub && profileTab === 'board' && (
+        <BoardControlPanel club={selectedClub} onToast={(m) => onShowToast?.(m)} />
       )}
 
       {/* Dynamic View Mode Content */}
