@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Activity, BarChart3, CalendarDays, CircleDot, History, Home, Inbox, Medal, Plus,
+  Activity, Archive, BarChart3, CalendarDays, CircleDot, History, Home, Inbox, Medal, Plus,
   Settings2, Sparkles, Trophy, Users, UserRound, Volume2, VolumeX, WalletCards, Globe2,
 } from 'lucide-react';
 import { NAV_GROUPS, TABS, type TabId } from '../../lib/constants';
@@ -17,6 +17,7 @@ interface TopBarProps {
   onOpenSettings: () => void;
   onOpenAwards: () => void;
   onNewCareer: () => void;
+  onOpenSlots: () => void;
   onSimWeek: () => void;
   onSimMonth: () => void;
   onSimSeason: () => void;
@@ -36,7 +37,7 @@ const TAB_ICONS: Record<TabId, React.ElementType> = {
 };
 
 export const TopBar = React.memo<TopBarProps>(function TopBar({
-  activeTab, onTab, muted, onToggleMute, onOpenSettings, onOpenAwards, onNewCareer,
+  activeTab, onTab, muted, onToggleMute, onOpenSettings, onOpenAwards, onNewCareer, onOpenSlots,
   onSimWeek, onSimMonth, onSimSeason, onContinue, simulating = false,
   seasonName = '2026-27', calendarLabel, inboxUnread = 0,
   onOpenClub, onOpenPlayer, onOpenCompetition,
@@ -86,6 +87,7 @@ export const TopBar = React.memo<TopBarProps>(function TopBar({
         <div className="mt-auto border-t border-white/[0.07] p-4 space-y-2">
           <button type="button" onClick={onOpenAwards} className="sidebar-utility"><Trophy size={15} /> Honours</button>
           <button type="button" onClick={onNewCareer} className="sidebar-utility"><Plus size={15} /> New career</button>
+          <button type="button" onClick={onOpenSlots} className="sidebar-utility"><Archive size={15} /> Save slots</button>
         </div>
       </aside>
 

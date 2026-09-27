@@ -1819,3 +1819,14 @@ export interface AchievementsResponse {
   youngest_scorer_record: YoungestScorerRecord | null;
 }
 
+
+export interface SaveSlot {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  season: string;
+  matchweek: number;
+  size_bytes: number;
+}
+

@@ -108,14 +108,13 @@ func (s *Server) handleNewCareer(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// A new career is a new universe: drop the old save and seed first so the
-	// fresh universe draws a fresh persisted seed (DeleteCareer removes the
-	// seed sidecar alongside the save).
-	if err := persistence.DeleteCareer(s.savePath); err != nil {
-		writeErrorJSON(w, http.StatusInternalServerError, "Could not remove the previous career save")
-		return
-	}
-	freshSeed, err := persistence.LoadOrCreateUniverseSeed(s.savePath)
+	// A new career is a new universe, but the previous save is only retired
+	// AFTER the fresh universe boots successfully: a failed boot must never
+	// destroy the existing career. The fresh seed is generated in memory
+	// (NewUniverseSeed) and persisted (WriteUniverseSeed) only on success, so
+	// named slot archives and the active save can never be clobbered by a
+	// half-finished regeneration.
+	freshSeed, err := persistence.NewUniverseSeed()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -123,6 +122,14 @@ func (s *Server) handleNewCareer(w http.ResponseWriter, r *http.Request) {
 	universe := tournament.NewSubsystemRNG(freshSeed)
 	homes := resolveNewCareerHomes(req.Shuffle, req.Homes, universe.New("prodigy_draw"))
 	if err := s.bootFreshCareer(homes, req.Shuffle, freshSeed); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := persistence.DeleteCareer(s.savePath); err != nil {
+		writeErrorJSON(w, http.StatusInternalServerError, "Could not remove the previous career save")
+		return
+	}
+	if err := persistence.WriteUniverseSeed(s.savePath, freshSeed); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

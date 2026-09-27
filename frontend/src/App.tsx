@@ -11,6 +11,7 @@ import { AwardsModal } from './components/layout/AwardsModal';
 import { AwardsCeremonyModal } from './components/career/AwardsCeremonyModal';
 import { ToastHost } from './components/layout/ToastHost';
 import { NewCareerModal } from './components/career/NewCareerModal';
+import { SaveSlotsModal } from './components/career/SaveSlotsModal';
 import { PlayerSheetProvider } from './components/clubs/PlayerSheet';
 import { MatchweekDigestModal } from './components/postmatch/MatchweekDigestModal';
 import { soundManager } from './audio/webAudio';
@@ -62,6 +63,7 @@ export const App: React.FC = () => {
   const [awardsData, setAwardsData] = useState<SeasonAwards | null>(null);
   const muted = settings.soundMuted;
   const [newCareerOpen, setNewCareerOpen] = useState(false);
+  const [slotsOpen, setSlotsOpen] = useState(false);
   const [careerKey, setCareerKey] = useState(0);
   const [inboxUnread, setInboxUnread] = useState(0);
   const [calendar, setCalendar] = useState<CalendarState | null>(null);
@@ -173,6 +175,7 @@ export const App: React.FC = () => {
         digestOpen ||
         newCareerOpen ||
         settingsOpen ||
+        slotsOpen ||
         selectedFixtureId
       ) {
         return;
@@ -180,7 +183,7 @@ export const App: React.FC = () => {
       autoAdvanceRef.current();
     }, settings.autoAdvanceSeconds * 1000);
     return () => window.clearInterval(id);
-  }, [settings.autoAdvanceSeconds, settingsOpen, simulating, awardsOpen, ceremonyOpen, digestOpen, newCareerOpen, selectedFixtureId]);
+  }, [settings.autoAdvanceSeconds, settingsOpen, slotsOpen, simulating, awardsOpen, ceremonyOpen, digestOpen, newCareerOpen, selectedFixtureId]);
 
   useEffect(() => {
     const onHash = () => setActiveTab(tabFromSlug(window.location.hash.replace(/^#/, '')));
@@ -268,6 +271,10 @@ export const App: React.FC = () => {
         onNewCareer={() => {
           soundManager.playClick();
           setNewCareerOpen(true);
+        }}
+        onOpenSlots={() => {
+          soundManager.playClick();
+          setSlotsOpen(true);
         }}
         onContinue={() => void handleMacroSim('continue')}
         onSimWeek={() => void handleMacroSim('week')}
@@ -400,6 +407,7 @@ export const App: React.FC = () => {
         }}
       />
       <SettingsPanel open={settingsOpen} settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />
+      <SaveSlotsModal open={slotsOpen} onClose={() => setSlotsOpen(false)} onToast={(m) => showToast(stripEmojis(m))} />
       <ToastHost message={toast} />
     </div>
     </PlayerSheetProvider>

@@ -12,6 +12,40 @@ import (
 
 const legacyUniverseSeed int64 = 20260907
 
+// NewUniverseSeed generates a fresh random universe seed. Callers that need
+// it persisted should follow up with WriteUniverseSeed; keeping generation
+// and persistence separate lets a caller boot a new universe in memory
+// before retiring any previous save artifacts.
+func NewUniverseSeed() (int64, error) {
+	var raw [8]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return 0, fmt.Errorf("failed to generate universe seed: %w", err)
+	}
+	seed := int64(binary.LittleEndian.Uint64(raw[:]) & 0x7fffffffffffffff)
+	if seed == 0 {
+		seed = 1
+	}
+	return seed, nil
+}
+
+// WriteUniverseSeed persists a universe seed to the sidecar path.
+func WriteUniverseSeed(savePath string, seed int64) error {
+	if savePath == "" {
+		savePath = SavePath()
+	}
+	if seed == 0 {
+		return fmt.Errorf("universe seed must be non-zero")
+	}
+	seedPath := UniverseSeedPath(savePath)
+	if err := os.MkdirAll(filepath.Dir(seedPath), 0755); err != nil {
+		return fmt.Errorf("failed to create universe seed directory: %w", err)
+	}
+	if err := writeAtomic(seedPath, []byte(strconv.FormatInt(seed, 10)+"\n")); err != nil {
+		return fmt.Errorf("failed to persist universe seed: %w", err)
+	}
+	return nil
+}
+
 // UniverseSeedPath returns the sidecar path that owns deterministic simulation
 // identity for a career. The sidecar keeps the seed stable without changing
 // the versioned career JSON schema, preserving older-save compatibility.

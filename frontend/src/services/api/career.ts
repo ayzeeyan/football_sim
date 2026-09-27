@@ -123,4 +123,84 @@ export function fetchSeasonAwards(): Promise<SeasonAwards> {
     golden_boy: null,
     player_of_the_season: null,
   });
-}
+}
+
+export interface SaveSlot {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  season: string;
+  matchweek: number;
+  size_bytes: number;
+}
+
+export function fetchSaveSlots(): Promise<{ slots: SaveSlot[] }> {
+  return apiFetch<{ slots: SaveSlot[] }>('/career/slots', undefined, { slots: [] });
+}
+
+export async function createSaveSlot(name: string): Promise<{ status: string; slot?: SaveSlot }> {
+  try {
+    const res = await fetch(`${API_BASE}/career/slots?name=${encodeURIComponent(name)}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) return { status: 'error' };
+    invalidateApiCache();
+    return data;
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+export async function renameSaveSlot(slotId: string, name: string): Promise<{ status: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/career/slots/${encodeURIComponent(slotId)}/rename?name=${encodeURIComponent(name)}`, { method: 'POST' });
+    invalidateApiCache();
+    return { status: res.ok ? 'success' : 'error' };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+export async function duplicateSaveSlot(slotId: string): Promise<{ status: string; slot?: SaveSlot }> {
+  try {
+    const res = await fetch(`${API_BASE}/career/slots/${encodeURIComponent(slotId)}/duplicate`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) return { status: 'error' };
+    invalidateApiCache();
+    return data;
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+export async function deleteSaveSlot(slotId: string): Promise<{ status: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/career/slots/${encodeURIComponent(slotId)}/delete`, { method: 'POST' });
+    invalidateApiCache();
+    return { status: res.ok ? 'success' : 'error' };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+/** Export URL for a slot's snapshot download (user-initiated). */
+export function saveSlotExportUrl(slotId: string): string {
+  return `${API_BASE}/career/slots/${encodeURIComponent(slotId)}/export`;
+}
+
+export async function importSaveSlot(name: string, snapshot: string): Promise<{ status: string; slot?: SaveSlot }> {
+  try {
+    const res = await fetch(`${API_BASE}/career/slots/import?name=${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: snapshot,
+    });
+    const data = await res.json();
+    if (!res.ok) return { status: 'error' };
+    invalidateApiCache();
+    return data;
+  } catch {
+    return { status: 'error' };
+  }
+}
+
