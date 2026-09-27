@@ -12,9 +12,12 @@ import (
 
 // Pre-match reads: competitions, fixtures, calendar, favourites and watch lists.
 func (s *Server) handleGetSuperLeague(w http.ResponseWriter, r *http.Request) {
+	// Optional ?league= selector (name or competition ID) picks one domestic
+	// league's table; the default remains the compatibility view.
+	league := r.URL.Query().Get("league")
 	s.worldMu.RLock()
 	var standings []map[string]interface{}
-	for _, c := range s.TournamentManager.GetStandings() {
+	for _, c := range s.TournamentManager.GetStandingsForLeague(league) {
 		standings = append(standings, s.serializeClub(c))
 	}
 	payload := map[string]interface{}{

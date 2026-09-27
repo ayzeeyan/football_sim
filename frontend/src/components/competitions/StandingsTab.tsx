@@ -8,6 +8,7 @@ import { soundManager } from '../../audio/webAudio';
 import { formatGd, cx, stripEmojis } from '../../lib/format';
 import { Card, ClubCrest, ClubDot, ConfirmBar, FormPips, LoadingState, OvrBadge, PanelHeader, PrimaryButton, ProgressBar } from '../ui/ui';
 import { qualificationBand, qualificationBarClass } from '../../lib/qualification';
+import { LEAGUES_5 } from '../../lib/constants';
 import { MatchCard } from '../matches/MatchCard';
 import { PostMatchModal } from '../postmatch/PostMatchBroadcast';
 import { PreMatchModal } from '../prematch/PreMatchModal';
@@ -111,11 +112,12 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
   const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
   const [previewFixture, setPreviewFixture] = useState<Fixture | null>(null);
   const [watch, setWatch] = useState<WeekWatch | null>(null);
+  const [leagueSelector, setLeagueSelector] = useState<string>(LEAGUES_5[0]);
   const fixturesRef = useRef<HTMLDivElement>(null);
 
   const loadAll = useCallback(async (mw?: number) => {
     const [lg, fx, rc, st, cal, sc] = await Promise.all([
-      fetchSuperLeague(),
+      fetchSuperLeague(leagueSelector),
       fetchFixtureSummaries(mw),
       fetchScoringRace(),
       fetchSeasonStats(),
@@ -129,7 +131,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
     setCalendar(cal);
     setSuperCup(sc);
     setViewMw((prev) => prev ?? fx.current_matchweek);
-  }, []);
+  }, [leagueSelector]);
 
   useEffect(() => {
     loadAll().finally(() => setLoading(false));
@@ -149,7 +151,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
   const reloadAfterResult = useCallback(
     async (mw: number) => {
       const [lg, fx, rc, st] = await Promise.all([
-        fetchSuperLeague(),
+        fetchSuperLeague(leagueSelector),
         fetchFixtureSummaries(mw),
         fetchScoringRace(),
         fetchSeasonStats(),
@@ -159,7 +161,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
       setRace(rc);
       setStats(st);
     },
-    [],
+    [leagueSelector],
   );
 
   const handleSimulateOne = async (f: Fixture) => {
@@ -266,6 +268,26 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
       )}
 
       <Card>
+        {league.world && (
+          <div className="flex flex-wrap items-center gap-1.5 px-4 pt-4 sm:px-5" role="group" aria-label="Domestic league selector">
+            {LEAGUES_5.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => { soundManager.playClick(); setLeagueSelector(name); }}
+                aria-pressed={leagueSelector === name}
+                className={cx(
+                  'min-h-9 border px-3 text-[12px] font-semibold transition-colors',
+                  leagueSelector === name
+                    ? 'border-brass/60 bg-brass/15 text-brass'
+                    : 'border-line bg-cardLight text-sage hover:border-brass/30 hover:text-bone',
+                )}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
         <PanelHeader
           kicker={isFinished ? 'Season complete' : `Matchweek ${Math.min(league.current_matchweek, league.max_matchweeks)} of ${league.max_matchweeks}`}
           title={league.world && league.clubs[0]?.league ? `${league.clubs[0].league} table` : 'League table'}

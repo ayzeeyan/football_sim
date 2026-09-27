@@ -292,8 +292,11 @@ export function fetchTrainingStatus(): Promise<{ training_energy: number; max_tr
 
 // --- Tournaments ------------------------------------------------------------
 
-export function fetchSuperLeague(): Promise<SuperLeagueState> {
-  return apiFetch<SuperLeagueState>('/super-league', undefined, {
+/** Domestic-league standings. Pass a league name ("La Liga") or competition
+ *  ID ("la-liga") to select a table; omit for the default compatibility view. */
+export function fetchSuperLeague(league?: string): Promise<SuperLeagueState> {
+  const query = league ? `?league=${encodeURIComponent(league)}` : '';
+  return apiFetch<SuperLeagueState>(`/super-league${query}`, undefined, {
     current_matchweek: 1,
     max_matchweeks: 44,
     season_phase: 'season',

@@ -219,6 +219,37 @@ func (tm *TournamentManager) GetStandings() []*models.Club {
 	return tm.standingsUnlocked()
 }
 
+// GetStandingsForLeague returns the sorted table of one domestic league in
+// the world career. The selector accepts a league name ("La Liga") or a
+// competition ID ("la-liga"); unknown selectors fall back to the default
+// compatibility view so existing clients keep working.
+func (tm *TournamentManager) GetStandingsForLeague(league string) []*models.Club {
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	if tm.World == nil {
+		return tm.standingsUnlocked()
+	}
+	if id := leagueIDForSelector(league); id != "" {
+		return tm.worldLeagueStandingsUnlocked(id)
+	}
+	return tm.standingsUnlocked()
+}
+
+// leagueIDForSelector resolves a user-facing league name or competition ID
+// to its domestic league competition ID. Empty when no league matches.
+func leagueIDForSelector(selector string) string {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return ""
+	}
+	for _, def := range domesticLeagueDefinitions {
+		if def.ID == selector || def.League == selector || def.Name == selector {
+			return def.ID
+		}
+	}
+	return ""
+}
+
 // KickoffNote is the pre-match line React shows above the probable XIs.
 func (tm *TournamentManager) KickoffNote(f *Fixture, home, away *models.Club) string {
 	tm.mu.RLock()

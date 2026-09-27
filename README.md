@@ -398,7 +398,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `POST /api/prodigies/{player_id}/train`, `POST /api/prodigies/{player_id}/position-path`, `POST /api/prodigies/{player_id}/school-track`
 - `GET /api/calendar`, `/api/fixtures`, `/api/fixtures/{fixture_id}`, `/api/competitions`, `/api/competitions/{competition_id}`
 - `GET /api/competitions/nations-cup` — national squads, results, table, and history
-- `GET /api/super-league` (compatibility: selected domestic-league view in world careers), `/api/ucl`, `/api/ucl/fixtures`, `/api/super-cup`
+- `GET /api/super-league` (compatibility: selected domestic-league view in world careers; optional `?league=` accepts a league name or competition ID and falls back to the default view), `/api/ucl`, `/api/ucl/fixtures`, `/api/super-cup`
 - `POST /api/fixtures/{fixture_id}/simulate`, `POST /api/fixtures/simulate-remaining`
 - `POST /api/sim/continue`, `POST /api/sim/week`, `POST /api/sim/month`, `POST /api/sim/season`
 - `GET /api/world/dashboard`, `/api/scoring-race`, `/api/trophies`, `/api/records`
