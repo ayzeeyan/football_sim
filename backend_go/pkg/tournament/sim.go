@@ -411,7 +411,7 @@ func (tm *TournamentManager) commitLiveFixtureOnFixtureUnlocked(fixture *Fixture
 		cupEvent = tm.advanceWorldCompetitionUnlocked(fixture.Competition)
 	}
 	if cupEvent != "" {
-		tm.PushInbox("cup", strings.TrimRight(cupEvent, "."), cupEvent, fixture.Matchweek, []string{home.ClubID, away.ClubID}, "", fixture.FixtureID)
+		tm.PushInbox(MsgCategoryCup, strings.TrimRight(cupEvent, "."), cupEvent, fixture.Matchweek, []string{home.ClubID, away.ClubID}, "", fixture.FixtureID)
 	}
 
 	rolled := tm.maybeRolloverUnlocked()
@@ -585,13 +585,13 @@ func (tm *TournamentManager) applyFinishedFixture(f *Fixture, home, away *models
 		}
 		if club.Morale < 35 && prev != "low" {
 			tm.MoraleStoryStatus[club.ClubID] = "low"
-			tm.PushInbox("club",
+			tm.PushInbox(MsgCategoryClub,
 				fmt.Sprintf("Dressing room tensions at %s", club.ClubName),
 				fmt.Sprintf("Dressing room tensions at %s — sources report senior players frustrated with recent results.", club.ClubName),
 				f.Matchweek, []string{club.ClubID}, "", f.FixtureID)
 		} else if club.Morale > 90 && prev != "high" {
 			tm.MoraleStoryStatus[club.ClubID] = "high"
-			tm.PushInbox("club",
+			tm.PushInbox(MsgCategoryClub,
 				fmt.Sprintf("Team spirit flying high at %s", club.ClubName),
 				fmt.Sprintf("%s riding a wave of confidence — team spirit at an all-time high.", club.ClubName),
 				f.Matchweek, []string{club.ClubID}, "", f.FixtureID)
@@ -672,7 +672,7 @@ func (tm *TournamentManager) inboxMatch(f *Fixture, home, away *models.Club, rep
 	if report.MOTM != nil {
 		body += " MOTM: " + report.MOTM.FullName + "."
 	}
-	cat := "match"
+	cat := MsgCategoryMatch
 	if f.Competition == "ucl" || tm.worldCompetitionUnlocked(f.Competition) != nil && !tm.isWorldDomesticLeague(f.Competition) {
 		cat = "cup"
 	} else if f.Competition == "super-cup" {
@@ -929,7 +929,7 @@ func (tm *TournamentManager) pushSeasonChampionInboxUnlocked(completed int) {
 				continue
 			}
 			c := table[0]
-			tm.PushInbox("honour",
+			tm.PushInbox(MsgCategoryHonour,
 				fmt.Sprintf("%s are %s champions", c.ClubName, def.Name),
 				fmt.Sprintf("%d points · %d wins · %+d goal difference. The window opens.", c.Points, c.Won, c.GoalDifference),
 				completed, []string{c.ClubID}, "", "")
@@ -943,7 +943,7 @@ func (tm *TournamentManager) pushSeasonChampionInboxUnlocked(completed int) {
 			if club == nil {
 				continue
 			}
-			tm.PushInbox("honour",
+			tm.PushInbox(MsgCategoryHonour,
 				fmt.Sprintf("%s win the %s", club.ClubName, def.Name),
 				fmt.Sprintf("%s lift the trophy.", club.ClubName),
 				completed, []string{club.ClubID}, "", "")
@@ -955,7 +955,7 @@ func (tm *TournamentManager) pushSeasonChampionInboxUnlocked(completed int) {
 		return
 	}
 	c := standings[0]
-	tm.PushInbox("honour",
+	tm.PushInbox(MsgCategoryHonour,
 		fmt.Sprintf("%s are Super League champions", c.ClubName),
 		fmt.Sprintf("%d points · %d wins · %+d goal difference. The window opens.", c.Points, c.Won, c.GoalDifference),
 		completed, []string{c.ClubID}, "", "")

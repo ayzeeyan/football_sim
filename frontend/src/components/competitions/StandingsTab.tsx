@@ -10,6 +10,7 @@ import { Card, ClubCrest, ConfirmBar, FormPips, LoadingState, OvrBadge, PanelHea
 import { qualificationBand, qualificationBarClass } from '../../lib/qualification';
 import { LEAGUES_5 } from '../../lib/constants';
 import { downloadCSV } from '../../lib/export';
+import { t } from '../../i18n';
 import { MatchCard } from '../matches/MatchCard';
 import { PostMatchModal } from '../postmatch/PostMatchBroadcast';
 import { PreMatchModal } from '../prematch/PreMatchModal';
@@ -324,7 +325,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
               onClick={() => downloadCSV(`standings-${leagueSelector.toLowerCase().replace(/ /g, '-')}`, league.clubs.map((c, i) => ({ position: i + 1, club: c.club_name, league: c.league, played: c.p, won: c.w, drawn: c.d, lost: c.l, goals_for: c.gf, goals_against: c.ga, goal_difference: c.gd, points: c.pts })))}
               className="min-h-9 border border-line bg-cardLight px-3 text-[12px] font-semibold text-sage hover:border-brass/30 hover:text-bone"
             >
-              Export CSV
+              {t('action.exportCsv')}
             </button>
           </div>
         )}

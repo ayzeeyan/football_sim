@@ -22,7 +22,7 @@ func (tm *TournamentManager) awardSeasonPrizeMoneyUnlocked() {
 			prize := leagueFinishPrize(place, n, def.Prestige)
 			creditClubPrize(club, prize)
 			if place == 1 {
-				tm.PushInbox("honour", club.ShortName+" collect the league prize",
+				tm.PushInbox(MsgCategoryHonour, club.ShortName+" collect the league prize",
 					fmt.Sprintf("%s receive %s for winning %s.", club.ClubName, models.FormatCurrency(prize), def.Name),
 					tm.CurrentMatchweek, []string{club.ClubID}, "", "")
 			}
@@ -45,7 +45,7 @@ func (tm *TournamentManager) awardSeasonPrizeMoneyUnlocked() {
 		if club := tm.Clubs[comp.ChampionID]; club != nil {
 			prize := cupPrize(comp.Prestige)
 			creditClubPrize(club, prize)
-			tm.PushInbox("honour", club.ShortName+" cash the "+comp.Name+" cheque",
+			tm.PushInbox(MsgCategoryHonour, club.ShortName+" cash the "+comp.Name+" cheque",
 				fmt.Sprintf("%s receive %s in prize money for winning the %s.", club.ClubName, models.FormatCurrency(prize), comp.Name),
 				tm.CurrentMatchweek, []string{club.ClubID}, "", "")
 		}
@@ -53,7 +53,7 @@ func (tm *TournamentManager) awardSeasonPrizeMoneyUnlocked() {
 			if club := tm.Clubs[runner]; club != nil && runner != comp.ChampionID {
 				rPrize := cupPrize(comp.Prestige) * 2 / 5
 				creditClubPrize(club, rPrize)
-				tm.PushInbox("honour", club.ShortName+" bank the "+comp.Name+" runners-up cheque",
+				tm.PushInbox(MsgCategoryHonour, club.ShortName+" bank the "+comp.Name+" runners-up cheque",
 					fmt.Sprintf("%s receive %s as %s runners-up.", club.ClubName, models.FormatCurrency(rPrize), comp.Name),
 					tm.CurrentMatchweek, []string{club.ClubID}, "", "")
 			}
@@ -130,7 +130,7 @@ func (tm *TournamentManager) awardEuropeanPrizeMoneyUnlocked(compID string) {
 		// Report only the plaqued amounts (this bonus plus the Final stage
 		// prize already banked above), never a hinted estimate as received.
 		finalPrize := europeanKnockoutRoundPrize(compID, "Final")
-		tm.PushInbox("honour", club.ShortName+" cash the "+comp.Name+" cheque",
+		tm.PushInbox(MsgCategoryHonour, club.ShortName+" cash the "+comp.Name+" cheque",
 			fmt.Sprintf("%s collect %s final prize plus a %s winner bonus for winning the %s (on top of participation, rank and round money).", club.ClubName, models.FormatCurrency(finalPrize), models.FormatCurrency(bonus), comp.Name),
 			tm.CurrentMatchweek, []string{club.ClubID}, "", "")
 	}
@@ -138,7 +138,7 @@ func (tm *TournamentManager) awardEuropeanPrizeMoneyUnlocked(compID string) {
 		if club := tm.Clubs[runner]; club != nil {
 			rPrize := europeanRunnerUpBonus(compID)
 			creditEuropeanPrize(club, rPrize)
-			tm.PushInbox("honour", club.ShortName+" bank the "+comp.Name+" runners-up cheque",
+			tm.PushInbox(MsgCategoryHonour, club.ShortName+" bank the "+comp.Name+" runners-up cheque",
 				fmt.Sprintf("%s receive %s as %s runners-up.", club.ClubName, models.FormatCurrency(rPrize), comp.Name),
 				tm.CurrentMatchweek, []string{club.ClubID}, "", "")
 		}

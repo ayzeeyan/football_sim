@@ -462,7 +462,7 @@ func (tm *TournamentManager) processRetirementsUnlocked() []string {
 				clubIDs = []string{prev.ClubID}
 			}
 		}
-		tm.PushInbox("honour",
+		tm.PushInbox(MsgCategoryHonour,
 			fmt.Sprintf("%s hangs up his boots", p.FullName),
 			fmt.Sprintf("After a career at %s, %s retires at %d.", clubName, p.FullName, p.Age),
 			1, clubIDs, p.PlayerID, "")
@@ -574,11 +574,11 @@ func (tm *TournamentManager) resetNewSeasonUnlocked() map[string]interface{} {
 				ev := p.AdvanceEducation(place)
 				switch ev {
 				case "stayed":
-					tm.PushInbox("youth", p.FullName+" stays in school", p.SchoolWantLine()+" High school from here — exam weeks only.", 1, []string{p.ClubID}, p.PlayerID, "")
+					tm.PushInbox(MsgCategoryYouth, p.FullName+" stays in school", p.SchoolWantLine()+" High school from here — exam weeks only.", 1, []string{p.ClubID}, p.PlayerID, "")
 				case "left":
-					tm.PushInbox("youth", p.FullName+" leaves school for football", p.SchoolWantLine()+" Full-time with the first team.", 1, []string{p.ClubID}, p.PlayerID, "")
+					tm.PushInbox(MsgCategoryYouth, p.FullName+" leaves school for football", p.SchoolWantLine()+" Full-time with the first team.", 1, []string{p.ClubID}, p.PlayerID, "")
 				case "graduated":
-					tm.PushInbox("youth", p.FullName+" finished school", "Full-time football from here. No more exam weeks.", 1, []string{p.ClubID}, p.PlayerID, "")
+					tm.PushInbox(MsgCategoryYouth, p.FullName+" finished school", "Full-time football from here. No more exam weeks.", 1, []string{p.ClubID}, p.PlayerID, "")
 				}
 			}
 			applySeasonEndLoyalty(p, place)
@@ -700,7 +700,7 @@ func (tm *TournamentManager) runYouthIntakeUnlocked() {
 				club.RecalculateWageBill()
 			}
 		}
-		tm.PushInbox("youth",
+		tm.PushInbox(MsgCategoryYouth,
 			fmt.Sprintf("Academy intake: %s signs for %s", p.FullName, name),
 			fmt.Sprintf("%d, %s, %d OVR. Not a franchise prodigy — a kid from the system.", p.Age, p.Position, p.OVR),
 			1, []string{p.ClubID}, p.PlayerID, "")
@@ -956,7 +956,7 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	tm.ManagerConsecutiveHot, tm.ManagerLastChange = map[string]int{}, map[string]int{}
 	PairSeniorMentors(tm.ClubsList, tm.GrowthEngine)
 	tm.pushRelegationNewsUnlocked(relegationMoves, 1)
-	tm.PushInbox("system", tm.SeasonName+" European season begins", "Domestic tables reset, national cups are drawn, and qualification has set the European fields.", 1, nil, "", "")
+	tm.PushInbox(MsgCategorySystem, tm.SeasonName+" European season begins", "Domestic tables reset, national cups are drawn, and qualification has set the European fields.", 1, nil, "", "")
 	return map[string]interface{}{"status": "success", "message": "New European season initialized.", "current_matchweek": 1, "max_matchweeks": tm.MaxMatchweeks, "retired_player_ids": retired}
 }
 

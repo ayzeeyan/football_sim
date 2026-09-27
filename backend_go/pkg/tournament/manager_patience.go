@@ -84,7 +84,7 @@ func (tm *TournamentManager) evaluateManagerTenureWithPatience(completedMW int) 
 		tm.ManagerConsecutiveHot[club.ClubID] = 0
 		tm.unlockSackingAchievementUnlocked(club, old.Name, completedMW)
 		tm.PushInbox(
-			"manager",
+			MsgCategoryManager,
 			fmt.Sprintf("BREAKING: %s sack %s; %s appointed", club.ClubName, old.Name, next.Name),
 			fmt.Sprintf("%s. %s arrive with a %s identity after the board moved on from %s.", reason, next.Name, next.Tactic(), old.Name),
 			completedMW, []string{club.ClubID}, "", "",

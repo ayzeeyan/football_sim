@@ -5,6 +5,7 @@ import type { Fixture, NXGNPlayer } from '../../types';
 import { Card, ClubCrest, EmptyState, LoadingState, PanelHeader } from '../ui/ui';
 import { cx } from '../../lib/format';
 import { downloadJSON } from '../../lib/export';
+import { t } from '../../i18n';
 import { AchievementsPanel } from '../career/AchievementsPanel';
 import { PlayerNameButton } from '../clubs/PlayerSheet';
 import { PostMatchModal } from '../postmatch/PostMatchBroadcast';
@@ -172,7 +173,7 @@ export const HistoryTab: React.FC = () => {
                 onClick={() => downloadJSON('records', { seasons: data?.past ?? [], trophies: data?.trophy_cabinet ?? [], records: data?.all_time_records ?? [] })}
                 className="min-h-9 border border-line bg-cardLight px-3 text-[12px] font-semibold text-sage hover:border-brass/30 hover:text-bone"
               >
-                Export JSON
+                {t('action.exportJson')}
               </button>
             </div>
           }

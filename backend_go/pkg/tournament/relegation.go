@@ -129,5 +129,5 @@ func (tm *TournamentManager) pushRelegationNewsUnlocked(moves []RelegationMove, 
 	for _, move := range moves {
 		clubIDs = append(clubIDs, move.ClubID)
 	}
-	tm.PushInbox("system", "Promotion and relegation confirmed", body, matchweek, clubIDs, "", "")
+	tm.PushInbox(MsgCategorySystem, "Promotion and relegation confirmed", body, matchweek, clubIDs, "", "")
 }

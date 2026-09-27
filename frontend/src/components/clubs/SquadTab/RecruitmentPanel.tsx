@@ -4,6 +4,7 @@ import type { Club, ScoutingReport } from '../../../types';
 import { fetchClubScouting } from '../../../services/api';
 import { Card, ClubCrest, EmptyState, LoadingState, OvrBadge } from '../../ui/ui';
 import { downloadCSV } from '../../../lib/export';
+import { t } from '../../../i18n';
 
 /**
  * Recruitment desk (F5): the AI scouting department's deterministic shortlist
@@ -59,7 +60,7 @@ export const RecruitmentPanel: React.FC<{ club: Club | null; onOpenPlayer: (id: 
             }
             className="min-h-9 border border-line bg-cardLight px-3 text-[12px] font-semibold text-sage hover:border-brass/30 hover:text-bone"
           >
-            Export CSV
+            {t('action.exportCsv')}
           </button>
         )}
       </div>

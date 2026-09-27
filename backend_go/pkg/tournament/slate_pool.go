@@ -283,7 +283,7 @@ func (tm *TournamentManager) applySlateFixtureWithRollover(f *Fixture, computed 
 		cupEvent = tm.advanceWorldCompetitionUnlocked(f.Competition)
 	}
 	if cupEvent != "" {
-		tm.PushInbox("cup", strings.TrimRight(cupEvent, "."), cupEvent, f.Matchweek, []string{home.ClubID, away.ClubID}, "", f.FixtureID)
+		tm.PushInbox(MsgCategoryCup, strings.TrimRight(cupEvent, "."), cupEvent, f.Matchweek, []string{home.ClubID, away.ClubID}, "", f.FixtureID)
 	}
 	rolled := map[string]interface{}{"rolled": false, "is_finished": false}
 	if allowRollover {

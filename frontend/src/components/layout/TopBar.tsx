@@ -6,6 +6,7 @@ import {
 import { NAV_GROUPS, TABS, type TabId } from '../../lib/constants';
 import { soundManager } from '../../audio/webAudio';
 import { cx } from '../../lib/format';
+import { t } from '../../i18n';
 import { GlobalSearch } from './GlobalSearch';
 import { usePlayerSheet } from '../clubs/PlayerSheet';
 
@@ -86,8 +87,8 @@ export const TopBar = React.memo<TopBarProps>(function TopBar({
 
         <div className="mt-auto border-t border-white/[0.07] p-4 space-y-2">
           <button type="button" onClick={onOpenAwards} className="sidebar-utility"><Trophy size={15} /> Honours</button>
-          <button type="button" onClick={onNewCareer} className="sidebar-utility"><Plus size={15} /> New career</button>
-          <button type="button" onClick={onOpenSlots} className="sidebar-utility"><Archive size={15} /> Save slots</button>
+          <button type="button" onClick={onNewCareer} className="sidebar-utility"><Plus size={15} /> {t('action.newCareer')}</button>
+          <button type="button" onClick={onOpenSlots} className="sidebar-utility"><Archive size={15} /> {t('action.saveSlots')}</button>
         </div>
       </aside>
 
@@ -116,9 +117,9 @@ export const TopBar = React.memo<TopBarProps>(function TopBar({
               </div>
             )}
             <div className="hidden md:flex simulation-cluster shrink-0" role="group" aria-label="Simulation controls">
-              <button disabled={simulating} onClick={onSimWeek} title="Simulate one week (W)">Week</button>
-              <button disabled={simulating} onClick={onSimMonth} title="Simulate one month (M)">Month</button>
-              <button disabled={simulating} onClick={onSimSeason} title="Simulate season (Shift+S)">Season</button>
+              <button disabled={simulating} onClick={onSimWeek} title="Simulate one week (W)">{t('action.week')}</button>
+              <button disabled={simulating} onClick={onSimMonth} title="Simulate one month (M)">{t('action.month')}</button>
+              <button disabled={simulating} onClick={onSimSeason} title="Simulate season (Shift+S)">{t('action.season')}</button>
             </div>
             <button type="button" onClick={onToggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute sound' : 'Mute sound'} className="icon-button hidden sm:grid shrink-0">
               {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
@@ -128,7 +129,7 @@ export const TopBar = React.memo<TopBarProps>(function TopBar({
             </button>
             {onContinue && (
               <button disabled={simulating} onClick={onContinue} className="continue-button shrink-0">
-                <Activity size={16} /><span>{simulating ? 'Advancing…' : 'Continue'}</span><kbd>C</kbd>
+                <Activity size={16} /><span>{simulating ? t('action.advancing') : t('action.continue')}</span><kbd>C</kbd>
               </button>
             )}
           </div>

@@ -12,6 +12,7 @@ import { usePlayerSheet } from '../../clubs/PlayerSheet';
 import { canStartNextSeason, type TransfersSubTab, type TransfersTabProps } from './helpers';
 import { NegotiationCard } from './NegotiationCard';
 import { downloadCSV } from '../../../lib/export';
+import { t } from '../../../i18n';
 
 
 export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
@@ -138,7 +139,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
                 onClick={() => downloadCSV('transfers', (data?.completed_transfers ?? []).map((t) => ({ player: t.player_name, position: t.player_pos, from: t.seller_short, to: t.buyer_short, fee: t.formatted_fee, matchweek: t.matchweek })))}
                 className="min-h-9 border border-line bg-cardLight px-3 text-[12px] font-semibold text-sage hover:border-brass/30 hover:text-bone"
               >
-                Export CSV
+                {t('action.exportCsv')}
               </button>
               {windowOpen ? (
               <PrimaryButton tone="cyan" onClick={handleAdvance} disabled={advancing}>

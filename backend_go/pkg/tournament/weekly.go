@@ -59,11 +59,11 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 		tm.TransferEngine.AdvanceWinterForMatchweek(completedMW)
 		if completedMW == transfers.WinterWindowStartMatchweek {
 			if n := tm.ArrangeWinterLoansUnlocked(); n > 0 {
-				tm.PushInbox("transfer", "January loan market opens", fmt.Sprintf("%d unused youngsters have been sent out on short winter loans.", n), completedMW, nil, "", "")
+				tm.PushInbox(MsgCategoryTransfer, "January loan market opens", fmt.Sprintf("%d unused youngsters have been sent out on short winter loans.", n), completedMW, nil, "", "")
 			}
 		}
 		if tm.TransferEngine.WindowType == transfers.WindowWinter && !tm.TransferEngine.IsWindowOpen() && completedMW == transfers.WinterWindowStartMatchweek+transfers.WinterTransferWindowWeeks-1 {
-			tm.PushInbox("transfer", "Winter transfer window closes", "January business is complete. The market reopens after the season.", completedMW, nil, "", "")
+			tm.PushInbox(MsgCategoryTransfer, "Winter transfer window closes", "January business is complete. The market reopens after the season.", completedMW, nil, "", "")
 		}
 	}
 	tm.pickPlayerOfTheWeek(completedMW)
@@ -77,7 +77,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 		tm.Inbox = append([]InboxItem{n}, tm.Inbox...)
 	}
 	if completedMW == 24 {
-		tm.PushInbox("nxgn", "NXGN 2027: The 50 Best Wonderkids in World Football Ranked", "Goal's annual NXGN rankings are officially out! The 12 Franchise Prodigies headline the global elite.", completedMW, nil, "", "")
+		tm.PushInbox(MsgCategoryNXGN, "NXGN 2027: The 50 Best Wonderkids in World Football Ranked", "Goal's annual NXGN rankings are officially out! The 12 Franchise Prodigies headline the global elite.", completedMW, nil, "", "")
 	}
 	for _, n := range CheckWonderkidMilestones(completedMW, tm.SeasonName, tm.ClubsList, tm.MilestonesFired, tm.RNG) {
 		tm.Inbox = append([]InboxItem{n}, tm.Inbox...)
@@ -141,7 +141,7 @@ func (tm *TournamentManager) pickPlayerOfTheWeek(mw int) {
 	}
 	if best != nil {
 		tm.PlayerOfTheWeek = best.row
-		tm.PushInbox("honour", fmt.Sprintf("Player of the week: %s", best.row["full_name"]), fmt.Sprintf("%s posted a %.1f against the week's best night.", best.row["full_name"], best.rating), mw, nil, fmt.Sprintf("%v", best.row["player_id"]), "")
+		tm.PushInbox(MsgCategoryHonour, fmt.Sprintf("Player of the week: %s", best.row["full_name"]), fmt.Sprintf("%s posted a %.1f against the week's best night.", best.row["full_name"], best.rating), mw, nil, fmt.Sprintf("%v", best.row["player_id"]), "")
 	}
 }
 
@@ -239,7 +239,7 @@ func (tm *TournamentManager) maybeCrownMonth(endMW int) {
 	if len(tm.GrowthNotifications) > 8 {
 		tm.GrowthNotifications = tm.GrowthNotifications[:8]
 	}
-	tm.PushInbox("honour", fmt.Sprintf("%s player of the month: %s", name, best.fullName), fmt.Sprintf("%.2f average across %d appearances.", avg, len(best.ratings)), endMW, nil, best.playerID, "")
+	tm.PushInbox(MsgCategoryHonour, fmt.Sprintf("%s player of the month: %s", name, best.fullName), fmt.Sprintf("%.2f average across %d appearances.", avg, len(best.ratings)), endMW, nil, best.playerID, "")
 }
 
 func (tm *TournamentManager) decayDerbyHeat(mw int) {
@@ -270,5 +270,5 @@ func (tm *TournamentManager) maybeExamWeekInbox(completedMW int) {
 	if sitting == 0 {
 		return
 	}
-	tm.PushInbox("youth", "Exam week: enrolled prodigies sit", "School comes first while they are enrolled. Cup nights are already off-limits in middle school.", completedMW, nil, "", "")
+	tm.PushInbox(MsgCategoryYouth, "Exam week: enrolled prodigies sit", "School comes first while they are enrolled. Cup nights are already off-limits in middle school.", completedMW, nil, "", "")
 }

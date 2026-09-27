@@ -566,7 +566,7 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 			appendInjuryEvent(report, sc.side, club, player, row, kind)
 			if injury.Severity == medical.SeveritySerious {
 				tm.PushInbox(
-					"injury",
+					MsgCategoryInjury,
 					fmt.Sprintf("CRUSHING BLOW: %s suffers %s", player.FullName, kind),
 					fmt.Sprintf("Devastating news for %s: medical scans confirm %s has suffered a severe %s and is ruled out for %d matches. A massive setback for the squad.", club.ClubName, player.FullName, kind, games),
 					matchweek,
@@ -578,7 +578,7 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 					unit = "match"
 				}
 				tm.PushInbox(
-					"injury",
+					MsgCategoryInjury,
 					fmt.Sprintf("%s: %s out %d %s", capitalizeKind(kind), player.FullName, games, unit),
 					fmt.Sprintf("%s will be without him. The XI changes.", club.ClubName),
 					matchweek,

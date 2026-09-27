@@ -52,7 +52,7 @@ func (tm *TournamentManager) maybePlayerConversationsUnlocked(completedMW int) {
 			continue
 		}
 		body, choices := conversationBody(c.player, c.club, c.kind)
-		id := tm.PushInbox("dugout", headline, body, completedMW, []string{c.club.ClubID}, c.player.PlayerID, "")
+		id := tm.PushInbox(MsgCategoryDugout, headline, body, completedMW, []string{c.club.ClubID}, c.player.PlayerID, "")
 		if id == "" {
 			continue
 		}

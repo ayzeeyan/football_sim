@@ -3,6 +3,7 @@ import { FlaskConical, RefreshCw } from 'lucide-react';
 import type { Club, WhatIfClubDelta, WhatIfResult } from '../../types';
 import { fetchWhatIf } from '../../services/api';
 import { ClubCrest, PrimaryButton } from '../ui/ui';
+import { t } from '../../i18n';
 
 /**
  * What-if sandbox (F4): resolves the fixture under a scratch seed on the
@@ -43,9 +44,9 @@ export const WhatIfPanel: React.FC<{
   return (
     <section className="console-card p-4 sm:p-5" data-whatif-panel="true">
       <div className="flex items-center justify-between gap-3">
-        <p className="match-section-title">What-if sandbox</p>
+        <p className="match-section-title">{t('whatif.title')}</p>
         <span className="flex items-center gap-1 text-[10px] uppercase tracking-[0.12em] text-sage">
-          <FlaskConical size={12} aria-hidden="true" /> Simulation only
+          <FlaskConical size={12} aria-hidden="true" /> {t('whatif.simulationOnly')}
         </span>
       </div>
       <p className="mt-2 text-[12px] leading-relaxed text-sage">
@@ -55,7 +56,7 @@ export const WhatIfPanel: React.FC<{
       {!result && !error && (
         <div className="mt-3">
           <PrimaryButton tone="cyan" onClick={() => void run(0)} disabled={loading}>
-            <FlaskConical size={14} aria-hidden="true" /> {loading ? 'Resolving…' : 'Run what-if'}
+            <FlaskConical size={14} aria-hidden="true" /> {loading ? 'Resolving…' : t('action.runWhatIf')}
           </PrimaryButton>
         </div>
       )}
@@ -114,7 +115,7 @@ export const WhatIfPanel: React.FC<{
 
           <div className="flex flex-wrap items-center gap-3">
             <PrimaryButton tone="cyan" onClick={() => void run((result?.scratch_seed ?? 0) + 1)} disabled={loading}>
-              <RefreshCw size={14} aria-hidden="true" /> {loading ? 'Resolving…' : 'Reroll scratch seed'}
+              <RefreshCw size={14} aria-hidden="true" /> {loading ? 'Resolving…' : t('action.rerollSeed')}
             </PrimaryButton>
             <span className="text-[10px] uppercase tracking-[0.1em] text-sage">Seed {result?.scratch_seed ?? 0}</span>
           </div>

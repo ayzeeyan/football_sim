@@ -185,7 +185,7 @@ func (tm *TournamentManager) seedOpeningInbox() {
 		}
 	}
 	tm.PushInbox(
-		"system",
+		MsgCategorySystem,
 		tm.SeasonName+" Super League opens",
 		"Twelve clubs, 44 matchweeks. Champions Cup and Super Cup share the slate. Watch the kids grow.",
 		1,

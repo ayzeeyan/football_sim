@@ -357,7 +357,7 @@ func (tm *TournamentManager) evaluatePromisesUnlocked(completedMW int) {
 					p.TransferRequested = true
 				}
 				if brokenNotes < 2 {
-					tm.PushInbox("dugout", p.FullName+" says a promise was broken",
+					tm.PushInbox(MsgCategoryDugout, p.FullName+" says a promise was broken",
 						fmt.Sprintf("%s was promised %s at %s and no longer trusts the plan.", p.FullName, p.PromiseKind, club.ShortName),
 						completedMW, []string{club.ClubID}, p.PlayerID, "")
 					brokenNotes++
@@ -413,7 +413,7 @@ func (tm *TournamentManager) maybeLoanReportsUnlocked(completedMW int) {
 	for i := 0; i < limit; i++ {
 		body += "• " + lines[i].text + "\n"
 	}
-	tm.PushInbox("youth", "Loan reports land", strings.TrimSpace(body), completedMW, nil, "", "")
+	tm.PushInbox(MsgCategoryYouth, "Loan reports land", strings.TrimSpace(body), completedMW, nil, "", "")
 }
 
 func (tm *TournamentManager) maybeTacticalEvolutionUnlocked(completedMW int) {
@@ -457,7 +457,7 @@ func (tm *TournamentManager) maybeTacticalEvolutionUnlocked(completedMW int) {
 			tm.ManagerLastChange = map[string]int{}
 		}
 		tm.ManagerLastChange[club.ClubID] = completedMW
-		tm.PushInbox("dugout", fmt.Sprintf("%s tweak their shape", club.ShortName),
+		tm.PushInbox(MsgCategoryDugout, fmt.Sprintf("%s tweak their shape", club.ShortName),
 			fmt.Sprintf("%s abandon %s for %s after three straight league defeats.", mgr.Name, old, mgr.Tactic()),
 			completedMW, []string{club.ClubID}, "", "")
 	}
@@ -530,7 +530,7 @@ func (tm *TournamentManager) pushSeasonPreviewUnlocked() {
 	}
 	body := fmt.Sprintf("%s open as the sides to beat. %s start closer to the trapdoor. Club boards have set their internal expectations.",
 		strings.Join(favs, ", "), strings.Join(scrap, ", "))
-	tm.PushInbox("race", tm.SeasonName+" season preview", body, 1, nil, "", "")
+	tm.PushInbox(MsgCategoryRace, tm.SeasonName+" season preview", body, 1, nil, "", "")
 }
 
 func (tm *TournamentManager) powerRankingsUnlocked(n int) []map[string]interface{} {

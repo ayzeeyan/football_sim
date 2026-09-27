@@ -688,7 +688,7 @@ func (tm *TournamentManager) evaluateManagerTenure(completedMW int) {
 		tm.ManagerLastChange[club.ClubID] = completedMW
 		tm.ManagerConsecutiveHot[club.ClubID] = 0
 		tm.PushInbox(
-			"manager",
+			MsgCategoryManager,
 			fmt.Sprintf("BREAKING: %s sack %s; %s appointed", club.ClubName, old.Name, next.Name),
 			fmt.Sprintf("%s. %s arrive with a %s identity after the board moved on from %s.", reason, next.Name, next.Tactic(), old.Name),
 			completedMW, []string{club.ClubID}, "", "",

@@ -30,7 +30,7 @@ describe('SaveSlotsModal (F9 save slots)', () => {
 
   test('is reachable from the top bar and wired in App', () => {
     expect(topBarSource).toContain('onOpenSlots');
-    expect(topBarSource).toContain('Save slots');
+    expect(topBarSource).toContain("t('action.saveSlots')");
     expect(appSource).toContain('<SaveSlotsModal open={slotsOpen}');
     expect(appSource).toContain('setSlotsOpen(true)');
   });

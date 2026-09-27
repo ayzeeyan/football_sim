@@ -76,7 +76,7 @@ func (tm *TournamentManager) generateWatchlistDigestUnlocked(completedMW int) {
 		lines = lines[:8]
 	}
 	clubIDs := append([]string{}, tm.Watch.Clubs...)
-	tm.PushInbox("watch",
+	tm.PushInbox(MsgCategoryWatch,
 		fmt.Sprintf("Watchlist: %d update%s from matchweek %d", len(lines), plural(len(lines)), completedMW),
 		strings.Join(lines, " "), completedMW, clubIDs, "", "")
 }

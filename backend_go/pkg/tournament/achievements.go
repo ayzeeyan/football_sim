@@ -100,7 +100,7 @@ func (tm *TournamentManager) unlockAchievementUnlocked(a Achievement) bool {
 	tm.AchievementsFired[a.UnlockKey] = true
 	tm.Achievements = append(tm.Achievements, a)
 	tm.PushInbox(
-		"milestone",
+		MsgCategoryMilestone,
 		fmt.Sprintf("MILESTONE: %s — %s", a.Title, a.SubjectName),
 		a.Description,
 		a.Matchweek,

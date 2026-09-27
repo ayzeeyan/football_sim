@@ -48,7 +48,7 @@ func (tm *TournamentManager) NoteMentorDeparture(departedID, departedName, selle
 			if name == "" {
 				name = p.MentorName
 			}
-			tm.PushInbox("transfer",
+			tm.PushInbox(MsgCategoryTransfer,
 				fmt.Sprintf("%s leaves %s without his mentor", name, p.FullName),
 				fmt.Sprintf("%s is gone to %s. %s wanted one more season learning from him.", name, buyerName, p.FullName),
 				matchweek, []string{club.ClubID, sellerID}, p.PlayerID, "")
@@ -89,7 +89,7 @@ func (tm *TournamentManager) mentorDramaForReport(homeClub, awayClub *models.Clu
 					continue
 				}
 				tm.markDramaFired(p.PlayerID, "mentor_feud")
-				tm.PushInbox("wonderkid",
+				tm.PushInbox(MsgCategoryWonderkid,
 					fmt.Sprintf("Falling-out: %s sees red, %s unimpressed", p.FullName, p.MentorName),
 					fmt.Sprintf("Sent off and straight down the tunnel past %s. The mentor relationship needs mending.", p.MentorName),
 					matchweek, []string{pr.club.ClubID}, p.PlayerID, fixtureID)
@@ -132,7 +132,7 @@ func (tm *TournamentManager) mentorDramaForReport(homeClub, awayClub *models.Clu
 				continue
 			}
 			tm.markDramaFired(p.PlayerID, "mentor_ahead")
-			tm.PushInbox("wonderkid",
+			tm.PushInbox(MsgCategoryWonderkid,
 				fmt.Sprintf("He started ahead of me: %s benched for %s", p.FullName, p.MentorName),
 				fmt.Sprintf("%s watched %s start in his place. The kid wants words with the manager.", p.FullName, p.MentorName),
 				matchweek, []string{pr.club.ClubID}, p.PlayerID, fixtureID)

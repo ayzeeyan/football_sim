@@ -119,7 +119,7 @@ func (tm *TournamentManager) executeLoanBuyClausesUnlocked() int {
 				FeeEUR: fee, FormattedFee: models.FormatCurrency(fee), Matchweek: tm.CurrentMatchweek,
 			})
 		}
-		tm.PushInbox("transfer", dest.ShortName+" trigger "+p.FullName+" buy clause",
+		tm.PushInbox(MsgCategoryTransfer, dest.ShortName+" trigger "+p.FullName+" buy clause",
 			fmt.Sprintf("%s pay %s to %s to make %s's loan permanent.", dest.ClubName, models.FormatCurrency(fee), parent.ClubName, p.FullName),
 			tm.CurrentMatchweek, []string{parent.ClubID, dest.ClubID}, p.PlayerID, "")
 	}
@@ -162,7 +162,7 @@ func (tm *TournamentManager) ReturnLoansUnlocked() int {
 			if !inSquad(parent, p) {
 				if len(parent.Squad) >= models.MaxSeniorSquadSize {
 					kept = append(kept, p)
-					tm.PushInbox("transfer", p.FullName+" loan return delayed",
+					tm.PushInbox(MsgCategoryTransfer, p.FullName+" loan return delayed",
 						fmt.Sprintf("%s remain at the squad limit. %s stays on loan at %s until a return slot is available.", parent.ClubName, p.FullName, club.ClubName),
 						tm.CurrentMatchweek, []string{parent.ClubID, club.ClubID}, p.PlayerID, "")
 					continue
@@ -175,7 +175,7 @@ func (tm *TournamentManager) ReturnLoansUnlocked() int {
 			p.ClubID = parent.ClubID
 			returned++
 			returnedTo[parent.ClubID] = parent
-			tm.PushInbox("transfer", p.FullName+" returns from loan",
+			tm.PushInbox(MsgCategoryTransfer, p.FullName+" returns from loan",
 				fmt.Sprintf("%s is back at %s after a season away.", p.FullName, parent.ClubName),
 				tm.CurrentMatchweek, []string{parent.ClubID, club.ClubID}, p.PlayerID, "")
 		}
@@ -192,7 +192,7 @@ func (tm *TournamentManager) ReturnLoansUnlocked() int {
 	}
 	sort.Strings(squeezed)
 	if len(squeezed) > 0 {
-		tm.PushInbox("transfer", "Wage squeeze on returning loanees",
+		tm.PushInbox(MsgCategoryTransfer, "Wage squeeze on returning loanees",
 			fmt.Sprintf("%d club(s) sit above the wage cap after loan returns and must sell before signing again.", len(squeezed)),
 			tm.CurrentMatchweek, squeezed, "", "")
 	}
@@ -337,7 +337,7 @@ func (tm *TournamentManager) arrangeLoansUnlocked(maxOut, maxIn, maxApps int) in
 		if cand.player.LoanBuyClauseEUR > 0 {
 			body += fmt.Sprintf(" %s hold a %s buy clause.", dest.ShortName, models.FormatCurrency(cand.player.LoanBuyClauseEUR))
 		}
-		tm.PushInbox("transfer", cand.player.FullName+" joins "+dest.ShortName+" on loan",
+		tm.PushInbox(MsgCategoryTransfer, cand.player.FullName+" joins "+dest.ShortName+" on loan",
 			body,
 			tm.CurrentMatchweek, []string{cand.parent.ClubID, dest.ClubID}, cand.player.PlayerID, "")
 	}

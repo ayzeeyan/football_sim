@@ -1,4 +1,5 @@
 import type { Club, Player } from '../types';
+import { t } from '../i18n';
 
 /** Central app constants — single source of truth for tabs, leagues, speeds. */
 
@@ -18,26 +19,26 @@ export const TRAINING_FOCUSES = [
 export type TrainingFocus = (typeof TRAINING_FOCUSES)[number]['value'];
 
 export const TABS = [
-  { id: 8, slug: 'home', label: 'Home' },
-  { id: 0, slug: 'match', label: 'Match Centre' },
-  { id: 6, slug: 'inbox', label: 'News' },
-  { id: 2, slug: 'league', label: 'Tables' },
-  { id: 7, slug: 'competitions', label: 'Competitions' },
-  { id: 5, slug: 'history', label: 'History' },
-  { id: 3, slug: 'squads', label: 'Clubs' },
-  { id: 9, slug: 'players', label: 'Players' },
-  { id: 4, slug: 'transfers', label: 'Transfers' },
-  { id: 1, slug: 'lab', label: 'Wonderkids' },
-  { id: 10, slug: 'stats', label: 'Statistics' },
+  { id: 8, slug: 'home', label: t('nav.home') },
+  { id: 0, slug: 'match', label: t('nav.match') },
+  { id: 6, slug: 'inbox', label: t('nav.inbox') },
+  { id: 2, slug: 'league', label: t('nav.league') },
+  { id: 7, slug: 'competitions', label: t('nav.competitions') },
+  { id: 5, slug: 'history', label: t('nav.history') },
+  { id: 3, slug: 'squads', label: t('nav.squads') },
+  { id: 9, slug: 'players', label: t('nav.players') },
+  { id: 4, slug: 'transfers', label: t('nav.transfers') },
+  { id: 1, slug: 'lab', label: t('nav.lab') },
+  { id: 10, slug: 'stats', label: t('nav.stats') },
 ] as const;
 
 /** Sidebar sections: the season you are watching, the competitions it
  *  produces, the world you browse, and the future you develop. */
 export const NAV_GROUPS: Array<{ label: string; slugs: Array<(typeof TABS)[number]['slug']> }> = [
-  { label: 'Season', slugs: ['home', 'match', 'inbox'] },
-  { label: 'Competitions', slugs: ['league', 'competitions', 'history', 'stats'] },
-  { label: 'Clubs & Market', slugs: ['squads', 'players', 'transfers'] },
-  { label: 'The Future', slugs: ['lab'] },
+  { label: t('navgroup.season'), slugs: ['home', 'match', 'inbox'] },
+  { label: t('navgroup.competitions'), slugs: ['league', 'competitions', 'history', 'stats'] },
+  { label: t('navgroup.market'), slugs: ['squads', 'players', 'transfers'] },
+  { label: t('navgroup.future'), slugs: ['lab'] },
 ];
 
 export type TabId = (typeof TABS)[number]['id'];
