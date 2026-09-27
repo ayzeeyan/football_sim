@@ -1,84 +1,17 @@
 import React, { useCallback, useState } from 'react';
-import type { TransferNegotiation, TransferRecordsData } from '../../types';
-import { fetchTransfers, fetchTransferRecords, advanceMarket, resetSeason, type TransfersResponse } from '../../services/api';
-import { Zap, Flame, CheckCircle, Newspaper, Handshake, ListChecks, Heart, Hourglass, FlagOff, Landmark, Sparkle, Trophy } from 'lucide-react';
-import { soundManager } from '../../audio/webAudio';
-import { useAsyncData } from '../../hooks/useAsyncData';
-import { formatMillions, cx, stripEmojis } from '../../lib/format';
-import { getClubCrestUrlByShort } from '../../lib/clubLogos';
-import { focusTabAt, nextTabIndex } from '../../lib/rovingTabindex';
-import { Badge, Card, ClubDot, ConfirmBar, EmptyState, ErrorState, LoadingState, PanelHeader, PrimaryButton, ProgressBar } from '../ui/ui';
-import { usePlayerSheet } from '../clubs/PlayerSheet';
+import type { TransferRecordsData } from '../../../types';
+import { fetchTransfers, fetchTransferRecords, advanceMarket, resetSeason} from '../../../services/api';
+import { Zap, CheckCircle, Newspaper, Handshake, ListChecks, Heart, Hourglass, FlagOff, Landmark, Sparkle, Trophy } from 'lucide-react';
+import { soundManager } from '../../../audio/webAudio';
+import { useAsyncData } from '../../../hooks/useAsyncData';
+import { formatMillions, cx, stripEmojis } from '../../../lib/format';
+import { getClubCrestUrlByShort } from '../../../lib/clubLogos';
+import { focusTabAt, nextTabIndex } from '../../../lib/rovingTabindex';
+import { Badge, Card, ConfirmBar, EmptyState, ErrorState, LoadingState, PanelHeader, PrimaryButton, ProgressBar } from '../../ui/ui';
+import { usePlayerSheet } from '../../clubs/PlayerSheet';
+import { canStartNextSeason, type TransfersSubTab, type TransfersTabProps } from './helpers';
+import { NegotiationCard } from './NegotiationCard';
 
-interface TransfersTabProps {
-  onShowToast: (msg: string) => void;
-}
-
-export function canStartNextSeason(data: Pick<TransfersResponse, 'is_window_open' | 'window_type' | 'season_phase' | 'window_week' | 'max_window_weeks'>): boolean {
-  const week = data.window_week ?? 0;
-  const maxWeeks = data.max_window_weeks ?? 12;
-  return !data.is_window_open && data.window_type === 'SUMMER' && data.season_phase === 'transfer_window' && week === maxWeeks;
-}
-
-const STAGE_TONES = ['', 'bg-[#5B7FA6]', 'bg-[#C98A4B]', 'bg-[#8E86C8]', 'bg-[#8AB4C8]', 'bg-pitchtone'];
-
-type TransfersSubTab = 'negotiations' | 'feed' | 'warchests' | 'history' | 'records';
-
-const STAGE_LABELS: Record<number, string> = {
-  1: 'Initial Enquiry & Scouting',
-  2: 'Opening Valuation Bids',
-  3: 'Transfer Fee Agreed',
-  4: 'Personal Terms & Medical',
-  5: 'Final Contract Signed',
-};
-
-const NegotiationCard: React.FC<{ neg: TransferNegotiation; onPlayerClick: (id: string) => void }> = ({ neg, onPlayerClick }) => (
-  <div
-    className={cx(
-      'p-4 rounded-xl border transition-colors',
-      neg.is_hijacked ? 'border-ember/50 bg-ember/[0.06]' : neg.is_wonderkid ? 'border-brass/45 bg-brass/[0.06]' : 'border-line bg-ink/40',
-    )}
-  >
-    <div className="flex items-center justify-between gap-2">
-      <button
-        type="button"
-        onClick={() => {
-          soundManager.playClick();
-          onPlayerClick(neg.player.player_id);
-        }}
-        className="text-left font-semibold text-[14px] text-bone hover:text-brass transition-colors min-w-0 flex items-center gap-2"
-      >
-        <span className="truncate">{neg.player.full_name}</span>
-        <span className="text-[12px] text-sage font-mono shrink-0">[{neg.player.ovr} · {neg.player.position}]</span>
-        {neg.is_wonderkid && (
-          <span className="px-1.5 py-0.2 rounded bg-brass/20 text-brass text-[10px] font-mono font-bold flex items-center gap-0.5 shrink-0">
-            <Sparkle size={10} /> PRODIGY
-          </span>
-        )}
-      </button>
-      <div className="text-[#A9CDBB] font-bold font-mono text-[14px] shrink-0">Bid {neg.formatted_bid}</div>
-    </div>
-    <div className="text-[13px] text-sage mt-2 flex items-center gap-2 flex-wrap">
-      <span className="inline-flex items-center gap-1.5"><ClubDot club={neg.seller} size={22} />{neg.seller.club_name}</span>
-      <span aria-hidden className="text-sage/60">→</span>
-      <span className="text-bone/85 font-semibold inline-flex items-center gap-1.5"><ClubDot club={neg.buyer} size={22} />{neg.buyer.club_name}</span>
-      {neg.is_hijacked && (
-        <span className="text-[#D89A84] font-semibold text-[11px] flex items-center gap-1 ml-auto uppercase tracking-[0.06em]">
-          <Flame size={12} className="text-ember" /> Rival bid from {neg.original_buyer?.short_name}
-        </span>
-      )}
-    </div>
-    <div className="mt-3.5 space-y-1.5">
-      <div className="flex justify-between font-mono text-[11px] font-semibold">
-        <span className="text-sage uppercase tracking-[0.08em]">
-          Stage {neg.stage_index}/5 · {STAGE_LABELS[neg.stage_index] || neg.stage_name}
-        </span>
-        <span className="text-bone/80">{neg.progress_pct}%</span>
-      </div>
-      <ProgressBar pct={neg.progress_pct} toneClass={STAGE_TONES[neg.stage_index] || 'bg-brass'} />
-    </div>
-  </div>
-);
 
 export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
   const { data, loading, error, reload } = useAsyncData(fetchTransfers);

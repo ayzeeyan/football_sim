@@ -60,7 +60,7 @@ describe('modal tab stacks keep the ARIA contract', () => {
   });
 
   test('transfers tablist', () => {
-    const src = read('../components/transfers/TransfersTab.tsx');
+    const src = read('../components/transfers/TransfersTab/TransfersTab.tsx');
     expect(src).toContain('role="tablist"');
     expect(src).toContain('onKeyDown={handleSubTabKeyDown}');
     expect(src).toContain('nextTabIndex');
