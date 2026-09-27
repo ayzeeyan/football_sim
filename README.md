@@ -259,6 +259,10 @@ The 36-team league phase is an exact Swiss draw (`world_manager.go`):
 
 Ranks 9–24 play two-legged knockout play-offs; ranks 1–8 bye to the Round of 16. Two-legged ties swap venues with **no away-goals rule**; level aggregates after leg 2 go to extra time and penalties. European finals are one-off matches in MW 38.
 
+### Promotion and relegation
+
+The dataset contains only the five top flights — there is no second division — so the world is a closed pyramid: the five leagues form a prestige ladder (Premier League → La Liga → Bundesliga → Serie A → Ligue 1) and each adjacent pair exchanges boundary clubs at the season transition. The bottom three of the stronger league are relegated into the weaker league; the top three of the weaker league are promoted into the stronger one. League sizes never change, all 96 dataset clubs (and their crest mappings) are preserved, and the exchange is a deterministic function of the final tables. Ligue 1 is the base of the pyramid: its relegation places are a survival battle with no lower tier to drop into, and the season-transition news says so explicitly.
+
 ### Qualification quotas
 
 Next season's fields: UCL 36 (8 England, 8 Spain, 8 Italy, 6 Germany, 6 France, plus the titleholder), Europa 20 (domestic cup winners plus top remaining league positions), Conference 20 (next-highest league finishers).

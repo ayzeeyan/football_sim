@@ -1,4 +1,6 @@
-/** League table qualification bands for the Top Five. Last three go down. */
+/** League table qualification bands for the Top Five. Last three go down:
+ *  the closed pyramid swaps them with the top three of the next-weaker
+ *  league at the season transition (Ligue 1 is the base — survival only). */
 
 export type QualBand = 'ucl' | 'el' | 'ecl' | 'rel' | null;
 

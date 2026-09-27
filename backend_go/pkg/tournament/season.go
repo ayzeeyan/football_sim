@@ -856,6 +856,10 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	// accumulate) for the season ahead.
 	tm.resetEuropeanRevenueLedgerUnlocked()
 	tm.archiveEuropeanSeasonUnlocked()
+	// Promotion and relegation are planned from the final tables here;
+	// the swaps are applied after every table read, just before the
+	// calendar rebuild re-seeds league and cup participants.
+	relegationMoves := tm.planDomesticPromotionRelegationUnlocked()
 	for _, club := range tm.ClubsList {
 		place := tm.leaguePlaceUnlocked(club)
 		for _, player := range club.Squad {
@@ -933,6 +937,7 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	tm.ReputationAppliedSeason = ""
 	tm.ContractsResolvedSeason = ""
 	tm.runYouthIntakeUnlocked()
+	tm.applyPlannedRelegationUnlocked(relegationMoves)
 	tm.rebuildEuropeanWorldCalendarUnlocked(qualification)
 	tm.initializeNationalTeamsUnlocked()
 	tm.AssignSquadRolesUnlocked()
@@ -949,6 +954,7 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	}
 	tm.ManagerConsecutiveHot, tm.ManagerLastChange = map[string]int{}, map[string]int{}
 	PairSeniorMentors(tm.ClubsList, tm.GrowthEngine)
+	tm.pushRelegationNewsUnlocked(relegationMoves, 1)
 	tm.PushInbox("system", tm.SeasonName+" European season begins", "Domestic tables reset, national cups are drawn, and qualification has set the European fields.", 1, nil, "", "")
 	return map[string]interface{}{"status": "success", "message": "New European season initialized.", "current_matchweek": 1, "max_matchweeks": tm.MaxMatchweeks, "retired_player_ids": retired}
 }
