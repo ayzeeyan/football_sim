@@ -3,6 +3,7 @@ package tournament
 import (
 	"encoding/json"
 	"math/rand"
+	"strings"
 	"testing"
 
 	"football_sim/pkg/growth"
@@ -91,15 +92,26 @@ func TestChunk3BackfillMentorship(t *testing.T) {
 func TestChunk3BackfillMilestones(t *testing.T) {
 	mkWK := func(id string, age int) *models.Player {
 		return &models.Player{PlayerID: id, FullName: "Kid " + id, Position: "ST", Category: "FWD",
-			OVR: 78, Age: age, UniverseWonderkid: true, Personality: "dedicated_pro", MentorName: "Vet"}
+			OVR: 78, Age: age, UniverseWonderkid: true, Personality: "dedicated_pro", MentorName: "Vet", ClubID: "C1"}
 	}
-	club := &models.Club{ClubID: "C1", ClubName: "Club One", ShortName: "CONE", Squad: []*models.Player{
+	club := &models.Club{ClubID: "C1", ClubName: "Club One", ShortName: "CONE", Country: "Spain", Squad: []*models.Player{
 		mkWK("W15", 15), mkWK("W17", 17), mkWK("W18", 18), mkWK("W14", 14),
 	}}
 	fired := map[string]map[string]bool{}
 	news := CheckWonderkidMilestones(20, "2026-27", []*models.Club{club}, fired, rand.New(rand.NewSource(2)))
 	if len(news) != 3 {
 		t.Fatalf("milestones fired = %d; want 3 (15/17/18)", len(news))
+	}
+	for _, item := range news {
+		if strings.Contains(item.Headline, "Philippines") {
+			t.Errorf("call-up nation must be derived from club country, got %q", item.Headline)
+		}
+		if strings.Contains(item.Body, "AFC qualifiers") {
+			t.Errorf("European world must cite UEFA qualifiers, got %q", item.Body)
+		}
+		if strings.Contains(item.Headline, "international call-up") && !strings.Contains(item.Headline, "Spain U-19") {
+			t.Errorf("call-up should cite Spain U-19, got %q", item.Headline)
+		}
 	}
 	// Re-fire is idempotent.
 	if again := CheckWonderkidMilestones(20, "2026-27", []*models.Club{club}, fired, rand.New(rand.NewSource(2))); len(again) != 0 {
@@ -117,6 +129,49 @@ func TestChunk3BackfillMilestones(t *testing.T) {
 	fresh3 := map[string]map[string]bool{}
 	if got := CheckWonderkidMilestones(19, "2026-27", []*models.Club{club}, fresh3, rand.New(rand.NewSource(2))); len(got) != 2 {
 		t.Errorf("mw 19 should fire 15+17 deals, got %d", len(got))
+	}
+}
+
+func TestWonderkidMilestoneNationDerivation(t *testing.T) {
+	mkWK := func(id string, clubID, originID string) *models.Player {
+		return &models.Player{PlayerID: id, FullName: "Kid " + id, Position: "ST", Category: "FWD",
+			OVR: 78, Age: 17, UniverseWonderkid: true, Personality: "dedicated_pro",
+			ClubID: clubID, OriginalClubID: originID}
+	}
+	// Nation follows the immutable original club, not the current one.
+	moved := mkWK("WMOV", "EPL-ARS", "SEA-NAP")
+	// Direct unit checks of the derivation helper.
+	countryByClubID := map[string]string{"EPL-ARS": "England", "SEA-NAP": "Italy"}
+	if got := wonderkidNation(moved, countryByClubID); got != "Italy" {
+		t.Errorf("nation should follow original club (Italy), got %q", got)
+	}
+	// Missing origin falls back to the current club.
+	noOrigin := mkWK("WORIG", "EPL-ARS", "")
+	noOrigin.OriginalClubID = ""
+	if got := wonderkidNation(noOrigin, countryByClubID); got != "England" {
+		t.Errorf("nation should fall back to current club (England), got %q", got)
+	}
+	// Unknown origin club also falls back to the current club.
+	ghost := mkWK("WGHOST", "EPL-ARS", "NOWHERE")
+	if got := wonderkidNation(ghost, countryByClubID); got != "England" {
+		t.Errorf("unknown origin should fall back to current club (England), got %q", got)
+	}
+	// A player with no resolvable country does not fire the call-up.
+	lost := mkWK("WLOST", "VOID", "VOID")
+	emptyFired := map[string]map[string]bool{}
+	if got := CheckWonderkidMilestones(10, "2026-27", []*models.Club{{ClubID: "VOID", ShortName: "VOID", Squad: []*models.Player{lost}}}, emptyFired, rand.New(rand.NewSource(2))); len(got) != 0 {
+		t.Errorf("country-less wonderkid must not fire a call-up, got %d items", len(got))
+	}
+	if emptyFired["WLOST"]["national_team"] {
+		t.Errorf("country-less call-up must not be marked fired")
+	}
+	// Sanity: the milestone news path itself uses the derived nation.
+	homegrown := mkWK("WHOME", "SEA-NAP", "SEA-NAP")
+	homeClub := &models.Club{ClubID: "SEA-NAP", ClubName: "Napoli", ShortName: "NAP", Country: "Italy", Squad: []*models.Player{homegrown}}
+	fired2 := map[string]map[string]bool{}
+	news := CheckWonderkidMilestones(10, "2026-27", []*models.Club{homeClub}, fired2, rand.New(rand.NewSource(2)))
+	if len(news) != 1 || !strings.Contains(news[0].Headline, "Italy U-19") {
+		t.Errorf("call-up should cite Italy U-19, got %+v", news)
 	}
 }
 

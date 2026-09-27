@@ -122,6 +122,20 @@ func GenerateNXGN50(clubs []*models.Club, ge *growth.GrowthEngine) []NXGNRanking
 	return rankings
 }
 
+// wonderkidNation mirrors the Nations Cup eligibility rule from
+// national_teams.go: a player's nation is the country of his immutable
+// original club, falling back to his current club when no origin is recorded.
+func wonderkidNation(p *models.Player, countryByClubID map[string]string) string {
+	originID := p.OriginalClubID
+	if originID == "" {
+		originID = p.ClubID
+	}
+	if country, ok := countryByClubID[originID]; ok && country != "" {
+		return country
+	}
+	return countryByClubID[p.ClubID]
+}
+
 // CheckWonderkidMilestones triggers autonomous milestone events at specific ages.
 func CheckWonderkidMilestones(
 	completedMW int,
@@ -131,6 +145,13 @@ func CheckWonderkidMilestones(
 	rng *rand.Rand,
 ) []InboxItem {
 	var news []InboxItem
+
+	countryByClubID := make(map[string]string, len(clubs))
+	for _, club := range clubs {
+		if club != nil {
+			countryByClubID[club.ClubID] = club.Country
+		}
+	}
 
 	for _, club := range clubs {
 		for _, p := range club.Squad {
@@ -163,20 +184,22 @@ func CheckWonderkidMilestones(
 
 			// Age 17: Youth International Call-up
 			if p.Age == 17 && !fired["national_team"] && completedMW >= 10 {
-				fired["national_team"] = true
-				headline := fmt.Sprintf("BREAKING: %s receives first international call-up for Philippines U-19", p.FullName)
-				body := fmt.Sprintf("%s's scintillating club form at %s has earned him a maiden call-up to the national youth squad for the upcoming AFC qualifiers.", p.FullName, club.ShortName)
-				news = append(news, NewInboxItem(
-					fmt.Sprintf("WK_NAT_%s_%d", p.PlayerID, completedMW),
-					"wonderkid",
-					headline,
-					body,
-					completedMW,
-					seasonName,
-					[]string{club.ClubID},
-					p.PlayerID,
-					"",
-				))
+				if nation := wonderkidNation(p, countryByClubID); nation != "" {
+					fired["national_team"] = true
+					headline := fmt.Sprintf("BREAKING: %s receives first international call-up for %s U-19", p.FullName, nation)
+					body := fmt.Sprintf("%s's scintillating club form at %s has earned him a maiden call-up to the national youth squad for the upcoming UEFA qualifiers.", p.FullName, club.ShortName)
+					news = append(news, NewInboxItem(
+						fmt.Sprintf("WK_NAT_%s_%d", p.PlayerID, completedMW),
+						"wonderkid",
+						headline,
+						body,
+						completedMW,
+						seasonName,
+						[]string{club.ClubID},
+						p.PlayerID,
+						"",
+					))
+				}
 			}
 
 			// Age 18: Senior Graduation & Golden Boy shortlist
