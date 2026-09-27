@@ -3,3 +3,4 @@
 export * from './WonderkidLabTab';
 export * from './ProdigyRadar';
 export * from './ProdigyWatch';
+export * from './TrainingPlanner';

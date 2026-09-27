@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { GrowthMilestoneItem, ProdigyData, ProdigyTimelineResponse, ProdigyWatchRow } from '../../../types';
 import { fetchProdigies, fetchGrowthMilestones, setProdigyPositionPath, setProdigySchoolTrack, fetchProdigyTimeline, fetchProdigyWatch } from '../../../services/api';
-import { Dna, Zap, TrendingUp, ClipboardCheck, Award, LayoutGrid, Eye, Sparkle, Microscope, CheckCircle2, Lock, Ruler, Scale, Calendar, Trophy, ChevronRight } from 'lucide-react';
+import { Dna, Zap, TrendingUp, Award, LayoutGrid, Eye, Sparkle, Microscope, CheckCircle2, Lock, Ruler, Scale, Calendar, Trophy, ChevronRight } from 'lucide-react';
 import { soundManager } from '../../../audio/webAudio';
 import { cx, stripEmojis, formatHeight } from '../../../lib/format';
 import { Badge, Card, ClubCrest, EmptyState, LoadingState, PanelHeader, ProgressBar } from '../../ui/ui';
 import { ProdigyRadar } from '../ProdigyRadar';
 import { ProdigyWatch } from '../ProdigyWatch';
+import { TrainingPlanner } from '../TrainingPlanner';
 import { usePlayerSheet } from '../../clubs/PlayerSheet';
 
 import { milestoneTone, type WonderkidLabTabProps } from './helpers';
@@ -362,18 +363,8 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
 
           <Card className="lg:col-span-4 flex flex-col justify-between">
             <ProdigyRadar attributes={selected.attributes} ovr={selected.ovr} />
-            <div className="bg-ink/40 border border-line rounded-xl p-4 space-y-2.5 mt-4">
-              <div className="flex items-center justify-between">
-                <div className="text-[13px] font-semibold text-bone flex items-center gap-1.5">
-                  <ClipboardCheck size={15} className="text-brass" /><span>Managed by club staff</span>
-                </div>
-                <span className="text-[12px] font-mono text-sage font-semibold">{energy}/{maxEnergy} sessions a week</span>
-              </div>
-              <p className="text-[13px] text-sage leading-relaxed">
-                Club staff run occasional sessions, rotating hypertrophy, technical, and tactical work.
-                Minutes in matches do most of the developing. They stop getting taller at their adult
-                height age, then keep improving toward potential.
-              </p>
+            <div className="mt-4">
+              <TrainingPlanner prodigy={selected} onShowToast={onShowToast} onTrained={() => void loadData()} />
             </div>
           </Card>
 

@@ -395,7 +395,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/clubs`, `/api/clubs/{club_id}/squad`, `/api/clubs/{club_id}/xi`, `/api/clubs/{club_id}/history`, `/api/clubs/{club_id}/profile`, `/api/clubs/{club_id}/fixtures`, `/api/clubs/{club_id}/transfers`
 - `GET /api/h2h/{club_a}/{club_b}`, `/api/players/{player_id}`, `/api/search?q=...`
 - `GET /api/prodigies`, `/api/prodigies/watch`, `/api/wonderkids` (legacy alias)
-- `GET /api/prodigies/{player_id}/timeline`, `/api/growth/milestones`, `/api/training/status`, `/api/nxgn50`
+- `GET /api/prodigies/{player_id}/timeline`, `/api/growth/milestones`, `/api/training/status`, `/api/training/projection/{player_id}`, `/api/nxgn50`
 - `POST /api/prodigies/{player_id}/train`, `POST /api/prodigies/{player_id}/position-path`, `POST /api/prodigies/{player_id}/school-track`
 - `GET /api/calendar`, `/api/fixtures`, `/api/fixtures/{fixture_id}`, `/api/competitions`, `/api/competitions/{competition_id}`
 - `GET /api/competitions/nations-cup` — national squads, results, table, and history

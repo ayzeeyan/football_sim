@@ -116,4 +116,20 @@ export function fetchGrowthMilestones(): Promise<GrowthMilestoneItem[]> {
 // Consumed by the prodigy training planner (Phase 3 F1) to show energy spend.
 export function fetchTrainingStatus(): Promise<{ training_energy: number; max_training_energy: number }> {
   return apiFetch('/training/status', undefined, { training_energy: 3, max_training_energy: 3 });
-}
+}
+export interface TrainingProjection {
+  player_id: string;
+  player_name: string;
+  club_id: string;
+  focus: 'hypertrophy' | 'technical' | 'tactical';
+  rationale: string;
+  projected_gains: string[];
+  trainable: boolean;
+  training_energy: number;
+  max_training_energy: number;
+}
+
+/** Read-only "what the staff do" projection for any player (Phase 3 F1). */
+export function fetchTrainingProjection(playerId: string): Promise<TrainingProjection | null> {
+  return apiFetch<TrainingProjection | null>(`/training/projection/${encodeURIComponent(playerId)}`, undefined, null);
+}

@@ -357,6 +357,35 @@ func (s *Server) handleGetTrainingStatus(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// handleGetTrainingProjection returns the read-only "what the staff do"
+// plan for any player. Prodigies are additionally trainable through the
+// interactive planner (POST /api/prodigies/{player_id}/train).
+func (s *Server) handleGetTrainingProjection(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	defer s.worldMu.RUnlock()
+
+	pid := r.PathValue("player_id")
+	player, club := s.findPlayer(pid)
+	if player == nil {
+		http.Error(w, "Player not found", http.StatusNotFound)
+		return
+	}
+	trainable := s.GrowthEngine.Biometrics[pid] != nil
+	proj := growth.ProjectTrainingWeek(player, trainable)
+	payload := map[string]interface{}{
+		"player_id":           pid,
+		"player_name":         player.FullName,
+		"club_id":             club.ClubID,
+		"focus":               proj.Focus,
+		"rationale":           proj.Rationale,
+		"projected_gains":     proj.ProjectedGains,
+		"trainable":           proj.Trainable,
+		"training_energy":     s.GrowthEngine.TrainingEnergy,
+		"max_training_energy": s.GrowthEngine.MaxTrainingEnergy,
+	}
+	writeJSON(w, payload)
+}
+
 func (s *Server) handleGetNXGN50(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RLock()
 	rankings := tournament.GenerateNXGN50(s.TournamentManager.ClubsList, s.GrowthEngine)
