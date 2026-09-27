@@ -381,6 +381,36 @@ export interface HeadToHeadRow {
   stage: string;
 }
 
+export interface ReportSummaryScorer {
+  minute: number;
+  player_id: string;
+  player_name: string;
+  club_id: string;
+  type: string;
+}
+
+export interface ReportSummary {
+  home_goals: number;
+  away_goals: number;
+  ht_home: number;
+  ht_away: number;
+  home_formation?: string;
+  away_formation?: string;
+  scorers?: ReportSummaryScorer[];
+  red_cards?: Array<{ minute: number; player_id: string; player_name: string; club_id: string }>;
+  motm?: { player_id: string; full_name: string; rating?: string } | null;
+  possession_home: number;
+  possession_away: number;
+  shots_home: number;
+  shots_away: number;
+  xg_home: number;
+  xg_away: number;
+  attendance?: number;
+  referee?: string;
+  weather?: string;
+  decided_by?: string;
+}
+
 export interface Fixture {
   id: string;
   fixture_id?: string;
@@ -422,6 +452,9 @@ export interface Fixture {
   shot_map?: ShotMapData | null;
   touch_heatmap?: TouchHeatmapData | null;
   press_conference?: PressConferenceData | null;
+  /** Archival summary present when the full report was aged out by the
+   *  backend retention policy (fixtures older than the keep window). */
+  report_summary?: ReportSummary | null;
   home_manager?: ManagerInfo | null;
   away_manager?: ManagerInfo | null;
   tactical_shifts?: TacticalShiftItem[];

@@ -182,6 +182,11 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 			if fixture.OneScoreOnly || (fixture.Status == "finished" && !fixture.HasScore) || fixture.NegativeScore {
 				return fmt.Errorf("career snapshot fixture %q has impossible result state", fixture.ID)
 			}
+			// Retention policy invariant: a fixture carries either its full
+			// report or its archival summary, never both.
+			if fixture.HasReport && fixture.HasSummary {
+				return fmt.Errorf("career snapshot fixture %q carries both a full report and an archival summary", fixture.ID)
+			}
 		}
 	}
 
@@ -334,6 +339,8 @@ type tournamentFixtureView struct {
 	HasScore      bool
 	OneScoreOnly  bool
 	NegativeScore bool
+	HasReport     bool
+	HasSummary    bool
 }
 
 func fixtureViews(fixtures []tournament.Fixture) []tournamentFixtureView {
@@ -345,6 +352,7 @@ func fixtureViews(fixtures []tournament.Fixture) []tournamentFixtureView {
 		out = append(out, tournamentFixtureView{
 			ID: f.FixtureID, HomeID: f.HomeID, AwayID: f.AwayID, Status: f.Status,
 			HasScore: hasHome && hasAway, OneScoreOnly: hasHome != hasAway, NegativeScore: negative,
+			HasReport: f.Report != nil, HasSummary: f.ReportSummary != nil,
 		})
 	}
 	return out

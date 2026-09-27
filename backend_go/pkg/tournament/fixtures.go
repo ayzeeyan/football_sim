@@ -23,6 +23,9 @@ type Fixture struct {
 	HomeGoals       *int                     `json:"home_goals"`
 	AwayGoals       *int                     `json:"away_goals"`
 	Report          *matchreport.MatchReport `json:"report,omitempty"`
+	// ReportSummary replaces Report for fixtures aged past the summary
+	// retention window; it keeps scores and player/club identifiers.
+	ReportSummary   *matchreport.ReportSummary `json:"report_summary,omitempty"`
 	Weather         string                   `json:"weather"`
 	DerbyName       string                   `json:"derby_name,omitempty"`
 	DerbyHeat       int                      `json:"derby_heat"`

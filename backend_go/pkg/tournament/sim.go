@@ -864,9 +864,19 @@ func (tm *TournamentManager) finishTableImpact(impact *matchreport.TableImpact, 
 
 const reportArchiveKeepWeeks = 3
 
-// CompactAgedReports drops heatmap points and xG-flow from finished matches
-// older than the last three matchweeks. Recent reports stay detailed for
-// post-match review; older ones keep score, events, XI ratings, and stats.
+// reportSummaryKeepWeeks bounds how long a finished match keeps even its
+// compacted report. Beyond this window the report is replaced by an archival
+// summary (score, scorers with player+club IDs, MOTM, key stats), which keeps
+// the career save from growing without bound across a 38-week season.
+const reportSummaryKeepWeeks = 8
+
+// CompactAgedReports applies the two-tier report retention policy:
+//   - last reportArchiveKeepWeeks matchweeks: full report
+//   - next (reportSummaryKeepWeeks - reportArchiveKeepWeeks): compacted report
+//   - older: archival summary only
+//
+// Recent reports stay detailed for post-match review; the policy is pure
+// bookkeeping and consumes no randomness.
 func (tm *TournamentManager) CompactAgedReports() {
 	if tm == nil {
 		return
@@ -878,17 +888,26 @@ func (tm *TournamentManager) compactAgedReportsUnlocked() {
 	if tm == nil {
 		return
 	}
-	keepFrom := tm.CurrentMatchweek - reportArchiveKeepWeeks
-	if keepFrom < 1 {
+	compactFrom := tm.CurrentMatchweek - reportArchiveKeepWeeks
+	summaryFrom := tm.CurrentMatchweek - reportSummaryKeepWeeks
+	if compactFrom < 1 {
 		return
 	}
 	compactList := func(list []Fixture) {
 		for i := range list {
 			f := &list[i]
-			if f.Report == nil || f.Status != "finished" || f.Matchweek >= keepFrom {
+			if f.Status != "finished" {
 				continue
 			}
-			matchreport.CompactForArchive(f.Report)
+			if f.Report != nil && f.Matchweek < compactFrom && f.Matchweek >= summaryFrom {
+				matchreport.CompactForArchive(f.Report)
+			}
+			if f.Report != nil && f.Matchweek < summaryFrom {
+				if f.ReportSummary == nil {
+					f.ReportSummary = matchreport.SummarizeReport(f.Report)
+				}
+				f.Report = nil
+			}
 		}
 	}
 	compactList(tm.Fixtures)

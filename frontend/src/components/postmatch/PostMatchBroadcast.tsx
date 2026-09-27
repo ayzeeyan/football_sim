@@ -114,6 +114,53 @@ export const PostMatchBroadcast: React.FC<PostMatchBroadcastProps> = ({
     );
   }
 
+  if (!fixture.events?.length && fixture.report_summary) {
+    const summary = fixture.report_summary;
+    return (
+      <section data-post-match="true" className="console-hero flex flex-col border border-brass/25 bg-[#0a1811] rounded-lg p-6 sm:p-8">
+        <MatchResultHeader fixture={fixture} home={home} away={away} homeScore={summary.home_goals} awayScore={summary.away_goals} events={events} />
+        <div className="mt-4 rounded-md border border-line bg-black/20 p-4" data-archived-summary="true">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brass/80">Archived match summary</p>
+          <p className="mt-1 text-[11px] text-sage">Full match detail is retained for recent fixtures; this older result keeps the archival record.</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-[12px] sm:grid-cols-4">
+            <div><p className="text-sage">Half-time</p><p className="font-mono text-bone">{summary.ht_home}–{summary.ht_away}</p></div>
+            <div><p className="text-sage">Possession</p><p className="font-mono text-bone">{summary.possession_home}%–{summary.possession_away}%</p></div>
+            <div><p className="text-sage">Shots</p><p className="font-mono text-bone">{summary.shots_home}–{summary.shots_away}</p></div>
+            <div><p className="text-sage">xG</p><p className="font-mono text-bone">{summary.xg_home.toFixed(2)}–{summary.xg_away.toFixed(2)}</p></div>
+          </div>
+          {(summary.scorers?.length ?? 0) > 0 && (
+            <div className="mt-3 border-t border-white/[0.08] pt-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-sage">Goals</p>
+              <ul className="mt-1 space-y-0.5 text-[12px] text-bone">
+                {summary.scorers?.map((scorer, i) => (
+                  <li key={`${scorer.player_id}-${i}`}>
+                    <button type="button" className="hover:text-brass" onClick={() => onOpenPlayer(scorer.player_id)}>
+                      {scorer.player_name} {scorer.minute}&prime;{scorer.type === 'own_goal' ? ' (og)' : ''}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {summary.motm && (
+            <p className="mt-3 border-t border-white/[0.08] pt-3 text-[12px] text-sage">
+              Player of the match:{' '}
+              <button type="button" className="font-semibold text-bone hover:text-brass" onClick={() => onOpenPlayer(summary.motm!.player_id)}>
+                {summary.motm.full_name}
+              </button>
+              {summary.motm.rating ? ` (${summary.motm.rating})` : ''}
+            </p>
+          )}
+        </div>
+        {onBackToMatches && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" onClick={onBackToMatches} className="px-4 py-2 text-[12px] font-semibold border border-line bg-cardLight text-bone hover:bg-cardHover">Back to Matches</button>
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section
       data-post-match="true"

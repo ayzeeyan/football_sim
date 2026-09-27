@@ -20,7 +20,9 @@ import (
 )
 
 const (
-	SaveVersion     = 8
+	// SaveVersion 9 adds Fixture.ReportSummary: finished matches aged past the
+	// retention window persist an archival summary instead of a full report.
+	SaveVersion     = 9
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )

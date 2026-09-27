@@ -306,7 +306,8 @@ Every fixture compiles a `MatchReport` (`matchreport/`): a timeline of events re
 
 ## Persistence (`backend_go/pkg/persistence`)
 
-- **Master manifest** — `saves/career.json` holds the `CareerSnapshot` (current save version 8): tournament state, inbox, calendar, milestones, club index.
+- **Master manifest** — `saves/career.json` holds the `CareerSnapshot` (current save version 9): tournament state, inbox, calendar, milestones, club index.
+- **Report retention** — finished matches keep full reports for the last 3 matchweeks, compacted reports (no heatmaps/xG-flow samples) for the following 5, and beyond that an archival summary (score, scorers with player+club IDs, MOTM, key stats) so a 38-week career save stays bounded.
 - **Sharded sidecars** — `saves/clubs/{club_id}.json` store each club's squad independently to avoid monolithic I/O.
 - **Universe seed** — `saves/career.json.seed` pins the 64-bit master seed (legacy default `20260907`).
 - **Atomic writes** — snapshots write to a `.tmp` file, verify, then rename over the target; crash corruption cannot leave a half-written save.

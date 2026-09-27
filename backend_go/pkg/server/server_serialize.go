@@ -366,6 +366,18 @@ func (s *Server) serializeFixture(f *tournament.Fixture) map[string]interface{} 
 		if f.Report.Penalties != nil {
 			out["penalties"] = f.Report.Penalties
 		}
+	} else if f.ReportSummary != nil {
+		// Aged fixture: the full report was archived into a summary.
+		out["report_summary"] = f.ReportSummary
+		out["ht_home"] = f.ReportSummary.HTHome
+		out["ht_away"] = f.ReportSummary.HTAway
+		out["attendance"] = f.ReportSummary.Attendance
+		if f.ReportSummary.Referee != "" {
+			out["referee"] = f.ReportSummary.Referee
+		}
+		if f.ReportSummary.DecidedBy != "" {
+			out["decided_by"] = f.ReportSummary.DecidedBy
+		}
 	}
 	return out
 }
