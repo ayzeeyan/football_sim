@@ -376,6 +376,96 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
         </button>
       </div>
 
+      {/* Club pulse, loan watch and inbox headlines — all emitted by WorldDashboard(). */}
+      {((data.club_pulse != null) || (data.loan_watch?.length ?? 0) > 0 || (data.headlines?.length ?? 0) > 0) && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          {data.club_pulse && (
+            <div className="console-card p-5" data-club-pulse="true">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-display text-[16px] font-bold text-bone">Club pulse</h3>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sage">{data.club_pulse.financial_health}</span>
+              </div>
+              <button type="button" onClick={() => onViewSquad(data.club_pulse!.club_id)} className="mt-3 flex w-full items-center gap-2 text-left hover:text-brass">
+                <span className="font-display text-[15px] font-bold text-bone truncate">{data.club_pulse.club_name}</span>
+              </button>
+              <dl className="mt-3 space-y-2 text-[12px]">
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-sage">Board confidence</dt>
+                  <dd className="flex min-w-0 items-center gap-2">
+                    <span className="h-1.5 w-20 overflow-hidden rounded-full bg-white/10"><span className="block h-full bg-brass" style={{ width: `${Math.max(0, Math.min(100, data.club_pulse.board_confidence))}%` }} /></span>
+                    <span className="font-mono text-bone">{data.club_pulse.board_confidence}</span>
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-sage">Squad morale</dt>
+                  <dd className="flex min-w-0 items-center gap-2">
+                    <span className="h-1.5 w-20 overflow-hidden rounded-full bg-white/10"><span className="block h-full bg-pitchtone" style={{ width: `${Math.max(0, Math.min(100, data.club_pulse.squad_morale))}%` }} /></span>
+                    <span className="font-mono text-bone">{data.club_pulse.squad_morale}</span>
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-sage">Transfer budget</dt>
+                  <dd className="font-mono text-bone">{formatMillions(data.club_pulse.transfer_budget)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <dt className="text-sage">Wage bill / cap</dt>
+                  <dd className="font-mono text-bone">{formatMillions(data.club_pulse.wage_bill)} / {formatMillions(data.club_pulse.wage_cap)}</dd>
+                </div>
+              </dl>
+              <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 border-t border-white/[0.08] pt-3 text-[11px] text-sage">
+                <span>{data.club_pulse.in_form_count} in form</span>
+                <span>{data.club_pulse.fatigued_count} fatigued</span>
+                <span>{data.club_pulse.unhappy_count} unhappy</span>
+                <span>{data.club_pulse.contract_expiring} contracts expiring</span>
+              </div>
+              {data.club_pulse.board_objective && (
+                <p className="mt-2 text-[11px] italic text-sage">Board objective: {data.club_pulse.board_objective}</p>
+              )}
+            </div>
+          )}
+
+          <div className="console-card p-5" data-loan-watch="true">
+            <h3 className="font-display text-[16px] font-bold text-bone">Loan watch</h3>
+            <p className="mt-1 text-[12px] text-sage">Prospects earning minutes away from their parent clubs.</p>
+            <ol className="mt-3 space-y-1.5">
+              {(data.loan_watch ?? []).slice(0, 6).map((player) => (
+                <li key={player.player_id}>
+                  <button type="button" onClick={() => openPlayer(player.player_id)} className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white/[0.04]">
+                    <span className="min-w-0 truncate text-[12px] font-semibold text-bone">{player.full_name}</span>
+                    <span className="shrink-0 font-mono text-[11px] text-sage">{player.club_short} · {player.appearances} apps · {player.goals}G {player.assists}A · {player.form_band}</span>
+                  </button>
+                </li>
+              ))}
+              {(data.loan_watch?.length ?? 0) === 0 && <li className="text-[12px] text-sage">No loanees are currently active.</li>}
+            </ol>
+          </div>
+
+          <div className="console-card p-5" data-headlines="true">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-display text-[16px] font-bold text-bone">Headlines</h3>
+              <button type="button" onClick={onOpenInbox} className="text-[11px] font-semibold text-brass hover:text-[#FFE082]">Open News</button>
+            </div>
+            <ul className="mt-3 space-y-2">
+              {(data.headlines ?? []).slice(0, 5).map((item) => (
+                <li key={item.id} className="rounded-md border border-white/[0.06] bg-black/15 p-2.5">
+                  <button
+                    type="button"
+                    onClick={() => (item.player_id ? openPlayer(item.player_id) : onOpenInbox())}
+                    className="w-full text-left"
+                  >
+                    <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.12em] text-brass/80">
+                      {item.category}{item.unread && <span className="h-1.5 w-1.5 rounded-full bg-brass" aria-label="Unread" />}
+                    </span>
+                    <span className="mt-0.5 block text-[12px] font-semibold leading-snug text-bone">{item.headline}</span>
+                  </button>
+                </li>
+              ))}
+              {(data.headlines?.length ?? 0) === 0 && <li className="text-[12px] text-sage">No headlines this matchweek.</li>}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {((data.power_rankings?.length ?? 0) > 0 || (data.wonderkids?.length ?? 0) > 0 || (data.sackings?.length ?? 0) > 0) && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           <div className="console-card p-5">
