@@ -9,3 +9,4 @@ export * from './PlayerOfMatch';
 export * from './LineupView';
 export * from './CompetitionImpact';
 export * from './OtherResults';
+export * from './PressConference';

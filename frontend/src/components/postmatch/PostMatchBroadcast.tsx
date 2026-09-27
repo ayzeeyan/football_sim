@@ -16,6 +16,7 @@ import { CompetitionImpact } from './CompetitionImpact';
 import { OtherResults } from './OtherResults';
 import { MatchMomentum, MatchSnapshot, ShotMap, TerritoryCard, TopPerformers } from './MatchInsights';
 import { DuelOfTheMatch } from './DuelOfTheMatch';
+import { PressConference } from './PressConference';
 
 type PostTab = 'overview' | 'stats' | 'lineups' | 'events' | 'table';
 
@@ -150,6 +151,7 @@ export const PostMatchBroadcast: React.FC<PostMatchBroadcastProps> = ({
                 <p className="mt-3 text-[15px] leading-relaxed text-bone">{summary}</p>
               </section>
               {fixture && <MatchMomentum fixture={fixture} events={events} />}
+              {fixture && <PressConference fixture={fixture} home={home} away={away} />}
               <section className="console-card p-4 sm:p-5">
                 <p className="match-section-title">Key moments</p>
                 <KeyMoments events={events} fixture={fixture} home={home} away={away} onOpenPlayer={onOpenPlayer} />

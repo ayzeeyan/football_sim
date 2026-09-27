@@ -357,6 +357,7 @@ export interface PressConferenceData {
   away_quote: string;
   home_manager?: string;
   away_manager?: string;
+  narrative?: string;
 }
 
 export interface TacticalShiftItem {
