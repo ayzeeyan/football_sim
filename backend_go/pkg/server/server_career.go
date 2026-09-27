@@ -169,18 +169,21 @@ func (s *Server) serializeNegotiation(neg *transfers.TransferNegotiation) map[st
 		return nil
 	}
 	return map[string]interface{}{
-		"negotiation_id": neg.NegotiationID,
-		"player":         s.serializePlayer(neg.Player),
-		"buyer":          s.serializeClub(neg.Buyer),
-		"seller":         s.serializeClub(neg.Seller),
-		"current_bid":    neg.CurrentBid,
-		"formatted_bid":  models.FormatCurrency(neg.CurrentBid),
-		"stage_index":    neg.StageIndex,
-		"stage_name":     neg.StageName,
-		"progress_pct":   neg.ProgressPct,
-		"is_wonderkid":   neg.IsWonderkid,
-		"is_hijacked":    neg.IsHijacked,
-		"original_buyer": s.serializeClub(neg.OriginalBuyer),
+		"negotiation_id":         neg.NegotiationID,
+		"player":                 s.serializePlayer(neg.Player),
+		"buyer":                  s.serializeClub(neg.Buyer),
+		"seller":                 s.serializeClub(neg.Seller),
+		"current_bid":            neg.CurrentBid,
+		"formatted_bid":          models.FormatCurrency(neg.CurrentBid),
+		"asking_price":           neg.AskingPrice,
+		"formatted_asking_price": models.FormatCurrency(neg.AskingPrice),
+		"history":                neg.History,
+		"stage_index":            neg.StageIndex,
+		"stage_name":             neg.StageName,
+		"progress_pct":           neg.ProgressPct,
+		"is_wonderkid":           neg.IsWonderkid,
+		"is_hijacked":            neg.IsHijacked,
+		"original_buyer":         s.serializeClub(neg.OriginalBuyer),
 	}
 }
 

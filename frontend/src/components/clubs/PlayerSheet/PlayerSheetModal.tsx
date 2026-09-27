@@ -3,7 +3,7 @@ import type { PlayerProfile } from '../../../types';
 import { ovrTone, positionTone, TRAINING_FOCUSES } from '../../../lib/constants';
 import { cx, loyaltyLabel } from '../../../lib/format';
 import { soundManager } from '../../../audio/webAudio';
-import { trainPlayer } from '../../../services/api';
+import { fetchClubs, submitTransferOffer, trainPlayer } from '../../../services/api';
 import { ClubCrest, ErrorState, LoadingState, Modal, PlayerPortrait, ProgressBar } from '../../ui/ui';
 import { Sparkle, Shield, AlertTriangle, Trophy, TrendingUp, Calendar, Heart, Award, Activity, Briefcase } from 'lucide-react';
 import { AttackingRoleMap } from '../AttackingRoleMap';
@@ -20,6 +20,10 @@ export const PlayerSheetModal: React.FC<{
 }> = ({ profile, loading, error, open, onClose, onRetry }) => {
   const [activeTab, setActiveTab] = useState<PlayerSheetTab>('overview');
   const [trainingResult, setTrainingResult] = useState('');
+  const [offerBuyer, setOfferBuyer] = useState('');
+  const [offerAmount, setOfferAmount] = useState('');
+  const [offerResult, setOfferResult] = useState('');
+  const [offerClubs, setOfferClubs] = useState<Array<{ club_id: string; club_name: string }>>([]);
   const player = profile?.player;
 
   // Reset to overview tab when a new player is loaded
@@ -286,6 +290,55 @@ export const PlayerSheetModal: React.FC<{
                       </strong>
                     </div>
                   </div>
+                </div>
+
+                {/* Transfer offer (Tier B3): open a negotiation for this
+                    player. The backend validates the corridor, budget, and
+                    wage cap before talks open. */}
+                <div className="p-4 rounded-xl border border-line bg-ink/40 space-y-2 text-[13px]">
+                  <h4 className="font-display text-[14px] font-semibold text-bone mb-1">Make an offer</h4>
+                  <p className="text-[11px] text-sage">Open transfer talks for {player.full_name}. Offers inside the valuation corridor only; meeting the asking price completes the deal.</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={offerBuyer}
+                      onChange={(e) => setOfferBuyer(e.target.value)}
+                      onFocus={() => {
+                        if (offerClubs.length === 0) {
+                          void fetchClubs().then((clubs) => setOfferClubs(clubs.filter((c) => c.club_id !== player.club_id).map((c) => ({ club_id: c.club_id, club_name: c.club_name }))));
+                        }
+                      }}
+                      className="min-w-0 flex-1 border border-line bg-ink px-2 py-1.5 text-[12px] text-bone"
+                      aria-label="Buying club"
+                    >
+                      <option value="">Buying club…</option>
+                      {offerClubs.map((c) => (
+                        <option key={c.club_id} value={c.club_id}>{c.club_name}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      value={offerAmount}
+                      onChange={(e) => setOfferAmount(e.target.value)}
+                      placeholder="Offer (EUR)"
+                      className="w-36 border border-line bg-ink px-2 py-1.5 text-right text-[12px] text-bone"
+                      aria-label="Offer amount in EUR"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        soundManager.playClick();
+                        void submitTransferOffer(player.player_id, offerBuyer, Number(offerAmount) || 0).then((res) => {
+                          setOfferResult(res.ok ? 'Talks opened. Follow the negotiation in the Transfer Centre.' : (res.message ?? 'The offer was refused.'));
+                        });
+                      }}
+                      disabled={offerBuyer === '' || offerAmount === ''}
+                      className="min-h-9 border border-brass/40 bg-brass/10 px-3 text-[12px] font-semibold text-brass hover:bg-brass/20 disabled:opacity-50"
+                    >
+                      Submit offer
+                    </button>
+                  </div>
+                  {offerResult && <p className="text-[12px] text-brass">{offerResult}</p>}
                 </div>
 
                 {/* Training control (Tier B2): one regimen per call from

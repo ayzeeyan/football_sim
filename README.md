@@ -423,6 +423,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/favourite`, `POST /api/favourite` (observational viewing preference), `GET /api/week/watch`
 - `GET /api/watchlist`, `POST /api/watchlist` — multi-entity watchlist (clubs, players, competitions; observational only, feeds weekly watch digests)
 - `GET /api/transfers`, `/api/transfers/records`, `POST /api/transfers/bid`, `POST /api/transfers/advance`
+- `POST /api/transfers/offer`, `POST /api/transfers/negotiations/{negotiation_id}/respond` — Tier B viewer transfer control: open a negotiation with an offer, then improve (meeting the asking price completes the deal) or withdraw
 - `GET /api/inbox`, `POST /api/inbox/read`, `POST /api/inbox/reply`
 - `GET /api/export/standings?league=`, `/api/export/squad?club_id=`, `/api/export/fixtures`, `/api/export/transfers` — user-initiated CSV downloads of resolved state
 

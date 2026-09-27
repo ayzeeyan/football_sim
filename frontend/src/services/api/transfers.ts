@@ -91,4 +91,46 @@ export function fetchTransferRecords(): Promise<TransferRecordsData> {
     net_spend: {},
     total_transfers_count: 0,
   });
-}
+}
+
+// Tier B (B3): open a negotiation with a viewer offer. The backend validates
+// the amount against the valuation corridor, the buyer's budget, and the
+// wage cap before the negotiation opens.
+export async function submitTransferOffer(playerId: string, buyerId: string, amount: number): Promise<{ ok: boolean; message?: string; negotiation?: TransferNegotiation }> {
+  try {
+    const res = await fetch('/api/transfers/offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: playerId, buyer_id: buyerId, amount }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, message: data.detail || 'The offer was refused.' };
+    invalidateApiCache();
+    return { ok: true, negotiation: data as TransferNegotiation };
+  } catch {
+    return { ok: false, message: 'Network error submitting the offer.' };
+  }
+}
+
+// Tier B (B3): improve an active negotiation (meeting the asking price
+// completes the transfer) or withdraw it.
+export async function respondToNegotiation(
+  negotiationId: string,
+  action: 'improve' | 'withdraw',
+  amount?: number,
+): Promise<{ ok: boolean; message?: string; negotiation?: TransferNegotiation }> {
+  try {
+    const res = await fetch(`/api/transfers/negotiations/${encodeURIComponent(negotiationId)}/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, amount: amount ?? 0 }),
+    });
+    const data = await res.json();
+    invalidateApiCache();
+    if (data.status === 'error') return { ok: false, message: data.message || 'The response was refused.', negotiation: data as TransferNegotiation };
+    return { ok: true, negotiation: data as TransferNegotiation };
+  } catch {
+    return { ok: false, message: 'Network error responding to the negotiation.' };
+  }
+}
+

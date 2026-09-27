@@ -1069,12 +1069,25 @@ func (te *TransferEngine) GetTransferRecords() TransferRecordsData {
 func (te *TransferEngine) InitiateBid(playerID string, buyerID string, bidAmount int64) *TransferNegotiation {
 	te.mu.Lock()
 	defer te.mu.Unlock()
-	if !te.IsWindowOpen() || te.TransferredThisWindow[playerID] {
-		return nil
+	neg, _ := te.initiateBidUnlocked(playerID, buyerID, bidAmount)
+	return neg
+}
+
+// initiateBidUnlocked is the reasoned core behind InitiateBid and the Tier B
+// viewer offers: it validates the bid against the window, the valuation
+// corridor, the wage cap, and the player's own destination preference,
+// returning a human-readable reason when the offer cannot stand.
+// Caller must hold te.mu.
+func (te *TransferEngine) initiateBidUnlocked(playerID string, buyerID string, bidAmount int64) (*TransferNegotiation, string) {
+	if !te.IsWindowOpen() {
+		return nil, "The transfer window is closed."
+	}
+	if te.TransferredThisWindow[playerID] {
+		return nil, "That player has already moved this window."
 	}
 	buyer := te.Clubs[buyerID]
 	if buyer == nil {
-		return nil
+		return nil, "Buying club not found."
 	}
 	var target *models.Player
 	var seller *models.Club
@@ -1089,14 +1102,17 @@ func (te *TransferEngine) InitiateBid(playerID string, buyerID string, bidAmount
 			break
 		}
 	}
-	if target == nil || seller == nil || seller.ClubID == buyerID {
-		return nil
+	if target == nil || seller == nil {
+		return nil, "Player not found."
+	}
+	if seller.ClubID == buyerID {
+		return nil, "The buying club already owns that player."
 	}
 	if isCanonicalWonderkid(target) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) {
-		return nil
+		return nil, "Franchise wonderkids only move between Super League clubs."
 	}
 	if !PlayerAcceptsDestination(target, seller, buyer) {
-		return nil
+		return nil, "The player is not interested in that move."
 	}
 	if bidAmount <= 0 {
 		bidAmount = int64(float64(models.BaselineValue(target.OVR, target.Age, target.UniverseWonderkid)) * 1.05)
@@ -1105,13 +1121,13 @@ func (te *TransferEngine) InitiateBid(playerID string, buyerID string, bidAmount
 	// path (floor and ceiling alike).
 	bidAmount = models.ClampValue(bidAmount, target.OVR, target.Age, target.UniverseWonderkid)
 	if !te.canAffordWithWage(buyer, bidAmount, annualWageFor(target)) {
-		return nil
+		return nil, "The buying club cannot afford that offer under the wage cap."
 	}
 	askingPrice := sellerAskingPrice(target, seller)
 	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, target.PlayerID, te.CurrentDay), Player: target, Buyer: buyer, Seller: seller, CurrentBid: bidAmount, AskingPrice: askingPrice, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(target), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(bidAmount)), fmt.Sprintf("Seller valuation: %s", models.FormatCurrency(askingPrice))}}
 	te.ActiveNegotiations = append(te.ActiveNegotiations, neg)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s open talks with %s for %s with opening %s bid", buyer.ShortName, seller.ShortName, target.FullName, models.FormatCurrency(bidAmount)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
-	return neg
+	return neg, ""
 }
 
 func (te *TransferEngine) prependFeed(item TransferFeedItem) {

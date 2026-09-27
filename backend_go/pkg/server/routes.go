@@ -114,6 +114,8 @@ func (s *Server) apiRoutes() []Route {
 		// Transfer Market
 		{Method: "GET", Path: "/api/transfers", Handler: s.handleGetTransfers, Summary: "Transfer market state"},
 		{Method: "POST", Path: "/api/transfers/bid", Handler: s.handleTransferBid, Summary: "Submit a transfer bid"},
+		{Method: "POST", Path: "/api/transfers/offer", Handler: s.handleTransferOffer, Summary: "Open a negotiation with a viewer offer (Tier B; validated against corridor, budget, and wage cap)"},
+		{Method: "POST", Path: "/api/transfers/negotiations/{negotiation_id}/respond", Handler: s.handleNegotiationRespond, Summary: "Improve or withdraw an active negotiation (Tier B; meeting the asking price completes the transfer)"},
 		{Method: "POST", Path: "/api/transfers/advance", Handler: s.handleTransferAdvance, Summary: "Advance the window"},
 		{Method: "GET", Path: "/api/transfers/records", Handler: s.handleGetTransferRecords, Summary: "Transfer records"},
 

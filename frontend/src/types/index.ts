@@ -1488,6 +1488,9 @@ export interface TransferNegotiation {
   seller: Club;
   current_bid: number;
   formatted_bid: string;
+  asking_price?: number;
+  formatted_asking_price?: string;
+  history?: string[];
   stage_index: number;
   stage_name: string;
   progress_pct: number;

@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import type { TransferRecordsData } from '../../../types';
-import { fetchTransfers, fetchTransferRecords, advanceMarket, resetSeason} from '../../../services/api';
+import { fetchTransfers, fetchTransferRecords, advanceMarket, resetSeason, respondToNegotiation} from '../../../services/api';
 import { Zap, CheckCircle, Newspaper, Handshake, ListChecks, Heart, Hourglass, FlagOff, Landmark, Sparkle, Trophy } from 'lucide-react';
 import { soundManager } from '../../../audio/webAudio';
 import { useAsyncData } from '../../../hooks/useAsyncData';
@@ -359,7 +359,21 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                 {data.active_negotiations.map((neg) => (
-                  <NegotiationCard key={neg.negotiation_id} neg={neg} onPlayerClick={openPlayer} />
+                  <NegotiationCard
+                    key={neg.negotiation_id}
+                    neg={neg}
+                    onPlayerClick={openPlayer}
+                    onRespond={(n, action, amount) => {
+                      void respondToNegotiation(n.negotiation_id, action, amount).then((res) => {
+                        if (res.ok) {
+                          onShowToast(action === 'improve' ? 'Offer submitted.' : 'Negotiation withdrawn.');
+                        } else {
+                          onShowToast(res.message ?? 'The response was refused.');
+                        }
+                        reload();
+                      });
+                    }}
+                  />
                 ))}
               </div>
             )}
