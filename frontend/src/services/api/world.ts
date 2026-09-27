@@ -125,4 +125,42 @@ export function fetchUclFixtures(): Promise<Fixture[]> {
 
 export function fetchFixture(fixtureId: string): Promise<Fixture | null> {
   return apiFetch<Fixture | null>(`/fixtures/${encodeURIComponent(fixtureId)}`, undefined, null);
-}
+}
+export interface WatchlistEntry {
+  id: string;
+  name: string;
+  short_name?: string;
+  position?: string;
+  ovr?: number;
+  club_short?: string;
+  kind?: string;
+}
+
+export interface WatchlistResponse {
+  clubs: WatchlistEntry[];
+  players: WatchlistEntry[];
+  competitions: WatchlistEntry[];
+}
+
+export type WatchlistEntity = 'club' | 'player' | 'competition';
+
+/** Multi-entity watchlist (observational only; Phase 3 F2). */
+export function fetchWatchlist(): Promise<WatchlistResponse> {
+  return apiFetch<WatchlistResponse>('/watchlist', undefined, { clubs: [], players: [], competitions: [] });
+}
+
+export async function toggleWatchlist(entity: WatchlistEntity, id: string): Promise<{ status: string; watched: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE}/watchlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entity, id }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { status: 'error', watched: false };
+    invalidateApiCache('/watchlist');
+    return { status: 'success', watched: !!data.watched };
+  } catch {
+    return { status: 'error', watched: false };
+  }
+}

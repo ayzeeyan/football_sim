@@ -44,6 +44,7 @@ type TournamentManager struct {
 	ProdigyHomes          map[string]string
 	LastCareerShuffle     bool
 	FavouriteClubID       string
+	Watch                 WatchlistState
 	RNG                   *rand.Rand
 
 	RecentResults       []string

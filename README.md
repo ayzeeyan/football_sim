@@ -409,6 +409,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `POST /api/season/reset`, `POST /api/season/restart`
 - `GET /api/career/default-homes`, `/api/career/preview-shuffle`, `POST /api/career/new` — `{ "shuffle", "homes" }`
 - `GET /api/favourite`, `POST /api/favourite` (observational viewing preference), `GET /api/week/watch`
+- `GET /api/watchlist`, `POST /api/watchlist` — multi-entity watchlist (clubs, players, competitions; observational only, feeds weekly watch digests)
 - `GET /api/transfers`, `/api/transfers/records`, `POST /api/transfers/bid`, `POST /api/transfers/advance`
 - `GET /api/inbox`, `POST /api/inbox/read`, `POST /api/inbox/reply`
 

@@ -328,6 +328,25 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
+	// Watchlist entries must reference known entities.
+	for _, id := range snap.Watchlist.Clubs {
+		if _, ok := clubIDs[id]; !ok {
+			return fmt.Errorf("career snapshot watchlist references unknown club %q", id)
+		}
+	}
+	for _, id := range snap.Watchlist.Players {
+		if _, ok := playerIDs[id]; !ok {
+			return fmt.Errorf("career snapshot watchlist references unknown player %q", id)
+		}
+	}
+	if snap.World != nil {
+		for _, id := range snap.Watchlist.Competitions {
+			if _, ok := snap.World.Competitions[id]; !ok {
+				return fmt.Errorf("career snapshot watchlist references unknown competition %q", id)
+			}
+		}
+	}
+
 	return nil
 }
 

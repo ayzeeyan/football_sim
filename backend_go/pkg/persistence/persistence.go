@@ -22,7 +22,8 @@ import (
 const (
 	// SaveVersion 9 adds Fixture.ReportSummary: finished matches aged past the
 	// retention window persist an archival summary instead of a full report.
-	SaveVersion     = 9
+	// SaveVersion 10 adds the multi-entity watchlist (WatchlistState).
+	SaveVersion     = 10
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -121,6 +122,7 @@ type CareerSnapshot struct {
 	SuperCupFinal         tournament.CupTie                    `json:"super_cup_final,omitempty"`
 	World                 *tournament.EuropeanWorld            `json:"world,omitempty"`
 	FavouriteClubID       string                               `json:"favourite_club_id,omitempty"`
+	Watchlist             tournament.WatchlistState            `json:"watchlist,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
 	ReputationAppliedSeason string   `json:"reputation_applied_season,omitempty"`
@@ -203,6 +205,7 @@ func BuildSnapshot(
 		SuperCupFinal:         tm.SuperCupFinal,
 		World:                 tm.World,
 		FavouriteClubID:       tm.FavouriteClubID,
+		Watchlist:             tm.Watch,
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
 		ReputationAppliedSeason: tm.ReputationAppliedSeason,
@@ -720,6 +723,7 @@ func RestoreCareer(
 	if snap.FavouriteClubID != "" {
 		tm.FavouriteClubID = snap.FavouriteClubID
 	}
+	tm.Watch = snap.Watchlist
 	tm.LastCareerShuffle = snap.LastCareerShuffle
 
 	// 2. Build index of existing players for fast lookup and deduplication

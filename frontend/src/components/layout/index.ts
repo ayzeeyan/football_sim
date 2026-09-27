@@ -3,3 +3,4 @@ export * from './TopBar';
 export * from './AwardsModal';
 export * from './ToastHost';
 export * from './GlobalSearch';
+export * from './WatchlistPanel';

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { Club, CompetitionClub, CompetitionFixtureRow } from '../../types';
 import { fetchWorldDashboard } from '../../services/api';
+import { WatchlistPanel } from '../layout/WatchlistPanel';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { usePlayerSheet } from '../clubs/PlayerSheet';
 import {
@@ -375,6 +376,11 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
         </button>
       </div>
 
+      <WatchlistPanel
+        onOpenClub={(clubId) => onViewSquad(clubId)}
+        onOpenPlayer={openPlayer}
+        onShowToast={() => undefined}
+      />
       {/* Club pulse, loan watch and inbox headlines — all emitted by WorldDashboard(). */}
       {((data.club_pulse != null) || (data.loan_watch?.length ?? 0) > 0 || (data.headlines?.length ?? 0) > 0) && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

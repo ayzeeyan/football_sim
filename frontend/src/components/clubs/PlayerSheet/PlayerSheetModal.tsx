@@ -6,6 +6,7 @@ import { soundManager } from '../../../audio/webAudio';
 import { ClubCrest, ErrorState, LoadingState, Modal, PlayerPortrait, ProgressBar } from '../../ui/ui';
 import { Sparkle, Shield, AlertTriangle, Trophy, TrendingUp, Calendar, Heart, Award, Activity, Briefcase } from 'lucide-react';
 import { AttackingRoleMap } from '../AttackingRoleMap';
+import { WatchToggle } from '../../layout/WatchlistPanel';
 import { RESULT_TONE, clubIdLabel, prettyCompetitionName, type PlayerSheetTab } from './labels';
 
 export const PlayerSheetModal: React.FC<{
@@ -88,8 +89,9 @@ export const PlayerSheetModal: React.FC<{
                     )}
                   </div>
 
-                  <h2 className="font-display text-[22px] font-bold text-bone truncate mt-1 leading-tight">
+                  <h2 className="font-display text-[22px] font-bold text-bone truncate mt-1 leading-tight flex items-center gap-2">
                     {player.full_name}
+                    <WatchToggle entity="player" id={player.player_id} onShowToast={() => undefined} className="!min-h-7 text-[10px]" />
                   </h2>
 
                   <p className="text-[13px] text-sage flex items-center gap-2 mt-0.5">

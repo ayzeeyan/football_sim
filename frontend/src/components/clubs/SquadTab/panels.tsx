@@ -6,6 +6,7 @@ import { cx, formatEUR } from '../../../lib/format';
 import { prettyCompetitionName } from '../PlayerSheet';
 import { FIXTURE_COMP_FILTERS, formatWageBill, matchesFixtureFilter, type SquadTabProps } from './status';
 import { ClubIdentityPanel } from '../ClubIdentityPanel';
+import { WatchToggle } from '../../layout/WatchlistPanel';
 
 export const ClubOverviewPanel: React.FC<{
   club: Club;
@@ -18,6 +19,9 @@ export const ClubOverviewPanel: React.FC<{
   const avgMorale = squad.length ? Math.round(squad.reduce((s, p) => s + (p.morale ?? 0), 0) / squad.length) : 0;
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <WatchToggle entity="club" id={club.club_id} onShowToast={() => undefined} />
+      </div>
       {(profile?.storylines?.length ?? 0) > 0 && (
         <Card>
           <p className="eyebrow">Current storylines</p>

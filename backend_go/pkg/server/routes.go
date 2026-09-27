@@ -88,6 +88,8 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/favourite", Handler: s.handleGetFavourite, Summary: "Observational favourite club"},
 		{Method: "POST", Path: "/api/favourite", Handler: s.handleSetFavourite, Summary: "Set the observational favourite club"},
 		{Method: "GET", Path: "/api/week/watch", Handler: s.handleWeekWatch, Summary: "Matchweek watch digest"},
+		{Method: "GET", Path: "/api/watchlist", Handler: s.handleGetWatchlist, Summary: "Multi-entity watchlist (observational)"},
+		{Method: "POST", Path: "/api/watchlist", Handler: s.handleToggleWatchlist, Summary: "Add or remove one watchlist entity"},
 
 		// Transfer Market
 		{Method: "GET", Path: "/api/transfers", Handler: s.handleGetTransfers, Summary: "Transfer market state"},
@@ -125,10 +127,10 @@ func BuildOpenAPISpec(routes []Route) map[string]interface{} {
 		params := make([]map[string]interface{}, 0)
 		for _, name := range openAPIPathParams(route.Path) {
 			params = append(params, map[string]interface{}{
-				"name": name,
-				"in":   "path",
+				"name":     name,
+				"in":       "path",
 				"required": true,
-				"schema": map[string]interface{}{"type": "string"},
+				"schema":   map[string]interface{}{"type": "string"},
 			})
 		}
 		operation := map[string]interface{}{

@@ -82,6 +82,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 	for _, n := range CheckWonderkidMilestones(completedMW, tm.SeasonName, tm.ClubsList, tm.MilestonesFired, tm.RNG) {
 		tm.Inbox = append([]InboxItem{n}, tm.Inbox...)
 	}
+	tm.generateWatchlistDigestUnlocked(completedMW)
 	tm.DerbiesPlayedThisMW = map[string]bool{}
 }
 
