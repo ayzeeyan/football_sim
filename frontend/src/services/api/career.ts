@@ -204,3 +204,69 @@ export async function importSaveSlot(name: string, snapshot: string): Promise<{ 
   }
 }
 
+
+export interface ViewerJobRecord {
+  club_id: string;
+  club_name: string;
+  season: string;
+  hired_matchweek: number;
+  ended_matchweek: number;
+  outcome: string;
+}
+
+export interface ViewerManager {
+  name: string;
+  club_id: string;
+  hired_season: string;
+  hired_matchweek: number;
+  sackings: number;
+  trophies: string[];
+  history: ViewerJobRecord[];
+}
+
+export interface ViewerCareerClub {
+  club_id: string;
+  club_name: string;
+  league: string;
+  manager_name?: string;
+  job_security?: string;
+}
+
+export interface ViewerCareer {
+  manager: ViewerManager | null;
+  job: Record<string, unknown> | null;
+  clubs: ViewerCareerClub[];
+}
+
+/** Viewer manager career (Tier B5): ledger, current job, every dugout. */
+export function fetchViewerCareer(): Promise<ViewerCareer> {
+  return apiFetch<ViewerCareer>('/career/manager', undefined, { manager: null, job: null, clubs: [] });
+}
+
+export async function acceptViewerJob(clubId: string, name?: string): Promise<{ status: string; message?: string; manager?: ViewerManager }> {
+  try {
+    const res = await fetch(`${API_BASE}/career/manager/job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ club_id: clubId, name: name ?? null }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { status: 'error', message: data.detail || data.message || 'Could not accept the job.' };
+    invalidateApiCache();
+    return data;
+  } catch {
+    return { status: 'error', message: 'Network error accepting the job.' };
+  }
+}
+
+export async function resignViewerJob(): Promise<{ status: string; message?: string; manager?: ViewerManager | null }> {
+  try {
+    const res = await fetch(`${API_BASE}/career/manager/resign`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) return { status: 'error', message: data.detail || data.message || 'Could not resign.' };
+    invalidateApiCache();
+    return data;
+  } catch {
+    return { status: 'error', message: 'Network error resigning.' };
+  }
+}

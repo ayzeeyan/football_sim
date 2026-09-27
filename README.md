@@ -421,6 +421,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `POST /api/season/reset`, `POST /api/season/restart`
 - `GET /api/career/default-homes`, `/api/career/preview-shuffle`, `POST /api/career/new` — `{ "shuffle", "homes" }`
 - `GET /api/career/slots`, `POST /api/career/slots`, `POST /api/career/slots/import?name=`, `POST /api/career/slots/{slot_id}/rename`, `POST /api/career/slots/{slot_id}/duplicate`, `POST /api/career/slots/{slot_id}/delete`, `GET /api/career/slots/{slot_id}/export` — named save-slot archives of the current career
+- `GET /api/career/manager`, `POST /api/career/manager/job`, `POST /api/career/manager/resign` — Tier B viewer manager career: accept a dugout, track job security, sackings, and trophies
 - `GET /api/favourite`, `POST /api/favourite` (observational viewing preference), `GET /api/week/watch`
 - `GET /api/watchlist`, `POST /api/watchlist` — multi-entity watchlist (clubs, players, competitions; observational only, feeds weekly watch digests)
 - `GET /api/transfers`, `/api/transfers/records`, `POST /api/transfers/bid`, `POST /api/transfers/advance`

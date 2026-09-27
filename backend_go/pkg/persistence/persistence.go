@@ -28,7 +28,8 @@ const (
 	// AchievementsFired, ClubUnbeatenRuns, YoungestScorer).
 	// SaveVersion 12 adds per-player injury history (Player.InjuryHistory).
 	// SaveVersion 13 adds the viewer lineup override (Club.LineupOverride).
-	SaveVersion     = 13
+	// SaveVersion 14 adds the viewer manager career (ViewerManager).
+	SaveVersion     = 14
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -132,6 +133,7 @@ type CareerSnapshot struct {
 	AchievementsFired     map[string]bool                      `json:"achievements_fired,omitempty"`
 	ClubUnbeatenRuns      map[string]int                       `json:"club_unbeaten_runs,omitempty"`
 	YoungestScorer        *tournament.YoungestScorerRecord     `json:"youngest_scorer,omitempty"`
+	ViewerManager         *tournament.ViewerManager            `json:"viewer_manager,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
 	ReputationAppliedSeason string   `json:"reputation_applied_season,omitempty"`
@@ -219,6 +221,7 @@ func BuildSnapshot(
 		AchievementsFired:     tm.AchievementsFired,
 		ClubUnbeatenRuns:      tm.ClubUnbeatenRuns,
 		YoungestScorer:        tm.YoungestScorer,
+		ViewerManager:         tm.ViewerManager,
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
 		ReputationAppliedSeason: tm.ReputationAppliedSeason,
@@ -748,6 +751,9 @@ func RestoreCareer(
 	}
 	if snap.YoungestScorer != nil {
 		tm.YoungestScorer = snap.YoungestScorer
+	}
+	if snap.ViewerManager != nil {
+		tm.ViewerManager = snap.ViewerManager
 	}
 	tm.LastCareerShuffle = snap.LastCareerShuffle
 

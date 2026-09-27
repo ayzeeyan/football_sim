@@ -39,6 +39,7 @@ type TournamentManager struct {
 	AchievementsFired     map[string]bool
 	ClubUnbeatenRuns      map[string]int
 	YoungestScorer        *YoungestScorerRecord
+	ViewerManager         *ViewerManager
 	ManagerConsecutiveHot map[string]int
 	ManagerLastChange     map[string]int
 	ManagerHistory        []ManagerHistoryEntry

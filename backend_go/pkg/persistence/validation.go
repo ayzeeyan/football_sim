@@ -409,6 +409,29 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
+	// Viewer manager career (SaveVersion 14): the current employer must
+	// exist and the ledger must be bounded and well-formed.
+	if vm := snap.ViewerManager; vm != nil {
+		if vm.Name == "" {
+			return fmt.Errorf("career snapshot viewer manager has an empty name")
+		}
+		if vm.ClubID != "" {
+			if _, ok := clubIDs[vm.ClubID]; !ok {
+				return fmt.Errorf("career snapshot viewer manager references unknown club %q", vm.ClubID)
+			}
+		}
+		if len(vm.History) > tournament.MaxViewerJobRecords {
+			return fmt.Errorf("career snapshot viewer manager has %d job records, above the cap of %d", len(vm.History), tournament.MaxViewerJobRecords)
+		}
+		for _, rec := range vm.History {
+			switch rec.Outcome {
+			case "active", "sacked", "resigned":
+			default:
+				return fmt.Errorf("career snapshot viewer job has unknown outcome %q", rec.Outcome)
+			}
+		}
+	}
+
 	return nil
 }
 
