@@ -189,81 +189,11 @@ func (s *Server) setupRoutes() {
 		})
 	}
 
-	// Health & System
-	s.mux.HandleFunc("GET /api/health", s.handleHealth)
-	s.mux.HandleFunc("GET /api/stats", s.handleStats)
-
-	// Clubs & Rosters
-	s.mux.HandleFunc("GET /api/clubs", s.handleGetClubs)
-	s.mux.HandleFunc("GET /api/clubs/{club_id}/squad", s.handleGetClubSquad)
-	s.mux.HandleFunc("GET /api/clubs/{club_id}/xi", s.handleGetClubXI)
-	s.mux.HandleFunc("GET /api/clubs/{club_id}/history", s.handleGetClubHistory)
-	s.mux.HandleFunc("GET /api/clubs/{club_id}/profile", s.handleGetClubProfile)
-	s.mux.HandleFunc("GET /api/clubs/{club_id}/fixtures", s.handleGetClubFixtures)
-	s.mux.HandleFunc("GET /api/clubs/{club_id}/transfers", s.handleGetClubTransfers)
-	s.mux.HandleFunc("GET /api/h2h/{club_a}/{club_b}", s.handleGetH2H)
-	s.mux.HandleFunc("GET /api/players/{player_id}", s.handleGetPlayerProfile)
-
-	// Wonderkids & Growth
-	s.mux.HandleFunc("GET /api/prodigies", s.handleGetProdigies)
-	s.mux.HandleFunc("GET /api/prodigies/watch", s.handleGetProdigyWatch)
-	s.mux.HandleFunc("GET /api/wonderkids", s.handleGetWonderkids)
-	s.mux.HandleFunc("POST /api/prodigies/{player_id}/train", s.handleTrainProdigy)
-	s.mux.HandleFunc("POST /api/prodigies/{player_id}/position-path", s.handleSetPositionPath)
-	s.mux.HandleFunc("POST /api/prodigies/{player_id}/school-track", s.handleSetSchoolTrack)
-	s.mux.HandleFunc("GET /api/growth/milestones", s.handleGetGrowthMilestones)
-	s.mux.HandleFunc("GET /api/prodigies/{player_id}/timeline", s.handleGetProdigyTimeline)
-	s.mux.HandleFunc("GET /api/training/status", s.handleGetTrainingStatus)
-	s.mux.HandleFunc("GET /api/nxgn50", s.handleGetNXGN50)
-
-	// Competitions & Super League Calendar
-	s.mux.HandleFunc("GET /api/super-league", s.handleGetSuperLeague)
-	s.mux.HandleFunc("GET /api/ucl", s.handleGetUCL)
-	s.mux.HandleFunc("GET /api/super-cup", s.handleGetSuperCup)
-	s.mux.HandleFunc("GET /api/competitions", s.handleGetCompetitions)
-	s.mux.HandleFunc("GET /api/competitions/{competition_id}", s.handleGetCompetition)
-	s.mux.HandleFunc("GET /api/competitions/nations-cup/fixtures/{fixture_id}", s.handleGetNationsFixture)
-	s.mux.HandleFunc("POST /api/competitions/nations-cup/fixtures/{fixture_id}/simulate", s.handleSimulateNationsFixture)
-	s.mux.HandleFunc("GET /api/ucl/fixtures", s.handleGetUCLFixtures)
-	s.mux.HandleFunc("GET /api/calendar", s.handleGetCalendar)
-	s.mux.HandleFunc("GET /api/fixtures", s.handleGetFixtures)
-	s.mux.HandleFunc("GET /api/fixtures/{fixture_id}", s.handleGetFixture)
-	s.mux.HandleFunc("POST /api/fixtures/{fixture_id}/simulate", s.handleSimulateFixture)
-	s.mux.HandleFunc("POST /api/fixtures/simulate-remaining", s.handleSimulateRemaining)
-	s.mux.HandleFunc("POST /api/sim/week", s.handleSimWeek)
-	s.mux.HandleFunc("POST /api/sim/month", s.handleSimMonth)
-	s.mux.HandleFunc("POST /api/sim/season", s.handleSimSeason)
-	s.mux.HandleFunc("POST /api/sim/continue", s.handleSimContinue)
-	s.mux.HandleFunc("GET /api/world/dashboard", s.handleGetWorldDashboard)
-	s.mux.HandleFunc("GET /api/search", s.handleSearchWorld)
-	s.mux.HandleFunc("GET /api/scoring-race", s.handleGetScoringRace)
-	s.mux.HandleFunc("GET /api/trophies", s.handleGetTrophies)
-	s.mux.HandleFunc("GET /api/records", s.handleGetRecords)
-	s.mux.HandleFunc("GET /api/season/awards", s.handleGetSeasonAwards)
-	s.mux.HandleFunc("GET /api/season/awards/ceremony", s.handleGetAwardsCeremony)
-	s.mux.HandleFunc("GET /api/season/history", s.handleGetSeasonHistory)
-	s.mux.HandleFunc("GET /api/season/stats", s.handleGetSeasonStats)
-	s.mux.HandleFunc("POST /api/season/reset", s.handleResetSeason)
-	s.mux.HandleFunc("POST /api/season/restart", s.handleRestartSeason)
-
-	// Career Management
-	s.mux.HandleFunc("GET /api/career/default-homes", s.handleGetDefaultHomes)
-	s.mux.HandleFunc("GET /api/career/preview-shuffle", s.handlePreviewShuffle)
-	s.mux.HandleFunc("POST /api/career/new", s.handleNewCareer)
-	s.mux.HandleFunc("GET /api/favourite", s.handleGetFavourite)
-	s.mux.HandleFunc("POST /api/favourite", s.handleSetFavourite)
-	s.mux.HandleFunc("GET /api/week/watch", s.handleWeekWatch)
-
-	// Transfer Market
-	s.mux.HandleFunc("GET /api/transfers", s.handleGetTransfers)
-	s.mux.HandleFunc("POST /api/transfers/bid", s.handleTransferBid)
-	s.mux.HandleFunc("POST /api/transfers/advance", s.handleTransferAdvance)
-	s.mux.HandleFunc("GET /api/transfers/records", s.handleGetTransferRecords)
-
-	// News Wire & Inbox
-	s.mux.HandleFunc("GET /api/inbox", s.handleGetInbox)
-	s.mux.HandleFunc("POST /api/inbox/read", s.handleMarkInboxRead)
-	s.mux.HandleFunc("POST /api/inbox/reply", s.handleInboxReply)
+	// Table-driven API registry: routing, README docs, and the OpenAPI
+	// spec all derive from apiRoutes() in routes.go.
+	for _, route := range s.apiRoutes() {
+		s.mux.HandleFunc(route.Method+" "+route.Path, route.Handler)
+	}
 
 	// Static SPA Fallback
 	s.mux.HandleFunc("/", s.handleStaticSPA)
