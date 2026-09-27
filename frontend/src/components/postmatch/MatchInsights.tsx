@@ -164,6 +164,50 @@ function shooterName(shot: ShotItem): string {
   return shot.shooter?.full_name || 'Unknown player';
 }
 
+/**
+ * Cumulative expected-goals flow, rendered from the backend-built
+ * shot_map.xg_flow series (matchreport.go) rather than a rebuilt proxy.
+ */
+export const XGFlow = React.memo(function XGFlow({ fixture }: { fixture: Fixture }) {
+  const flow = fixture.shot_map?.xg_flow ?? [];
+  if (flow.length < 2) {
+    return <p className="rounded-md border border-white/[0.08] bg-black/15 p-6 text-center text-[12px] text-sage">No expected-goals flow was recorded for this match.</p>;
+  }
+  const lastMinute = Math.max(90, flow[flow.length - 1].minute);
+  const maxXg = Math.max(0.5, ...flow.map((point) => Math.max(point.home_xg, point.away_xg)));
+  const width = 100;
+  const height = 46;
+  const x = (minute: number) => (Math.min(minute, lastMinute) / lastMinute) * width;
+  const y = (value: number) => height - (value / maxXg) * (height - 4) - 2;
+  const line = (key: 'home_xg' | 'away_xg') => flow.map((point, index) => `${index === 0 ? 'M' : 'L'}${x(point.minute).toFixed(2)},${y(point[key]).toFixed(2)}`).join(' ');
+  const homeColor = rgbCss(fixture.home.primary_color, '#F3E6C4');
+  const awayColor = rgbCss(fixture.away.primary_color, '#69AEE5');
+  const homeTotal = fixture.shot_map?.total_home_xg ?? flow[flow.length - 1].home_xg;
+  const awayTotal = fixture.shot_map?.total_away_xg ?? flow[flow.length - 1].away_xg;
+
+  return (
+    <section className="console-card p-4" data-xg-flow="true">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="match-section-title"><Gauge size={14} /> xG flow</h3>
+          <p className="mt-1 text-[10px] text-sage">Cumulative expected goals across the 90 minutes</p>
+        </div>
+        <div className="flex gap-3 text-[10px] text-sage">
+          <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-full" style={{ background: homeColor }} />{fixture.home.short_name} {homeTotal.toFixed(2)}</span>
+          <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-full" style={{ background: awayColor }} />{fixture.away.short_name} {awayTotal.toFixed(2)}</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 block h-28 w-full" role="img" aria-label={`Cumulative expected goals: ${fixture.home.short_name} ${homeTotal.toFixed(2)}, ${fixture.away.short_name} ${awayTotal.toFixed(2)}`}>
+        <line x1="0" y1={height - 2} x2={width} y2={height - 2} stroke="rgba(255,255,255,.15)" strokeWidth=".4" />
+        <line x1={x(45)} y1="0" x2={x(45)} y2={height} stroke="rgba(255,255,255,.12)" strokeWidth=".4" strokeDasharray="1.5 1.5" />
+        <path d={line('away_xg')} fill="none" stroke={awayColor} strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={line('home_xg')} fill="none" stroke={homeColor} strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+      <div className="mt-1 grid grid-cols-4 text-[9px] text-sage"><span>0'</span><span className="text-center">30'</span><span className="text-center">60'</span><span className="text-right">{lastMinute}'</span></div>
+    </section>
+  );
+});
+
 export const ShotMap = React.memo(function ShotMap({ fixture }: { fixture: Fixture }) {
   const shots = fixture.shot_map?.shots ?? [];
   const homeColor = rgbCss(fixture.home.primary_color, '#F3E6C4');

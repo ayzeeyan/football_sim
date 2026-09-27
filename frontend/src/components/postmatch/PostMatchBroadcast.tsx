@@ -14,7 +14,7 @@ import { PlayerOfMatch } from './PlayerOfMatch';
 import { LineupView } from './LineupView';
 import { CompetitionImpact } from './CompetitionImpact';
 import { OtherResults } from './OtherResults';
-import { MatchMomentum, MatchSnapshot, ShotMap, TerritoryCard, TopPerformers } from './MatchInsights';
+import { MatchMomentum, MatchSnapshot, ShotMap, TerritoryCard, TopPerformers, XGFlow } from './MatchInsights';
 import { DuelOfTheMatch } from './DuelOfTheMatch';
 import { PressConference } from './PressConference';
 
@@ -184,6 +184,7 @@ export const PostMatchBroadcast: React.FC<PostMatchBroadcastProps> = ({
             <section className="console-card p-4 sm:p-5 xl:col-span-5"><MatchStatComparison homeName={home?.short_name || 'Home'} awayName={away?.short_name || 'Away'} home={homeStats} away={awayStats} /></section>
             <div className="space-y-4 xl:col-span-7">
               {fixture && <ShotMap fixture={fixture} />}
+              {fixture && <XGFlow fixture={fixture} />}
               {fixture && <MatchMomentum fixture={fixture} events={events} />}
             </div>
             {fixture && <div className="xl:col-span-7"><TopPerformers fixture={fixture} rows={allRows} onOpenPlayer={onOpenPlayer} /></div>}
