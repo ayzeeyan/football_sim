@@ -134,5 +134,6 @@ const CLUB_ID_BY_SHORT: Record<string, string> = {
 
 export function getClubCrestUrlByShort(shortName: string | null | undefined): string | null {
   if (!shortName) return null;
-  return CLUB_CREST_URLS[CLUB_ID_BY_SHORT[shortName.toUpperCase()]] ?? null;
+  const clubId = CLUB_ID_BY_SHORT[shortName.toUpperCase()];
+  return clubId ? (CLUB_CREST_URLS[clubId] ?? null) : null;
 }

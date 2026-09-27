@@ -10,7 +10,7 @@ import {
   TrendingUp,
   Clock,
 } from 'lucide-react';
-import type { Club, CompetitionClub, CompetitionFixtureRow, WorldDashboard } from '../../types';
+import type { Club, CompetitionClub, CompetitionFixtureRow } from '../../types';
 import { fetchWorldDashboard } from '../../services/api';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { usePlayerSheet } from '../clubs/PlayerSheet';
@@ -22,7 +22,6 @@ import {
   ProgressBar,
 } from '../ui/ui';
 import { cx, formatMillions } from '../../lib/format';
-import { soundManager } from '../../audio/webAudio';
 
 interface HomeDashboardTabProps {
   careerKey: number;
@@ -356,9 +355,9 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
             <span>Medical report</span><AlertTriangle size={14} />
           </div>
           {data.injuries.length > 0 ? (
-            <button type="button" onClick={() => openPlayer(data.injuries[0].player_id)} className="mt-4 w-full text-left group">
-              <p className="font-display text-[20px] font-bold text-bone group-hover:text-brass truncate">{data.injuries[0].full_name}</p>
-              <p className="mt-1 text-[12px] text-sage">{data.injuries[0].club_short} · {data.injuries[0].injury} · {data.injuries[0].injured_matches} matches</p>
+            <button type="button" onClick={() => openPlayer(data.injuries[0]!.player_id)} className="mt-4 w-full text-left group">
+              <p className="font-display text-[20px] font-bold text-bone group-hover:text-brass truncate">{data.injuries[0]!.full_name}</p>
+              <p className="mt-1 text-[12px] text-sage">{data.injuries[0]!.club_short} · {data.injuries[0]!.injury} · {data.injuries[0]!.injured_matches} matches</p>
             </button>
           ) : <p className="mt-4 text-[12px] text-sage">No injuries are currently reported.</p>}
         </div>
@@ -369,8 +368,8 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
           </div>
           {data.biggest_transfers.length > 0 ? (
             <>
-              <p className="mt-4 font-display text-[20px] font-bold text-bone group-hover:text-brass truncate">{data.biggest_transfers[0].player_name}</p>
-              <p className="mt-1 text-[12px] text-sage">{data.biggest_transfers[0].seller_short} → {data.biggest_transfers[0].buyer_short} · {data.biggest_transfers[0].formatted_fee}</p>
+              <p className="mt-4 font-display text-[20px] font-bold text-bone group-hover:text-brass truncate">{data.biggest_transfers[0]!.player_name}</p>
+              <p className="mt-1 text-[12px] text-sage">{data.biggest_transfers[0]!.seller_short} → {data.biggest_transfers[0]!.buyer_short} · {data.biggest_transfers[0]!.formatted_fee}</p>
             </>
           ) : <p className="mt-4 text-[12px] text-sage">No completed major transfers yet.</p>}
         </button>
@@ -519,7 +518,7 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
         <div className="console-card p-5">
           <div className="flex items-center justify-between pb-3 border-b border-[#214332]">
             <h3 className="font-display text-[16px] font-bold text-bone">Important fixtures</h3>
-            <button type="button" onClick={() => onOpenFixture(data.upcoming_fixtures[1])} className="text-[12px] font-semibold text-brass">Open Matches</button>
+            <button type="button" onClick={() => onOpenFixture(data.upcoming_fixtures[1]!)} className="text-[12px] font-semibold text-brass">Open Matches</button>
           </div>
           <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
             {data.upcoming_fixtures.slice(0, 6).map((fixture) => (

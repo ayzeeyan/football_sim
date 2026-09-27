@@ -111,7 +111,7 @@ export function positionFit(player: TacticalPlayerLike, tacticalSlot: string): P
   const secondary = player.secondary_position
     ? secondaryFit(lookup[normalizedPosition(player.secondary_position)] ?? 'Emergency')
     : 'Emergency';
-  return FIT_RANK[secondary] > FIT_RANK[primary] ? secondary : primary;
+  return (FIT_RANK[secondary] ?? 0) > (FIT_RANK[primary] ?? 0) ? secondary : primary;
 }
 
 function slotCategory(slot: string): string {
@@ -132,7 +132,7 @@ function inferredCategory(player: TacticalPlayerLike): string {
 
 function assignmentScore(player: TacticalPlayerLike, slot: string): number {
   const fit = positionFit(player, slot);
-  let score = FIT_BONUS[fit] + (player.ovr ?? 0) * 10 + ((player.universe_wonderkid || player.is_wk) ? 200 : 0) + 1;
+  let score = (FIT_BONUS[fit] ?? 0) + (player.ovr ?? 0) * 10 + ((player.universe_wonderkid || player.is_wk) ? 200 : 0) + 1;
   if (fit === 'Emergency') {
     const category = inferredCategory(player);
     if (category === slotCategory(slot)) score += 300;
@@ -160,38 +160,39 @@ function minimumCostAssignment(weights: number[][]): number[] {
     const used = Array<boolean>(m + 1).fill(false);
     do {
       used[j0] = true;
-      const i0 = p[j0];
+      const i0 = p[j0]!;
       let delta = Number.MAX_SAFE_INTEGER;
       let j1 = 0;
       for (let j = 1; j <= m; j += 1) {
         if (used[j]) continue;
-        const cur = -(weights[i0 - 1]?.[j - 1] ?? -1_000_000) - u[i0] - v[j];
-        if (cur < minv[j]) {
+        const cur = -(weights[i0 - 1]?.[j - 1] ?? -1_000_000) - (u[i0] ?? 0) - (v[j] ?? 0);
+        if (cur < (minv[j] ?? Number.MAX_SAFE_INTEGER)) {
           minv[j] = cur;
           way[j] = j0;
         }
-        if (minv[j] < delta || (minv[j] === delta && (j1 === 0 || j < j1))) {
-          delta = minv[j];
+        if ((minv[j] ?? Number.MAX_SAFE_INTEGER) < delta || (minv[j] === delta && (j1 === 0 || j < j1))) {
+          delta = minv[j]!;
           j1 = j;
         }
       }
       for (let j = 0; j <= m; j += 1) {
         if (used[j]) {
-          u[p[j]] += delta;
-          v[j] -= delta;
-        } else if (j > 0) minv[j] -= delta;
+          u[p[j]!] = (u[p[j]!] ?? 0) + delta;
+          v[j] = (v[j] ?? 0) - delta;
+        } else if (j > 0) minv[j]! -= delta;
       }
       j0 = j1;
     } while (p[j0] !== 0);
     do {
-      const j1 = way[j0];
-      p[j0] = p[j1];
+      const j1 = way[j0]!;
+      p[j0] = p[j1]!;
       j0 = j1;
     } while (j0 !== 0);
   }
   const result = Array<number>(n).fill(-1);
   for (let j = 1; j <= m; j += 1) {
-    if (p[j] > 0 && p[j] <= n) result[p[j] - 1] = j - 1;
+    const row = p[j]!;
+    if (row > 0 && row <= n) result[row - 1] = j - 1;
   }
   return result;
 }
@@ -200,7 +201,7 @@ function minimumCostAssignment(weights: number[][]): number[] {
 // legacy fields are inferred from the declared formation and natural positions.
 export function resolveTacticalAssignments<T extends TacticalPlayerLike>(players: T[], formation?: string): TacticalAssignment<T>[] {
   const canonicalFormation = normalizeFormation(formation);
-  const formationSlots = [...FORMATION_SLOTS[canonicalFormation]];
+  const formationSlots = [...(FORMATION_SLOTS[canonicalFormation] ?? [])];
   const indexed = players.map((player, index) => ({ player, index })).sort((a, b) => {
     const keyOrder = stablePlayerKey(a.player).localeCompare(stablePlayerKey(b.player));
     return keyOrder || a.index - b.index;
@@ -225,13 +226,16 @@ export function resolveTacticalAssignments<T extends TacticalPlayerLike>(players
   if (remaining.length && openSlots.length) {
     const columns = Math.max(remaining.length, openSlots.length);
     const weights = openSlots.map((slot) => Array.from({ length: columns }, (_, column) => (
-      column < remaining.length ? assignmentScore(remaining[column].player, slot) : -1_000_000
+      column < remaining.length ? assignmentScore(remaining[column]!.player, slot) : -1_000_000
     )));
     const assignment = minimumCostAssignment(weights);
     assignment.forEach((column, slotIndex) => {
       if (column < 0 || column >= remaining.length) return;
-      const { player, index } = remaining[column];
+      const row = remaining[column];
+      if (!row) return;
+      const { player, index } = row;
       const tacticalSlot = openSlots[slotIndex];
+      if (!tacticalSlot) return;
       resolved.set(index, {
         player,
         naturalPosition: normalizedPosition(player.natural_position || player.position),

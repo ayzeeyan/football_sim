@@ -1,4 +1,3 @@
-import React from 'react';
 import { Star } from 'lucide-react';
 import type { Club, MatchPlayerRow } from '../../types';
 import { ClubCrest, PlayerPortrait } from '../ui/ui';

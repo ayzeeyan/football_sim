@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { AlertTriangle, Star } from 'lucide-react';
 import type { Club, MatchPlayerRow } from '../../types';
 import { cx, rgbCss } from '../../lib/format';

@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Globe2, Zap } from 'lucide-react';
-import type { Fixture, NationsCupFixture, NationsCupResponse } from '../../types';
+import type { Fixture, NationsCupFixture } from '../../types';
 import { fetchNationsCup, fetchNationsFixture, simulateNationsFixture } from '../../services/api';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { cx } from '../../lib/format';
 import { soundManager } from '../../audio/webAudio';
-import { ClubCrest, Modal } from '../ui/ui';
+import { Modal } from '../ui/ui';
 import { usePlayerSheet } from '../clubs/PlayerSheet';
 import { PostMatchBroadcast } from '../postmatch/PostMatchBroadcast';
 

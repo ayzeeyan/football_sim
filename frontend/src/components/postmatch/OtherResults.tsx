@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Fixture } from '../../types';
 import { ClubCrest } from '../ui/ui';
 

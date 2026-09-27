@@ -56,8 +56,8 @@ function handlePostTabKey(event: React.KeyboardEvent<HTMLDivElement>) {
   if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
   event.preventDefault();
   const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-  tabs[next].focus();
-  tabs[next].click();
+  tabs[next]?.focus();
+  tabs[next]?.click();
 }
 
 export const PostMatchBroadcast: React.FC<PostMatchBroadcastProps> = ({

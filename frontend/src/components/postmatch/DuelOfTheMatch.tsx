@@ -7,7 +7,9 @@ import { ClubCrest, PlayerPortrait } from '../ui/ui';
 function bestOfSide(rows: MatchPlayerRow[]): MatchPlayerRow | null {
   const rated = rows.filter((row) => row.played !== false && row.rating > 0);
   if (!rated.length) return null;
-  return rated.reduce((best, row) => (row.rating > best.rating ? row : best), rated[0]);
+  const seed = rated[0];
+  if (!seed) return null;
+  return rated.reduce((best, row) => (row.rating > best.rating ? row : best), seed);
 }
 
 function ratingTone(rating: number): string {

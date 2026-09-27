@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Crown, Medal, Trophy, Sparkle, Target, Handshake, Flame, Award, BookOpen, Star } from 'lucide-react';
+import { Medal, Trophy, Star } from 'lucide-react';
 import { fetchCareerHistory, fetchNXGN50, type CareerHistory, type HistoryResultRow, type SeasonHistoryRow } from '../../services/api';
 import type { Fixture, NXGNPlayer } from '../../types';
 import { Card, ClubCrest, EmptyState, LoadingState, PanelHeader } from '../ui/ui';
-import { cx, rgbCss } from '../../lib/format';
+import { cx } from '../../lib/format';
 import { PlayerNameButton } from '../clubs/PlayerSheet';
 import { PostMatchModal } from '../postmatch/PostMatchBroadcast';
 import { soundManager } from '../../audio/webAudio';

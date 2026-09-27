@@ -168,7 +168,7 @@ export const SuperCupBoard: React.FC<{ data: SuperCupState | null; loading?: boo
             {/* Path 1: seed 1 + 8v9 → QF1 → SF1 */}
             <div style={{ gridColumn: 1, gridRow: '1 / 2' }}><ByeSlot seed={1} club={byes[0] ?? null} /></div>
             <div style={{ gridColumn: 1, gridRow: '2 / 3' }}>
-              <BracketMatch kicker={PLAY_IN_LABELS[3]} home={playIn[3]?.home ?? null} away={playIn[3]?.away ?? null} tie={playIn[3]} />
+              <BracketMatch kicker={PLAY_IN_LABELS[3]!} home={playIn[3]?.home ?? null} away={playIn[3]?.away ?? null} tie={playIn[3]} />
             </div>
             <div style={{ gridColumn: 2, gridRow: '1 / 3' }} className="relative pl-3">
               <span className="absolute left-0 top-1/4 bottom-1/4 w-3 border-l border-t border-b border-line/80 rounded-l-md" aria-hidden />
@@ -177,7 +177,7 @@ export const SuperCupBoard: React.FC<{ data: SuperCupState | null; loading?: boo
 
             <div style={{ gridColumn: 1, gridRow: '3 / 4' }}><ByeSlot seed={2} club={byes[1] ?? null} /></div>
             <div style={{ gridColumn: 1, gridRow: '4 / 5' }}>
-              <BracketMatch kicker={PLAY_IN_LABELS[2]} home={playIn[2]?.home ?? null} away={playIn[2]?.away ?? null} tie={playIn[2]} />
+              <BracketMatch kicker={PLAY_IN_LABELS[2]!} home={playIn[2]?.home ?? null} away={playIn[2]?.away ?? null} tie={playIn[2]} />
             </div>
             <div style={{ gridColumn: 2, gridRow: '3 / 5' }} className="relative pl-3">
               <span className="absolute left-0 top-1/4 bottom-1/4 w-3 border-l border-t border-b border-line/80 rounded-l-md" aria-hidden />
@@ -199,7 +199,7 @@ export const SuperCupBoard: React.FC<{ data: SuperCupState | null; loading?: boo
             {/* Path 2: seed 3 + 6v11 → QF3 → SF2 */}
             <div style={{ gridColumn: 1, gridRow: '5 / 6' }}><ByeSlot seed={3} club={byes[2] ?? null} /></div>
             <div style={{ gridColumn: 1, gridRow: '6 / 7' }}>
-              <BracketMatch kicker={PLAY_IN_LABELS[1]} home={playIn[1]?.home ?? null} away={playIn[1]?.away ?? null} tie={playIn[1]} />
+              <BracketMatch kicker={PLAY_IN_LABELS[1]!} home={playIn[1]?.home ?? null} away={playIn[1]?.away ?? null} tie={playIn[1]} />
             </div>
             <div style={{ gridColumn: 2, gridRow: '5 / 7' }} className="relative pl-3">
               <span className="absolute left-0 top-1/4 bottom-1/4 w-3 border-l border-t border-b border-line/80 rounded-l-md" aria-hidden />
@@ -208,7 +208,7 @@ export const SuperCupBoard: React.FC<{ data: SuperCupState | null; loading?: boo
 
             <div style={{ gridColumn: 1, gridRow: '7 / 8' }}><ByeSlot seed={4} club={byes[3] ?? null} /></div>
             <div style={{ gridColumn: 1, gridRow: '8 / 9' }}>
-              <BracketMatch kicker={PLAY_IN_LABELS[0]} home={playIn[0]?.home ?? null} away={playIn[0]?.away ?? null} tie={playIn[0]} />
+              <BracketMatch kicker={PLAY_IN_LABELS[0]!} home={playIn[0]?.home ?? null} away={playIn[0]?.away ?? null} tie={playIn[0]} />
             </div>
             <div style={{ gridColumn: 2, gridRow: '7 / 9' }} className="relative pl-3">
               <span className="absolute left-0 top-1/4 bottom-1/4 w-3 border-l border-t border-b border-line/80 rounded-l-md" aria-hidden />

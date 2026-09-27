@@ -116,14 +116,14 @@ function buildMomentum(shots: ShotItem[], events: MatchEventItem[]): Array<{ hom
     shots.forEach((shot) => {
       const index = Math.min(8, Math.max(0, Math.floor(shot.minute / 10)));
       const weight = 0.25 + Math.max(0, shot.xg) * 4 + (shot.outcome === 'goal' ? 0.8 : 0);
-      bins[index][shot.team] += weight;
+      bins[index]![shot.team] += weight;
     });
     return bins;
   }
   events.forEach((event) => {
     const index = Math.min(8, Math.max(0, Math.floor(event.minute / 10)));
     const weight = ['goal', 'penalty', 'own_goal', 'corner_goal', 'free_kick_goal'].includes(event.type) ? 2.5 : event.type === 'red' ? 1.5 : 0.4;
-    bins[index][event.side] += weight;
+    bins[index]![event.side] += weight;
   });
   return bins;
 }
@@ -173,7 +173,7 @@ export const XGFlow = React.memo(function XGFlow({ fixture }: { fixture: Fixture
   if (flow.length < 2) {
     return <p className="rounded-md border border-white/[0.08] bg-black/15 p-6 text-center text-[12px] text-sage">No expected-goals flow was recorded for this match.</p>;
   }
-  const lastMinute = Math.max(90, flow[flow.length - 1].minute);
+  const lastMinute = Math.max(90, flow[flow.length - 1]!.minute);
   const maxXg = Math.max(0.5, ...flow.map((point) => Math.max(point.home_xg, point.away_xg)));
   const width = 100;
   const height = 46;
@@ -182,8 +182,8 @@ export const XGFlow = React.memo(function XGFlow({ fixture }: { fixture: Fixture
   const line = (key: 'home_xg' | 'away_xg') => flow.map((point, index) => `${index === 0 ? 'M' : 'L'}${x(point.minute).toFixed(2)},${y(point[key]).toFixed(2)}`).join(' ');
   const homeColor = rgbCss(fixture.home.primary_color, '#F3E6C4');
   const awayColor = rgbCss(fixture.away.primary_color, '#69AEE5');
-  const homeTotal = fixture.shot_map?.total_home_xg ?? flow[flow.length - 1].home_xg;
-  const awayTotal = fixture.shot_map?.total_away_xg ?? flow[flow.length - 1].away_xg;
+  const homeTotal = fixture.shot_map?.total_home_xg ?? flow[flow.length - 1]!.home_xg;
+  const awayTotal = fixture.shot_map?.total_away_xg ?? flow[flow.length - 1]!.away_xg;
 
   return (
     <section className="console-card p-4" data-xg-flow="true">

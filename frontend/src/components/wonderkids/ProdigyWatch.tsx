@@ -35,7 +35,7 @@ interface ProdigyWatchProps {
 
 export const ProdigyWatch: React.FC<ProdigyWatchProps> = ({ watchRows, onSelectProdigy }) => {
   const [raceMode, setRaceMode] = useState<RaceMode>('golden_boy');
-  const activeRace = RACE_MODES.find((mode) => mode.id === raceMode) ?? RACE_MODES[0];
+  const activeRace = RACE_MODES.find((mode) => mode.id === raceMode) ?? RACE_MODES[0]!;
   const rankedRows = useMemo(() => [...watchRows].sort((a, b) => compareRows(a, b, raceMode)), [watchRows, raceMode]);
 
   return (

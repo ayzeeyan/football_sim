@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Club, Fixture, NearbyStanding, TableImpact } from '../../types';
 import { prettyCompetitionName } from '../clubs/PlayerSheet';
 import { cx } from '../../lib/format';

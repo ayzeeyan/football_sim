@@ -1,4 +1,3 @@
-import React from 'react';
 import { Activity, ArrowRight, Sparkles, Swords, TrendingUp } from 'lucide-react';
 import type { Club, Fixture, Player } from '../../types';
 import { ClubCrest, FormPips, OvrBadge } from '../ui/ui';
@@ -34,7 +33,8 @@ function predictionRead(fixture: Fixture, prediction: ReturnType<typeof matchPre
     { label: 'a draw', probability: prediction.draw },
     { label: fixture.away.short_name, probability: prediction.away },
   ].sort((left, right) => right.probability - left.probability);
-  const [leader, runnerUp] = outcomes;
+  const leader = outcomes[0]!;
+  const runnerUp = outcomes[1]!;
   const gap = leader.probability - runnerUp.probability;
   const headline = leader.label === 'a draw'
     ? 'The draw leads the model'

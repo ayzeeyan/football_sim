@@ -6,7 +6,7 @@ import type { SuperLeagueState, FixturesResponse } from '../../types';
 import { Trophy, RotateCcw, Users, Zap, CalendarDays } from 'lucide-react';
 import { soundManager } from '../../audio/webAudio';
 import { formatGd, cx, stripEmojis } from '../../lib/format';
-import { Card, ClubCrest, ClubDot, ConfirmBar, FormPips, LoadingState, OvrBadge, PanelHeader, PrimaryButton, ProgressBar } from '../ui/ui';
+import { Card, ClubCrest, ConfirmBar, FormPips, LoadingState, OvrBadge, PanelHeader, PrimaryButton, ProgressBar } from '../ui/ui';
 import { qualificationBand, qualificationBarClass } from '../../lib/qualification';
 import { LEAGUES_5 } from '../../lib/constants';
 import { MatchCard } from '../matches/MatchCard';

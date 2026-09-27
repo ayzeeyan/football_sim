@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import type { TransferNegotiation, TransferRecordsData } from '../../types';
 import { fetchTransfers, fetchTransferRecords, advanceMarket, resetSeason, type TransfersResponse } from '../../services/api';
-import { Zap, Flame, CheckCircle, Newspaper, Handshake, ListChecks, Heart, Hourglass, FlagOff, Landmark, AlertCircle, Sparkle, ArrowRight, Trophy } from 'lucide-react';
+import { Zap, Flame, CheckCircle, Newspaper, Handshake, ListChecks, Heart, Hourglass, FlagOff, Landmark, Sparkle, Trophy } from 'lucide-react';
 import { soundManager } from '../../audio/webAudio';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { formatMillions, cx, stripEmojis } from '../../lib/format';
@@ -153,8 +153,8 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
       : event.key === 'End'
         ? tabs.length - 1
         : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
-    tabs[next].focus();
-    tabs[next].click();
+    tabs[next]?.focus();
+    tabs[next]?.click();
   };
 
   return (

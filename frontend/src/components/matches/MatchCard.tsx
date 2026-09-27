@@ -263,7 +263,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({ fixture: f, onOpenMatchCen
           )}
           {f.head_to_head && f.head_to_head.length > 0 && (
             <p className="text-center text-[11px] text-sage font-mono mt-2">
-              Last meeting: {f.head_to_head[0].home_goals}–{f.head_to_head[0].away_goals} · MW {f.head_to_head[0].matchweek}
+              Last meeting: {f.head_to_head[0]!.home_goals}–{f.head_to_head[0]!.away_goals} · MW {f.head_to_head[0]!.matchweek}
             </p>
           )}
           <p className="text-center text-[12px] text-[#A9CBDD] font-semibold mt-2">Open report for timeline, lineups and stats</p>
@@ -290,7 +290,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({ fixture: f, onOpenMatchCen
           )}
           {f.head_to_head && f.head_to_head.length > 0 && (
             <p className="text-center text-[12px] text-sage font-mono">
-              Last meeting · MW {f.head_to_head[0].matchweek}: {f.head_to_head[0].home_goals}–{f.head_to_head[0].away_goals}
+              Last meeting · MW {f.head_to_head[0]!.matchweek}: {f.head_to_head[0]!.home_goals}–{f.head_to_head[0]!.away_goals}
             </p>
           )}
           <div className="flex items-center gap-2">

@@ -148,7 +148,7 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatc
     if (selectedClub || clubs.length === 0) return;
     const wanted = initialClubRef.current;
     const linked = wanted ? clubs.find((c) => c.club_id === wanted) : undefined;
-    const seed = linked ?? clubs[0];
+    const seed = linked ?? clubs[0] ?? null;
     setSelectedClub(seed);
     if (linked) setSelectedLeague(linked.league);
   }, [clubs, selectedClub]);
@@ -157,7 +157,7 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatc
     soundManager.playClick();
     setSelectedLeague(league);
     const list = league === 'All clubs' ? clubs : clubs.filter((c) => c.league === league);
-    if (list.length > 0) setSelectedClub(list[0]);
+    if (list.length > 0) setSelectedClub(list[0] ?? null);
   };
 
   useEffect(() => {
@@ -1009,11 +1009,11 @@ const ClubOverviewPanel: React.FC<{
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <p className="eyebrow">Previous result</p>
-          <FixtureMini fixture={profile?.previous_result ?? null} club={club} onWatchFixture={onWatchFixture} />
+          <FixtureMini fixture={profile?.previous_result ?? null} onWatchFixture={onWatchFixture} />
         </Card>
         <Card>
           <p className="eyebrow">Next fixture</p>
-          <FixtureMini fixture={profile?.next_fixture ?? null} club={club} onWatchFixture={onWatchFixture} />
+          <FixtureMini fixture={profile?.next_fixture ?? null} onWatchFixture={onWatchFixture} />
         </Card>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1054,9 +1054,8 @@ const PlayerStatCard: React.FC<{ title: string; player: Player | null | undefine
 
 const FixtureMini: React.FC<{
   fixture: Fixture | null;
-  club: Club;
   onWatchFixture?: SquadTabProps['onWatchFixture'];
-}> = ({ fixture, club, onWatchFixture }) => {
+}> = ({ fixture, onWatchFixture }) => {
   if (!fixture) return <p className="mt-2 text-[13px] text-sage">No fixture logged.</p>;
   const home = fixture.home?.short_name || fixture.home_id;
   const away = fixture.away?.short_name || fixture.away_id;
