@@ -1830,3 +1830,27 @@ export interface SaveSlot {
   size_bytes: number;
 }
 
+
+export interface SetPiecePick {
+  player_id: string;
+  full_name: string;
+  position: string;
+  ovr: number;
+  confidence: number;
+  reason: string;
+}
+
+export interface SetPieceInspection {
+  penalty_taker: SetPiecePick | null;
+  free_kick_taker: SetPiecePick | null;
+  aerial_target: SetPiecePick | null;
+  corner_taker: SetPiecePick | null;
+}
+
+export interface ClubSetPiecesResponse {
+  club_id: string;
+  club_name: string;
+  short_name: string;
+  set_pieces: SetPieceInspection;
+}
+
