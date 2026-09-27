@@ -25,6 +25,12 @@ export function formatMillions(valueEur: number): string {
   return `€${(valueEur / 1_000_000).toFixed(1)}M`;
 }
 
+/** Compact euro currency label; "—" for missing values. */
+export function formatEUR(value: number | null | undefined): string {
+  if (typeof value !== 'number') return '—';
+  return new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
 export function formatGd(gd: number): string {
   return gd > 0 ? `+${gd}` : `${gd}`;
 }

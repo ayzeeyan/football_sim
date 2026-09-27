@@ -179,8 +179,8 @@ func TestTenSeasonMacroSoakValidatesEveryBoundary(t *testing.T) {
 		if offseasonResult.WeeksAdvanced != transfers.TransferWindowWeeks {
 			t.Fatalf("season %d processed %d transfer weeks, want exactly %d", season, offseasonResult.WeeksAdvanced, transfers.TransferWindowWeeks)
 		}
-		if processedEndWeek != 1 {
-			t.Fatalf("season %d rollover left the closed transfer engine at week %d, want reset Week 1", season, processedEndWeek)
+		if processedEndWeek != 0 {
+			t.Fatalf("season %d rollover left the closed transfer engine at week %d, want idle Week 0", season, processedEndWeek)
 		}
 		if afterAllTime < beforeAllTime {
 			t.Fatalf("season %d all-time transfer count regressed", season)

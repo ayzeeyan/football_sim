@@ -207,19 +207,23 @@ func (tm *TournamentManager) addETGoal(payload *matchreport.InstantPayload, side
 	}
 	sMini := matchreport.ToMiniPlayer(scorer)
 	ev := matchreport.MatchEventItem{
-		Minute:    minute,
-		Display:   matchreport.MinuteDisplay(minute, rng),
-		Seq:       seq,
-		Type:      "goal",
-		Side:      side,
-		Scorer:    &sMini,
-		HomeScore: payload.HomeGoals,
-		AwayScore: payload.AwayGoals,
-		Period:    "et",
+		Minute:     minute,
+		Display:    matchreport.MinuteDisplay(minute, rng),
+		Seq:        seq,
+		Type:       "goal",
+		Side:       side,
+		Scorer:     &sMini,
+		PlayerID:   scorer.PlayerID,
+		PlayerName: scorer.FullName,
+		HomeScore:  payload.HomeGoals,
+		AwayScore:  payload.AwayGoals,
+		Period:     "et",
 	}
 	if assister != nil {
 		am := matchreport.ToMiniPlayer(assister)
 		ev.Assister = &am
+		ev.AssistPlayerID = assister.PlayerID
+		ev.AssistPlayerName = assister.FullName
 	}
 	payload.Events = append(payload.Events, ev)
 }

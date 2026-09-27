@@ -23,6 +23,7 @@ func createTransferTestUniverse() (*TransferEngine, *models.Club, *models.Club) 
 		Squad: []*models.Player{{PlayerID: "P2", FullName: "Madrid Veteran", OVR: 86, Age: 29, ClubID: "LAL-RMA"}},
 	}
 	clubs := []*models.Club{barca, madrid}
+	fillSellerToTransferableSize(barca)
 	mgrs := managers.BuildManagers(clubs)
 	te := NewTransferEngine(clubs, mgrs, 42)
 	return te, barca, madrid
@@ -133,6 +134,50 @@ func TestTransferEngine_WinterCalendarAdvanceIsFiniteAndIdempotent(t *testing.T)
 	}
 	if te.CurrentWeek != WinterTransferWindowWeeks || te.ProcessedWeeks != WinterTransferWindowWeeks {
 		t.Fatalf("closed winter market advanced or reopened: week=%d processed=%d", te.CurrentWeek, te.ProcessedWeeks)
+	}
+}
+
+func TestValidateWindowStateRejectsAmbiguousLifecycleStates(t *testing.T) {
+	valid := []struct {
+		kind      WindowType
+		open      bool
+		offseason bool
+		week      int
+		processed int
+	}{
+		{WindowClosed, false, false, 0, 0},
+		{WindowSummer, true, true, 1, 0},
+		{WindowSummer, false, true, TransferWindowWeeks, TransferWindowWeeks},
+		{WindowWinter, true, false, 3, 2},
+		{WindowWinter, false, false, WinterTransferWindowWeeks, WinterTransferWindowWeeks},
+	}
+	for _, state := range valid {
+		if err := ValidateWindowState(state.kind, state.open, state.offseason, state.week, state.processed); err != nil {
+			t.Errorf("valid state %+v rejected: %v", state, err)
+		}
+	}
+
+	invalid := []struct {
+		name      string
+		kind      WindowType
+		open      bool
+		offseason bool
+		week      int
+		processed int
+	}{
+		{"idle_week_one", WindowClosed, false, false, 1, 0},
+		{"closed_but_open", WindowClosed, true, false, 0, 0},
+		{"summer_during_season", WindowSummer, true, false, 1, 0},
+		{"winter_in_offseason", WindowWinter, true, true, 1, 0},
+		{"open_counter_mismatch", WindowSummer, true, true, 4, 1},
+		{"premature_close", WindowWinter, false, false, 3, 3},
+	}
+	for _, state := range invalid {
+		t.Run(state.name, func(t *testing.T) {
+			if err := ValidateWindowState(state.kind, state.open, state.offseason, state.week, state.processed); err == nil {
+				t.Fatalf("invalid state %+v was accepted", state)
+			}
+		})
 	}
 }
 

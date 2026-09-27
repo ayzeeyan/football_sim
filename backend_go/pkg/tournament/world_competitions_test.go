@@ -9,6 +9,37 @@ import (
 	"football_sim/pkg/transfers"
 )
 
+func TestViewingPreferenceDoesNotControlFeaturedFixtureOrWorldProgression(t *testing.T) {
+	tm, _, _ := loadEuropeanWorldForTest(t)
+	dashboardBefore := tm.WorldDashboard()
+	featuredBefore, _ := dashboardBefore["next_fixture"].(map[string]interface{})
+	if featuredBefore == nil || featuredBefore["id"] == "" {
+		t.Fatal("neutral world has no featured fixture")
+	}
+
+	// Select a club that is not necessarily involved in the featured match.
+	selected := tm.ClubsList[len(tm.ClubsList)-1].ClubID
+	if !tm.SetFavouriteClubID(selected) {
+		t.Fatalf("could not store viewing preference %s", selected)
+	}
+	dashboardAfter := tm.WorldDashboard()
+	featuredAfter, _ := dashboardAfter["next_fixture"].(map[string]interface{})
+	if featuredAfter == nil || featuredAfter["id"] != featuredBefore["id"] {
+		t.Fatalf("viewing preference changed featured fixture: before=%v after=%v", featuredBefore["id"], featuredAfter["id"])
+	}
+
+	mw := tm.CurrentMatchweek
+	result := tm.SimulateRemaining()
+	if result["status"] != "success" {
+		t.Fatalf("world simulation failed: %v", result)
+	}
+	for _, fixture := range tm.GetSlate(mw) {
+		if tm.isWorldDomesticLeague(fixture.Competition) && fixture.Status != "finished" {
+			t.Fatalf("domestic fixture %s remained %s after whole-world simulation", fixture.FixtureID, fixture.Status)
+		}
+	}
+}
+
 func loadEuropeanWorldForTest(t *testing.T) (*TournamentManager, *growth.GrowthEngine, *transfers.TransferEngine) {
 	t.Helper()
 	ge := growth.NewGrowthEngine(8181)
@@ -115,10 +146,16 @@ func TestEuropeanWorldCompletesCompetitionsAndCarriesQualificationIntoNextSeason
 	if batch.Status != "success" || !batch.SeasonFinished || tm.SeasonPhase != "transfer_window" {
 		t.Fatalf("world season did not finish: batch=%+v phase=%s", batch, tm.SeasonPhase)
 	}
-	for _, id := range []string{"fa-cup", "efl-cup", "copa-del-rey", "dfb-pokal", "coppa-italia", "coupe-de-france", "champions-league", "europa-league", "conference-league"} {
+	if national := tm.World.NationalTeams; national == nil || national.Stage != "Complete" || national.ChampionID == "" || len(national.Fixtures) != 11 {
+		t.Fatalf("national competition did not advance with the shared season: %+v", national)
+	}
+	for _, id := range []string{"premier-league", "la-liga", "bundesliga", "serie-a", "ligue-1", "fa-cup", "efl-cup", "copa-del-rey", "dfb-pokal", "coppa-italia", "coupe-de-france", "champions-league", "europa-league", "conference-league"} {
 		comp := tm.World.Competitions[id]
 		if comp == nil || comp.ChampionID == "" || tm.Clubs[comp.ChampionID] == nil {
 			t.Fatalf("%s did not produce a champion: %#v", id, comp)
+		}
+		if comp.Stage != "Complete" {
+			t.Fatalf("%s ended at stage %q, want Complete", id, comp.Stage)
 		}
 	}
 	if err := tm.ValidateWorldState(); err != nil {
@@ -169,10 +206,10 @@ func TestWorldAwardsIncludeDomesticGoldenBoots(t *testing.T) {
 func TestGetCompetitionsListsConfiguredWorldOrder(t *testing.T) {
 	tm, _, _ := loadEuropeanWorldForTest(t)
 	list := tm.GetCompetitions()
-	if len(list) != 14 {
-		t.Fatalf("competitions=%d want 14", len(list))
+	if len(list) != 15 {
+		t.Fatalf("competitions=%d want 15", len(list))
 	}
-	if list[0]["id"] != "premier-league" || list[len(list)-1]["id"] != "conference-league" {
+	if list[0]["id"] != "premier-league" || list[len(list)-2]["id"] != "conference-league" || list[len(list)-1]["id"] != nationalTeamsCompetitionID {
 		t.Fatalf("unexpected competition order: first=%v last=%v", list[0]["id"], list[len(list)-1]["id"])
 	}
 	detail := tm.GetCompetition("champions-league")

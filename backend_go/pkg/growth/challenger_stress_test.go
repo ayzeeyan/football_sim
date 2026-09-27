@@ -8,7 +8,7 @@ import (
 )
 
 // TestChallenger_GrowthEngine_PotentialBounds_Wonderkids tests that canonical wonderkids
-// (potentials 93 to 96) NEVER grow beyond their potential ceiling under extreme XP and seasonal progression.
+// configured potentials never grow beyond their ceiling under extreme XP and seasonal progression.
 func TestChallenger_GrowthEngine_PotentialBounds_Wonderkids(t *testing.T) {
 	ge := NewGrowthEngine(99999)
 
@@ -153,15 +153,15 @@ func TestChallenger_AgingDecline_VeteransFloor35(t *testing.T) {
 	for _, ta := range targetAges {
 		playerID := fmt.Sprintf("vet_%d", ta.age)
 		ge.Attributes[playerID] = &TechnicalAttributes{
-			Pace:            60,
-			Stamina:         60,
-			Strength:        60,
-			Physicality:     60,
-			Shooting:        80, // non-physical
-			Passing:         80, // non-physical
-			Dribbling:       80, // non-physical
-			Defending:       80, // non-physical
-			Composure:       80, // non-physical
+			Pace:        60,
+			Stamina:     60,
+			Strength:    60,
+			Physicality: 60,
+			Shooting:    80, // non-physical
+			Passing:     80, // non-physical
+			Dribbling:   80, // non-physical
+			Defending:   80, // non-physical
+			Composure:   80, // non-physical
 		}
 
 		// First decline

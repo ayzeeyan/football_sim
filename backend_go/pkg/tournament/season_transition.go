@@ -12,6 +12,17 @@ func (tm *TournamentManager) FinalizeSeasonTransition() map[string]interface{} {
 			"message": "Cannot finalize season transition: tournament manager is unavailable.",
 		}
 	}
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if failure := tm.seasonTransitionErrorUnlocked(); failure != nil {
+		return failure
+	}
+	return tm.resetNewSeasonUnlocked()
+}
+
+// seasonTransitionErrorUnlocked applies the lifecycle gates shared by every
+// transition path. The caller must hold tm.mu.
+func (tm *TournamentManager) seasonTransitionErrorUnlocked() map[string]interface{} {
 	if tm.SeasonPhase != "transfer_window" {
 		return map[string]interface{}{
 			"status":            "error",
@@ -20,7 +31,7 @@ func (tm *TournamentManager) FinalizeSeasonTransition() map[string]interface{} {
 			"current_matchweek": tm.CurrentMatchweek,
 		}
 	}
-	if tm.TransferEngine != nil && tm.TransferEngine.IsWindowOpen() {
+	if tm.TransferEngine != nil && !tm.TransferEngine.HasCompletedSummerWindow() {
 		return map[string]interface{}{
 			"status":            "error",
 			"message":           "Season transition cannot finalize before all 12 transfer weeks are processed.",
@@ -33,13 +44,11 @@ func (tm *TournamentManager) FinalizeSeasonTransition() map[string]interface{} {
 	// use the completed campaign's stature. Keep this guarded fallback for
 	// legacy/manual callers that finalize after the window without going through
 	// that path. Incomplete result inputs must leave the campaign untouched.
-	tm.mu.Lock()
 	ready := tm.completedSeasonInputsAvailableUnlocked()
 	if ready && tm.ReputationAppliedSeason != tm.SeasonName {
 		ready = tm.applyCompletedSeasonReputationUnlocked()
 	}
 	markerReady := tm.ReputationAppliedSeason == tm.SeasonName
-	tm.mu.Unlock()
 	if !ready || !markerReady {
 		return map[string]interface{}{
 			"status":            "error",
@@ -48,5 +57,5 @@ func (tm *TournamentManager) FinalizeSeasonTransition() map[string]interface{} {
 			"current_matchweek": tm.CurrentMatchweek,
 		}
 	}
-	return tm.ResetNewSeason()
+	return nil
 }

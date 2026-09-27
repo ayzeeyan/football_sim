@@ -261,6 +261,26 @@ func (s *Server) handleGetWorldDashboard(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, payload)
 }
 
+func (s *Server) handleSearchWorld(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	limit := 8
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := fmt.Sscanf(raw, "%d", &limit); n != 1 || err != nil {
+			limit = 8
+		}
+	}
+	if limit < 1 {
+		limit = 8
+	}
+	if limit > 48 {
+		limit = 48
+	}
+	s.worldMu.RLock()
+	payload := s.TournamentManager.SearchWorld(q, limit)
+	s.worldMu.RUnlock()
+	writeJSON(w, payload)
+}
+
 type continueResult struct {
 	tournament.BatchSimResult
 	StopReason      string                 `json:"stop_reason"`
@@ -283,39 +303,6 @@ func (s *Server) handleSimContinue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tm := s.TournamentManager
-	if tm.SeasonPhase == "season" {
-		favID, fav, _, _ := tm.WeekWatch()
-		if fav != nil && fav.Status == "scheduled" {
-			res := tm.SimulateRemainingExcluding(fav.FixtureID)
-			played, _ := res["played"].(int)
-			skipped, _ := res["skipped"].(int)
-			hint := "Your club is ready to play. Watch live or simulate the fixture."
-			out := continueResult{
-				BatchSimResult: tournament.BatchSimResult{
-					Status:           "success",
-					Mode:             "continue",
-					SeasonName:       tm.SeasonName,
-					SeasonPhase:      tm.SeasonPhase,
-					CurrentMatchweek: tm.CurrentMatchweek,
-					Played:           played,
-					Skipped:          skipped,
-					Digests:          []tournament.MatchweekDigest{},
-					Message:          hint,
-					CalendarLabel:    tm.SeasonName,
-				},
-				StopReason:      "watched_club_match",
-				ContinueHint:    hint,
-				NextFixture:     s.serializeFixture(fav),
-				FavouriteClubID: favID,
-			}
-			snap, gen := s.takeCareerSnapshotLocked()
-			s.worldMu.Unlock()
-			s.commitCareerSnapshot(snap, gen)
-			writeJSON(w, out)
-			return
-		}
-	}
-
 	batch, statusCode := s.runMacroSimulationLocked("week")
 	batch.Mode = "continue"
 	stop := "week"
@@ -350,6 +337,9 @@ func (s *Server) handleSimContinue(w http.ResponseWriter, r *http.Request) {
 		StopReason:      stop,
 		ContinueHint:    hint,
 		FavouriteClubID: tm.FavouriteClubID,
+	}
+	if next, ok := tm.WorldDashboard()["next_fixture"].(map[string]interface{}); ok {
+		out.NextFixture = next
 	}
 	if statusCode == http.StatusOK {
 		snap, gen := s.takeCareerSnapshotLocked()

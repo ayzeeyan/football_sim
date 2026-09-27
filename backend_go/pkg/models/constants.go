@@ -29,6 +29,12 @@ var PositionPaths = map[string][]string{
 	"RW":  {"CAM", "ST"},
 }
 
+// attackingTacticalPositions is the canonical set used by model-side role
+// eligibility. Keep it aligned with the frontend role map.
+var attackingTacticalPositions = [...]string{
+	"LAM", "AM", "CAM", "RAM", "LW", "LF", "CF", "RF", "RW", "ST", "LST", "RST",
+}
+
 // PositionOptions returns a copy of learnable secondary positions for the given position.
 func PositionOptions(pos string) []string {
 	paths, ok := PositionPaths[strings.ToUpper(strings.TrimSpace(pos))]
@@ -47,9 +53,9 @@ func GetPositionCategory(pos string) string {
 	switch p {
 	case "GK":
 		return "GK"
-	case "CB", "LB", "RB", "LWB", "RWB":
+	case "CB", "LCB", "RCB", "LB", "RB", "LWB", "RWB":
 		return "DEF"
-	case "CDM", "CM", "LM", "RM":
+	case "DM", "CDM", "LDM", "RDM", "CM", "LCM", "RCM", "LM", "RM":
 		return "MID"
 	default:
 		// Includes CAM, CF, ST, LW, RW, etc.

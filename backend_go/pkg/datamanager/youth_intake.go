@@ -96,12 +96,30 @@ func RunYouthIntakeClubs(clubs []*models.Club, count *int, ge *growth.GrowthEngi
 	return runYouthIntakeInternal(clubs, clubs, count, ge, rng)
 }
 
+// RunSeasonYouthIntakeClubs performs the automatic annual intake. Unlike the
+// explicit academy API, it uses a realistic soft roster target so ten-season
+// careers do not converge on 34 senior players at every club.
+func RunSeasonYouthIntakeClubs(clubs []*models.Club, ge *growth.GrowthEngine, rng *rand.Rand) ([]*models.Player, error) {
+	return runYouthIntakeInternalWithCap(clubs, clubs, nil, ge, rng, models.AcademyIntakeSquadTarget)
+}
+
 func runYouthIntakeInternal(
 	clubs []*models.Club,
 	globalClubs []*models.Club,
 	count *int,
 	ge *growth.GrowthEngine,
 	rng *rand.Rand,
+) ([]*models.Player, error) {
+	return runYouthIntakeInternalWithCap(clubs, globalClubs, count, ge, rng, models.MaxSeniorSquadSize)
+}
+
+func runYouthIntakeInternalWithCap(
+	clubs []*models.Club,
+	globalClubs []*models.Club,
+	count *int,
+	ge *growth.GrowthEngine,
+	rng *rand.Rand,
+	squadCap int,
 ) ([]*models.Player, error) {
 	if rng == nil {
 		// Fixed fallback seed: nil callers (tests, tools) stay deterministic
@@ -124,18 +142,44 @@ func runYouthIntakeInternal(
 	signed := make([]*models.Player, 0)
 
 	for _, club := range clubs {
-		if len(club.Squad) >= 34 {
+		if club == nil {
+			continue
+		}
+		outgoingLoans := 0
+		for _, c := range globalClubs {
+			if c == nil || c.ClubID == club.ClubID {
+				continue
+			}
+			for _, p := range c.Squad {
+				if p != nil && p.OnLoan && p.ParentClubID == club.ClubID {
+					outgoingLoans++
+				}
+			}
+		}
+		if len(club.Squad)+outgoingLoans >= squadCap {
 			continue
 		}
 
-		hasGoldenGen := rng.Float64() < 0.20
-		gradCount := 2 + rng.Intn(3) // 2, 3, or 4
+		academyQuality := club.Identity.Clamp().AcademyQuality
+		// Preserve the old 20% midpoint while making elite and modest academies
+		// genuinely distinct. The bounded 8–28% corridor prevents identity from
+		// overwhelming the rest of the career model.
+		goldenChance := 0.08 + float64(academyQuality)*0.002
+		hasGoldenGen := rng.Float64() < goldenChance
+		qualityBonus := (academyQuality - 50) / 20 // bounded -2..+2
+		gradCount := 2 + rng.Intn(3)               // 2, 3, or 4
 		if count != nil && *count > 0 {
 			gradCount = *count
 		}
+		// Season-scale universes use intake as the final safety net after
+		// retirements, contract expiry, and loan returns. Keep the explicit-count
+		// helper exact for tools/tests and avoid changing isolated one-club calls.
+		if needed := models.MinSeniorSquadSize - len(club.Squad); count == nil && len(globalClubs) >= 12 && needed > gradCount {
+			gradCount = needed
+		}
 
 		for i := 0; i < gradCount; i++ {
-			if len(club.Squad) >= 34 {
+			if len(club.Squad)+outgoingLoans >= squadCap {
 				break
 			}
 
@@ -166,9 +210,11 @@ func runYouthIntakeInternal(
 				ovr = 72 + rng.Intn(7)       // 72 to 78
 				potential = 90 + rng.Intn(6) // 90 to 95
 			} else {
-				ovr = 58 + rng.Intn(15)      // 58 to 72
+				ovr = 58 + rng.Intn(15)       // 58 to 72
 				potential = 75 + rng.Intn(18) // 75 to 92
 			}
+			ovr = clampAcademyRating(ovr+qualityBonus, 58, 78)
+			potential = clampAcademyRating(potential+qualityBonus, 75, 95)
 
 			randSuffix := 1000 + rng.Intn(9000)
 			safeName := strings.ReplaceAll(name, " ", "_")
@@ -219,4 +265,14 @@ func runYouthIntakeInternal(
 	}
 
 	return signed, nil
+}
+
+func clampAcademyRating(value, low, high int) int {
+	if value < low {
+		return low
+	}
+	if value > high {
+		return high
+	}
+	return value
 }

@@ -95,3 +95,44 @@ func TestHalfTimeCommandPublishesXIAndRejectsDuplicates(t *testing.T) {
 		t.Fatalf("substitute entered %d times", count)
 	}
 }
+
+func TestHalfTimeAICommandResumesSpectatorMatch(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer ts.Close()
+	defer srv.Stop()
+
+	srv.worldMu.Lock()
+	e := srv.LiveMatchEngine
+	e.ResetMatch()
+	e.Kickoff()
+	e.CurrentMinute = 44.99
+	e.Update(0.1)
+	srv.worldMu.Unlock()
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws/match", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	readLiveCompletionTick(t, conn)
+
+	if err := conn.WriteJSON(map[string]interface{}{"action": "halftime_resume_ai"}); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		tick := readLiveCompletionTick(t, conn)
+		if tick["state"] != "PLAYING" {
+			continue
+		}
+		if tick["tick_type"] != "full" {
+			t.Fatal("AI resume did not force a full snapshot")
+		}
+		if tick["minute"] != float64(45) {
+			t.Fatalf("AI resume changed the interval minute: %v", tick["minute"])
+		}
+		break
+	}
+}

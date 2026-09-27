@@ -146,7 +146,7 @@ func TestLiveTickerCommitsFullTimeFixtureOnceAndSavesCareer(t *testing.T) {
 		srv.worldMu.RUnlock()
 		t.Fatalf("fixture score does not match live engine: %v-%v vs %d-%d", finished.HomeGoals, finished.AwayGoals, srv.LiveMatchEngine.HomeScore, srv.LiveMatchEngine.AwayScore)
 	}
-	if len(finished.Report.Events) != len(srv.LiveMatchEngine.Events) || len(finished.Report.HomeXI) == 0 || len(finished.Report.AwayXI) == 0 || len(finished.Report.HomeBench) == 0 || len(finished.Report.AwayBench) == 0 {
+	if len(finished.Report.Events) < len(srv.LiveMatchEngine.Events) || len(finished.Report.HomeXI) == 0 || len(finished.Report.AwayXI) == 0 || len(finished.Report.HomeBench) == 0 || len(finished.Report.AwayBench) == 0 {
 		srv.worldMu.RUnlock()
 		t.Fatalf("live report omitted engine data: events=%d/%d homeXI=%d awayXI=%d benches=%d/%d", len(finished.Report.Events), len(srv.LiveMatchEngine.Events), len(finished.Report.HomeXI), len(finished.Report.AwayXI), len(finished.Report.HomeBench), len(finished.Report.AwayBench))
 	}

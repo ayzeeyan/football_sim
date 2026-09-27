@@ -47,42 +47,47 @@ type MatchEventItem struct {
 	PlayerIn    *MiniPlayer `json:"player_in,omitempty"`  // subbed in
 	// Flat attribution keeps timeline consumers independent from the nested
 	// player shape and makes a card's club unambiguous after possession flips.
-	PlayerID   string `json:"player_id,omitempty"`
-	PlayerName string `json:"player_name,omitempty"`
-	ClubID     string `json:"club_id,omitempty"`
-	ClubName   string `json:"club_name,omitempty"`
-	Display    string `json:"display"`
-	Disallowed bool   `json:"disallowed,omitempty"`
-	Outcome    string `json:"outcome,omitempty"`  // for var_review: goal_stands, goal_disallowed
-	Reason     string `json:"reason,omitempty"`   // for var_review: offside, handball, check complete
-	Decision   string `json:"decision,omitempty"` // mirrors outcome
-	SentOff    bool   `json:"sent_off,omitempty"` // red-card dismissal flag
-	HomeScore  int    `json:"home_score"`
-	AwayScore  int    `json:"away_score"`
-	Detail     string `json:"detail,omitempty"`
-	Period     string `json:"period,omitempty"` // et for extra-time goals
+	PlayerID         string `json:"player_id,omitempty"`
+	PlayerName       string `json:"player_name,omitempty"`
+	AssistPlayerID   string `json:"assist_player_id,omitempty"`
+	AssistPlayerName string `json:"assist_player_name,omitempty"`
+	ClubID           string `json:"club_id,omitempty"`
+	ClubName         string `json:"club_name,omitempty"`
+	Display          string `json:"display"`
+	Disallowed       bool   `json:"disallowed,omitempty"`
+	Outcome          string `json:"outcome,omitempty"`  // for var_review: goal_stands, goal_disallowed
+	Reason           string `json:"reason,omitempty"`   // for var_review: offside, handball, check complete
+	Decision         string `json:"decision,omitempty"` // mirrors outcome
+	SentOff          bool   `json:"sent_off,omitempty"` // red-card dismissal flag
+	HomeScore        int    `json:"home_score"`
+	AwayScore        int    `json:"away_score"`
+	Detail           string `json:"detail,omitempty"`
+	Period           string `json:"period,omitempty"` // et for extra-time goals
 }
 
 type MatchPlayerRow struct {
-	PlayerID     string   `json:"player_id"`
-	FullName     string   `json:"full_name"`
-	Position     string   `json:"position"`
-	OVR          int      `json:"ovr"`
-	Age          int      `json:"age"`
-	Category     string   `json:"category"`
-	IsWK         bool     `json:"is_wk"`
-	Rating       *float64 `json:"rating"`
-	MatchGoals   int      `json:"match_goals"`
-	MatchAssists int      `json:"match_assists"`
-	MatchOG      int      `json:"match_og"`
-	MatchPenMiss int      `json:"match_pen_miss"`
-	Card         *string  `json:"card"`
-	Minutes      int      `json:"minutes"`
-	OnMinute     *int     `json:"on_minute"`
-	OffMinute    *int     `json:"off_minute"`
-	Starter      bool     `json:"starter"`
-	Played       bool     `json:"played"`
-	Side         string   `json:"side,omitempty"` // set on MOTM rows only
+	PlayerID        string   `json:"player_id"`
+	FullName        string   `json:"full_name"`
+	Position        string   `json:"position"` // natural position; never overloaded with a match role
+	NaturalPosition string   `json:"natural_position,omitempty"`
+	TacticalSlot    string   `json:"tactical_slot,omitempty"`
+	PositionFit     string   `json:"position_fit,omitempty"`
+	OVR             int      `json:"ovr"`
+	Age             int      `json:"age"`
+	Category        string   `json:"category"`
+	IsWK            bool     `json:"is_wk"`
+	Rating          *float64 `json:"rating"`
+	MatchGoals      int      `json:"match_goals"`
+	MatchAssists    int      `json:"match_assists"`
+	MatchOG         int      `json:"match_og"`
+	MatchPenMiss    int      `json:"match_pen_miss"`
+	Card            *string  `json:"card"`
+	Minutes         int      `json:"minutes"`
+	OnMinute        *int     `json:"on_minute"`
+	OffMinute       *int     `json:"off_minute"`
+	Starter         bool     `json:"starter"`
+	Played          bool     `json:"played"`
+	Side            string   `json:"side,omitempty"` // set on MOTM rows only
 }
 
 type TeamStats struct {
@@ -97,6 +102,7 @@ type TeamStats struct {
 	YellowCards  int     `json:"yellow_cards"`
 	RedCards     int     `json:"red_cards"`
 	Saves        int     `json:"saves"`
+	BigChances   int     `json:"big_chances,omitempty"`
 }
 
 type MatchStats struct {
@@ -129,8 +135,8 @@ type XGFlowPoint struct {
 }
 
 type ShotMapData struct {
-	Shots       []ShotMapItem `json:"shots"`
-	XGFlow      []XGFlowPoint `json:"xg_flow"`
+	Shots       []ShotMapItem `json:"shots,omitempty"`
+	XGFlow      []XGFlowPoint `json:"xg_flow,omitempty"`
 	TotalHomeXG float64       `json:"total_home_xg"`
 	TotalAwayXG float64       `json:"total_away_xg"`
 }
@@ -145,8 +151,8 @@ type ZoneSplit struct {
 }
 
 type TouchHeatmapData struct {
-	HomePoints [][]float64 `json:"home_points"`
-	AwayPoints [][]float64 `json:"away_points"`
+	HomePoints [][]float64 `json:"home_points,omitempty"`
+	AwayPoints [][]float64 `json:"away_points,omitempty"`
 	HomeZones  ZoneSplit   `json:"home_zones"`
 	AwayZones  ZoneSplit   `json:"away_zones"`
 }
@@ -161,26 +167,63 @@ type PressConferenceData struct {
 }
 
 type MatchReport struct {
-	Method          string              `json:"method"`
-	HomeGoals       int                 `json:"home_goals"`
-	AwayGoals       int                 `json:"away_goals"`
-	Events          []MatchEventItem    `json:"events"`
-	HomeXI          []MatchPlayerRow    `json:"home_xi"`
-	AwayXI          []MatchPlayerRow    `json:"away_xi"`
-	HomeBench       []MatchPlayerRow    `json:"home_bench"`
-	AwayBench       []MatchPlayerRow    `json:"away_bench"`
-	Stats           MatchStats          `json:"stats"`
-	ShotMap         ShotMapData         `json:"shot_map"`
-	Heatmap         TouchHeatmapData    `json:"heatmap"`
-	PressConference PressConferenceData `json:"press_conference"`
-	MOTM            *MatchPlayerRow     `json:"motm,omitempty"`
-	HTHome          int                 `json:"ht_home"`
-	HTAway          int                 `json:"ht_away"`
-	Attendance      int                 `json:"attendance"`
-	Referee         string              `json:"referee"`
-	Weather         string              `json:"weather"`
-	DecidedBy       *string             `json:"decided_by,omitempty"`
-	Penalties       interface{}         `json:"penalties,omitempty"`
+	Method            string              `json:"method"`
+	HomeFormation     string              `json:"home_formation,omitempty"`
+	AwayFormation     string              `json:"away_formation,omitempty"`
+	HomeGoals         int                 `json:"home_goals"`
+	AwayGoals         int                 `json:"away_goals"`
+	Events            []MatchEventItem    `json:"events"`
+	HomeXI            []MatchPlayerRow    `json:"home_xi"`
+	AwayXI            []MatchPlayerRow    `json:"away_xi"`
+	HomeBench         []MatchPlayerRow    `json:"home_bench,omitempty"`
+	AwayBench         []MatchPlayerRow    `json:"away_bench,omitempty"`
+	Stats             MatchStats          `json:"stats"`
+	ShotMap           ShotMapData         `json:"shot_map"`
+	Heatmap           TouchHeatmapData    `json:"heatmap"`
+	PressConference   PressConferenceData `json:"press_conference"`
+	MOTM              *MatchPlayerRow     `json:"motm,omitempty"`
+	HTHome            int                 `json:"ht_home"`
+	HTAway            int                 `json:"ht_away"`
+	Attendance        int                 `json:"attendance"`
+	Referee           string              `json:"referee"`
+	Weather           string              `json:"weather"`
+	DecidedBy         *string             `json:"decided_by,omitempty"`
+	Penalties         interface{}         `json:"penalties,omitempty"`
+	StoryFacts        []StoryFact         `json:"story_facts,omitempty"`
+	TableImpact       *TableImpact        `json:"table_impact,omitempty"`
+	CompetitionImpact string              `json:"competition_impact,omitempty"`
+}
+
+// CompactForArchive drops reconstructable visual payload from a finished
+// match so long careers do not retain every heatmap point, xG-flow sample,
+// shot coordinate, and unused bench row. Score, events, starting XI ratings,
+// played substitutes, and team stats stay authoritative.
+func CompactForArchive(r *MatchReport) {
+	if r == nil {
+		return
+	}
+	r.Heatmap.HomePoints = nil
+	r.Heatmap.AwayPoints = nil
+	r.ShotMap.XGFlow = nil
+	r.ShotMap.Shots = nil
+	r.HomeBench = playedRows(r.HomeBench)
+	r.AwayBench = playedRows(r.AwayBench)
+}
+
+func playedRows(rows []MatchPlayerRow) []MatchPlayerRow {
+	if len(rows) == 0 {
+		return nil
+	}
+	kept := make([]MatchPlayerRow, 0, len(rows))
+	for _, row := range rows {
+		if row.Played {
+			kept = append(kept, row)
+		}
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	return kept
 }
 
 // AppearanceWindow returns minutes played, on-minute, and off-minute for a player.
@@ -521,22 +564,54 @@ func reconstructShots(
 				IsWonderkid: isWk,
 			})
 		}
-	}
-
-	// Home remaining shots
-	homeGoalsCount := 0
-	for _, s := range shots {
-		if s.Team == "home" && s.Outcome == "goal" {
-			homeGoalsCount++
+		if e.Type == "penalty_miss" {
+			isHome := e.Side == "home"
+			x := 0.93
+			if !isHome {
+				x = 0.07
+			}
+			shooter := ShotShooter{FullName: "Striker", Position: "FWD", OVR: 80}
+			if e.Scorer != nil {
+				shooter = ShotShooter{
+					FullName: e.Scorer.FullName,
+					Position: e.Scorer.Position,
+					OVR:      e.Scorer.OVR,
+					PlayerID: e.Scorer.PlayerID,
+				}
+			}
+			shots = append(shots, ShotMapItem{
+				Minute: e.Minute, Team: e.Side, Shooter: shooter,
+				X: x, Y: 0.50, XG: 0.76, Outcome: "miss",
+				IsWonderkid: e.Scorer != nil && e.Scorer.IsWK,
+			})
 		}
 	}
-	homeRem := homeShotsTotal - homeGoalsCount
+
+	// Fill only the shots not already represented by a goal or penalty miss.
+	homeExplicit, awayExplicit := 0, 0
+	homeExplicitOn, awayExplicitOn := 0, 0
+	for _, s := range shots {
+		if s.Team == "home" {
+			homeExplicit++
+			if s.Outcome == "goal" || s.Outcome == "save" {
+				homeExplicitOn++
+			}
+		} else if s.Team == "away" {
+			awayExplicit++
+			if s.Outcome == "goal" || s.Outcome == "save" {
+				awayExplicitOn++
+			}
+		}
+	}
+	// Home remaining shots
+	homeRem := homeShotsTotal - homeExplicit
 	if homeRem < 0 {
 		homeRem = 0
 	}
 	for i := 0; i < homeRem; i++ {
 		m := 4 + rng.Intn(87)
-		isOn := rng.Float64() < (float64(homeShotsOn) / math.Max(1.0, float64(homeShotsTotal)))
+		remainingOn := maxInt(0, homeShotsOn-homeExplicitOn)
+		isOn := rng.Float64() < (float64(remainingOn) / float64(maxInt(1, homeRem)))
 		var xgVal float64
 		if isOn {
 			xgVal = 0.14 + rng.Float64()*0.22
@@ -565,19 +640,14 @@ func reconstructShots(
 	}
 
 	// Away remaining shots
-	awayGoalsCount := 0
-	for _, s := range shots {
-		if s.Team == "away" && s.Outcome == "goal" {
-			awayGoalsCount++
-		}
-	}
-	awayRem := awayShotsTotal - awayGoalsCount
+	awayRem := awayShotsTotal - awayExplicit
 	if awayRem < 0 {
 		awayRem = 0
 	}
 	for i := 0; i < awayRem; i++ {
 		m := 4 + rng.Intn(87)
-		isOn := rng.Float64() < (float64(awayShotsOn) / math.Max(1.0, float64(awayShotsTotal)))
+		remainingOn := maxInt(0, awayShotsOn-awayExplicitOn)
+		isOn := rng.Float64() < (float64(remainingOn) / float64(maxInt(1, awayRem)))
 		var xgVal float64
 		if isOn {
 			xgVal = 0.14 + rng.Float64()*0.22

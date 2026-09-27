@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { cx, rgbCss, contrastText } from '../../lib/format';
-import { getClubCrestUrl } from '../../lib/clubLogos';
+import { getClubCrestUrl, getClubCrestUrlByShort } from '../../lib/clubLogos';
 import { getPlayerPortraitUrl, getPlayerFallbackColors, getPlayerInitials } from '../../lib/playerPortraits';
 import type { Club, Player } from '../../types';
 
 /* ---------- Layout primitives ---------- */
 
 export const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({ className, children }) => (
-  <div className={cx('panel-pad', className)}>{children}</div>
+  <div className={cx('panel-pad rounded-lg transition-colors duration-200', className)}>{children}</div>
 );
 
 export const PanelHeader: React.FC<{
@@ -17,13 +17,13 @@ export const PanelHeader: React.FC<{
   subtitle?: React.ReactNode;
   right?: React.ReactNode;
 }> = ({ kicker, title, subtitle, right }) => (
-  <div className="flex flex-wrap items-start justify-between gap-3">
+  <div className="panel-heading flex flex-wrap items-end justify-between gap-3 border-b border-white/[0.08] pb-3.5 mb-4">
     <div className="min-w-0">
-      {kicker && <p className="text-[13px] text-sage mb-1">{kicker}</p>}
-      <h2 className="font-display text-[28px] leading-none font-semibold text-bone text-pretty tracking-tight">{title}</h2>
-      {subtitle && <p className="text-[14px] text-sage font-normal mt-1.5 max-w-prose text-pretty leading-relaxed">{subtitle}</p>}
+      {kicker && <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#c5a568]">{kicker}</p>}
+      <h2 className="font-display text-[clamp(1.45rem,2vw,1.75rem)] leading-[0.98] font-bold text-bone text-pretty tracking-[-0.025em]">{title}</h2>
+      {subtitle && <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-sage text-pretty">{subtitle}</p>}
     </div>
-    {right && <div className="flex items-center gap-2 shrink-0">{right}</div>}
+    {right && <div className="flex items-center gap-2 shrink-0 pb-0.5">{right}</div>}
   </div>
 );
 
@@ -32,13 +32,13 @@ export const PanelHeader: React.FC<{
 type BadgeTone = 'cyan' | 'gold' | 'green' | 'red' | 'slate' | 'purple' | 'amber';
 
 const badgeTones: Record<BadgeTone, string> = {
-  cyan: 'bg-[#8AB4C8]/10 text-[#A9CBDD] border-[#8AB4C8]/30 border',
-  gold: 'bg-brass/10 text-brass border-brass/40 border',
-  green: 'bg-pitchtone/10 text-[#A9CDBB] border-pitchtone/30 border',
-  red: 'bg-ember/10 text-[#D89A84] border-ember/40 border',
-  slate: 'bg-cardLight text-sage border-line border',
-  purple: 'bg-[#8E86C8]/10 text-[#B9B3E6] border-[#8E86C8]/30 border',
-  amber: 'bg-brass/10 text-brass border-brass/30 border',
+  cyan: 'bg-[#8AB4C8]/10 text-[#b6d2e0] border-[#8AB4C8]/30 border',
+  gold: 'bg-[#c5a568]/10 text-[#dec58e] border-[#c5a568]/35 border',
+  green: 'bg-pitchtone/10 text-[#b8d3c1] border-pitchtone/35 border',
+  red: 'bg-ember/10 text-[#e8a394] border-ember/35 border',
+  slate: 'bg-white/[0.035] text-[#c0c9ba] border-white/[0.12] border',
+  purple: 'bg-[#8E86C8]/10 text-[#c2bce9] border-[#8E86C8]/30 border',
+  amber: 'bg-[#c5a568]/10 text-[#dec58e] border-[#c5a568]/30 border',
 };
 
 export const Badge: React.FC<{ tone?: BadgeTone; className?: string; children: React.ReactNode }> = ({
@@ -46,10 +46,86 @@ export const Badge: React.FC<{ tone?: BadgeTone; className?: string; children: R
   className,
   children,
 }) => (
-  <span className={cx('px-2 py-0.5 text-[12px] font-medium whitespace-nowrap', badgeTones[tone], className)}>
+  <span className={cx('inline-flex items-center rounded-sm px-2 py-0.5 text-[11px] font-semibold leading-4 tracking-[0.015em] whitespace-nowrap', badgeTones[tone], className)}>
     {children}
   </span>
 );
+
+export const OvrBadge: React.FC<{ ovr: number; size?: 'sm' | 'md' | 'lg'; className?: string }> = ({
+  ovr,
+  size = 'md',
+  className,
+}) => {
+  const sizeClasses = {
+    sm: 'w-6 h-6 text-[11px]',
+    md: 'w-8 h-8 text-[13px]',
+    lg: 'w-11 h-11 text-[17px]',
+  }[size];
+
+  let toneClass = 'bg-gradient-to-b from-[#34443a] to-[#1b2a21] text-[#e5e9df] border border-white/15';
+  if (ovr >= 88) {
+    toneClass = 'bg-gradient-to-b from-[#d5bd82] via-[#b19251] to-[#79643b] text-[#141b14] border border-[#f1dfac]/70 shadow-md shadow-black/25';
+  } else if (ovr >= 82) {
+    toneClass = 'bg-gradient-to-b from-[#407258] to-[#1c422d] text-[#e0f0e4] border border-[#76a589]/45';
+  } else if (ovr >= 76) {
+    toneClass = 'bg-gradient-to-b from-[#355365] to-[#1b3039] text-[#e0edf0] border border-[#668a99]/45';
+  }
+
+  return (
+    <div
+      className={cx(
+        sizeClasses,
+        toneClass,
+        'font-display font-bold rounded-sm flex items-center justify-center shrink-0 tracking-tight select-none shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]',
+        className,
+      )}
+      title={`Rating: ${ovr}`}
+    >
+      {ovr}
+    </div>
+  );
+};
+
+export const StatusChip: React.FC<{
+  type: 'injured' | 'suspended' | 'unhappy' | 'expiring' | 'in_form' | 'prodigy' | 'fatigued';
+  label: string;
+  count?: number;
+  onClick?: () => void;
+  className?: string;
+}> = ({ type, label, count, onClick, className }) => {
+  const styles = {
+    injured: 'bg-ember/15 text-[#FFA8A8] border-ember/40 hover:bg-ember/25',
+    suspended: 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25',
+    unhappy: 'bg-purple-500/15 text-purple-300 border-purple-500/40 hover:bg-purple-500/25',
+    expiring: 'bg-blue-500/15 text-blue-300 border-blue-500/40 hover:bg-blue-500/25',
+    in_form: 'bg-pitchtone/20 text-[#82E4A6] border-pitchtone/50 hover:bg-pitchtone/30',
+    prodigy: 'bg-brass/20 text-brass border-brass/50 hover:bg-brass/30',
+    fatigued: 'bg-amber-600/15 text-amber-300 border-amber-600/40 hover:bg-amber-600/25',
+  }[type];
+
+  const content = (
+    <span
+      className={cx(
+        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-[11px] font-semibold border transition-colors',
+        styles,
+        onClick && 'cursor-pointer active:scale-95',
+        className,
+      )}
+    >
+      {count != null && <span className="font-bold font-mono">[{count}]</span>}
+      <span>{label}</span>
+    </span>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="inline-block rounded-sm text-left focus-visible:outline-offset-2">
+        {content}
+      </button>
+    );
+  }
+  return content;
+};
 
 /* ---------- Buttons ---------- */
 
@@ -81,7 +157,7 @@ export const GhostButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>
 }) => (
   <button
     className={cx(
-      'px-3.5 py-2 border text-[13px] font-semibold flex items-center gap-1.5 transition-colors',
+      'min-h-9 rounded-sm px-3.5 py-2 border text-[13px] font-semibold flex items-center gap-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
       active
         ? 'bg-bone/15 border-bone/50 text-bone'
         : 'bg-cardLight hover:bg-cardHover text-bone/80 border-line',
@@ -100,21 +176,65 @@ export const StatCard: React.FC<{ label: string; value: string; sub: string; acc
   value,
   sub,
 }) => (
-  <div className="panel-pad">
-    <div className="text-[13px] text-sage">{label}</div>
-    <div className="font-display text-[28px] font-semibold text-bone mt-1 truncate tracking-tight" title={value}>
+  <div className="panel-pad rounded-lg">
+    <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-sage">{label}</div>
+    <div className="mt-2 truncate font-display text-[clamp(1.65rem,3vw,2rem)] font-semibold leading-none tracking-tight text-bone" title={value}>
       {value}
     </div>
-    <div className="text-[13px] mt-1 text-sage">{sub}</div>
+    <div className="mt-2 text-[12px] leading-relaxed text-sage">{sub}</div>
   </div>
 );
 
+export const StatMeter: React.FC<{
+  label: string;
+  value: number;
+  max?: number;
+  statusText?: string;
+  toneClass?: string;
+  className?: string;
+}> = ({ label, value, max = 100, statusText, toneClass = 'bg-emerald-500', className }) => {
+  const pct = Math.min(100, Math.max(0, (value / max) * 100));
+  return (
+    <div className={cx('space-y-1', className)}>
+      <div className="flex items-center justify-between text-[12px]">
+        <span className="text-sage font-medium">{label}</span>
+        {statusText && <span className="font-semibold text-bone">{statusText}</span>}
+      </div>
+      <div className="w-full h-1.5 bg-[#142B20] rounded-full overflow-hidden border border-[#214332]">
+        <div
+          className={cx('h-full rounded-full transition-all duration-300', toneClass)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+};
+
 export const EmptyState: React.FC<{ message: string; className?: string }> = ({ message, className }) => (
-  <div className={cx('text-center text-sage text-[13px] py-16 px-6', className)}>{message}</div>
+  <div className={cx('empty-state px-6 py-14 text-center text-[13px] leading-relaxed text-sage', className)}>{message}</div>
 );
 
 export const LoadingState: React.FC<{ message?: string }> = ({ message = 'Loading…' }) => (
-  <div className="p-8 text-center text-sage text-sm animate-pulse">{message}</div>
+  <div className="flex items-center justify-center gap-3 p-8 text-center text-[13px] font-medium text-sage" role="status" aria-live="polite">
+    <span className="state-spinner h-4 w-4 shrink-0 rounded-full border border-[#c5a568]/35 border-t-[#c5a568]" aria-hidden="true" />
+    <span>{message}</span>
+  </div>
+);
+
+export const ErrorState: React.FC<{ message?: string; onRetry?: () => void }> = ({
+  message = 'This view could not be loaded.',
+  onRetry,
+}) => (
+  <div className="error-state rounded-md border border-[#b86754]/25 bg-[#7b3025]/[0.07] p-7 text-center" role="alert">
+    <AlertTriangle size={22} className="mx-auto text-[#d68f7a]" aria-hidden="true" />
+    <p className="mt-3 text-[14px] font-semibold text-bone">Something interrupted the feed</p>
+    <p className="mx-auto mt-1 max-w-md text-[13px] leading-relaxed text-sage">{message}</p>
+    {onRetry && (
+      <button type="button" onClick={onRetry} className="btn-primary mt-4 bg-cardLight text-bone hover:bg-cardHover">
+        <RefreshCw size={14} aria-hidden="true" /> Retry
+      </button>
+    )}
+  </div>
 );
 
 export const FormPips: React.FC<{ form: string[]; size?: 'sm' | 'md' }> = ({ form, size = 'md' }) => {
@@ -124,19 +244,19 @@ export const FormPips: React.FC<{ form: string[]; size?: 'sm' | 'md' }> = ({ for
     return <span className="text-[12px] text-sage font-mono">No form yet</span>;
   }
   return (
-    <span className="flex gap-1">
+    <span className="flex gap-1.5">
       {last.map((r, i) => (
         <span
           key={i}
           title={r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
           className={cx(
             box,
-            'rounded-md flex items-center justify-center font-bold font-mono border',
+          'rounded-sm flex items-center justify-center font-bold font-mono shadow-sm',
             r === 'W'
-              ? 'bg-pitchtone/15 text-[#A9CDBB] border-pitchtone/30'
+              ? 'bg-[#18683E] text-[#C2F7D7] border border-[#25975A]'
               : r === 'D'
-                ? 'bg-brass/15 text-brass border-brass/30'
-                : 'bg-ember/15 text-[#D89A84] border-ember/30',
+                ? 'bg-[#7A5B18] text-[#F9E8A2] border border-[#B3892B]'
+                : 'bg-[#7A2424] text-[#FFA8A8] border border-[#B33B3B]',
           )}
         >
           {r}
@@ -151,7 +271,7 @@ export const ProgressBar: React.FC<{ pct: number; toneClass?: string; className?
   toneClass = 'bg-brass',
   className,
 }) => (
-  <div className={cx('w-full h-1.5 bg-line/60 rounded-full overflow-hidden', className)}>
+  <div className={cx('w-full h-1.5 bg-white/[0.08] rounded-full overflow-hidden', className)}>
     <div
       className={cx('h-full rounded-full transition-[width] duration-300', toneClass)}
       style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
@@ -161,26 +281,33 @@ export const ProgressBar: React.FC<{ pct: number; toneClass?: string; className?
 
 /* ---------- Club crest (real artwork, initials fallback) ---------- */
 
-const CrestFallback: React.FC<{ club: Club; size: number }> = ({ club, size }) => (
+export type CrestClubInput = {
+  club_id?: string;
+  short_name?: string;
+  club_name?: string;
+  primary_color?: [number, number, number];
+};
+
+const CrestFallback: React.FC<{ club: CrestClubInput; size: number }> = ({ club, size }) => (
   <div
     className="w-full h-full flex items-center justify-center font-bold font-mono"
     style={{
-      backgroundColor: rgbCss(club.primary_color),
-      color: contrastText(club.primary_color),
+      backgroundColor: club.primary_color ? rgbCss(club.primary_color) : '#1B3B2B',
+      color: club.primary_color ? contrastText(club.primary_color) : '#F4ECD8',
       fontSize: Math.max(9, size * 0.28),
     }}
   >
-    {club.short_name.slice(0, 2)}
+    {(club.short_name ?? 'FC').slice(0, 2)}
   </div>
 );
 
-export const ClubCrest: React.FC<{ club: Club | null; size?: number; className?: string }> = ({
+export const ClubCrest: React.FC<{ club: CrestClubInput | null | undefined; size?: number; className?: string }> = ({
   club,
   size = 40,
   className,
 }) => {
   const [failed, setFailed] = useState(false);
-  const url = getClubCrestUrl(club);
+  const url = club ? (club.club_id ? getClubCrestUrl({ club_id: club.club_id }) : getClubCrestUrlByShort(club.short_name)) : null;
   useEffect(() => setFailed(false), [url]);
 
   if (!club) return <div className={cx('rounded-lg bg-cardLight shrink-0 border border-line', className)} style={{ width: size, height: size }} />;
@@ -188,12 +315,12 @@ export const ClubCrest: React.FC<{ club: Club | null; size?: number; className?:
     <div
       className={cx('rounded-lg overflow-hidden shrink-0 border border-bone/25 bg-bone', className)}
       style={{ width: size, height: size }}
-      title={club.club_name}
+      title={club.club_name ?? club.short_name}
     >
       {url && !failed ? (
         <img
           src={url}
-          alt={`${club.club_name} crest`}
+          alt={`${club.club_name ?? club.short_name ?? 'Club'} crest`}
           width={size}
           height={size}
           loading="lazy"
@@ -306,7 +433,72 @@ export const PlayerPortrait: React.FC<{
   );
 };
 
+/* ---------- Controls & Nav ---------- */
+
+export const TabPillGroup: React.FC<{
+  tabs: Array<{ id: string; label: string; count?: number; icon?: React.ReactNode }>;
+  activeId: string;
+  onChange: (id: string) => void;
+  className?: string;
+}> = ({ tabs, activeId, onChange, className }) => (
+  <div className={cx('section-tabs', className)} role="tablist">
+    {tabs.map((tab) => {
+      const active = tab.id === activeId;
+      return (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onChange(tab.id)}
+          className={cx(
+            'section-tab flex items-center gap-2',
+            active
+              ? 'section-tab-active'
+              : '',
+          )}
+          role="tab"
+          aria-selected={active}
+        >
+          {tab.icon}
+          <span>{tab.label}</span>
+          {tab.count != null && (
+            <span
+              className={cx(
+                'px-1.5 py-0.2 rounded text-[11px] font-mono font-bold',
+                active ? 'bg-black/10 text-ink' : 'bg-white/[0.06] text-sage',
+              )}
+            >
+              {tab.count}
+            </span>
+          )}
+        </button>
+      );
+    })}
+  </div>
+);
+
 /* ---------- Modal ---------- */
+
+// Reference-counted body scroll lock so nested modals cannot restore a
+// stale `overflow: hidden` and freeze the page after every dialog closes.
+let bodyScrollLocks = 0;
+let bodyScrollPrev = '';
+
+function lockBodyScroll(): () => void {
+  if (bodyScrollLocks === 0) {
+    bodyScrollPrev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  bodyScrollLocks += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    bodyScrollLocks = Math.max(0, bodyScrollLocks - 1);
+    if (bodyScrollLocks === 0) {
+      document.body.style.overflow = bodyScrollPrev;
+    }
+  };
+}
 
 export const Modal: React.FC<{
   open: boolean;
@@ -314,26 +506,29 @@ export const Modal: React.FC<{
   children: React.ReactNode;
   maxWidth?: string;
   labelledBy?: string;
-}> = ({ open, onClose, children, maxWidth = 'max-w-4xl', labelledBy = 'dialog-title' }) => {
+  fillViewport?: boolean;
+}> = ({ open, onClose, children, maxWidth = 'max-w-4xl', labelledBy = 'dialog-title', fillViewport = false }) => {
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const release = lockBodyScroll();
     window.addEventListener('keydown', onKey);
     return () => {
-      document.body.style.overflow = prev;
+      release();
       window.removeEventListener('keydown', onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/85 p-4 sm:p-6 animate-fade-in"
-      style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      className="app-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-ink/85 p-2 sm:p-3 animate-fade-in"
+      style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -343,7 +538,8 @@ export const Modal: React.FC<{
     >
       <div
         className={cx(
-          'bg-dugout border border-line w-full shadow-raised overflow-hidden flex flex-col max-h-[min(85vh,calc(100dvh-2rem))] overscroll-contain',
+          'app-modal min-h-0 bg-dugout border border-line w-full shadow-raised overflow-hidden flex flex-col max-h-[min(94vh,calc(100dvh-1rem))] overscroll-contain',
+          fillViewport && 'h-[min(94vh,calc(100dvh-1rem))]',
           maxWidth,
         )}
       >
@@ -354,11 +550,9 @@ export const Modal: React.FC<{
 };
 
 export const ModalHeader: React.FC<{ title: React.ReactNode; subtitle?: string; onClose: () => void }> = ({
-  title,
-  subtitle,
-  onClose,
+  title, subtitle, onClose,
 }) => (
-  <div className="px-5 py-4 border-b border-line flex items-center justify-between bg-dugout gap-3">
+  <div className="app-modal-header shrink-0 px-5 py-4 border-b border-line flex items-center justify-between bg-dugout gap-3">
     <div className="min-w-0">
       <h2 id="dialog-title" className="font-display text-lg font-semibold text-bone flex items-center gap-2 text-pretty">
         {title}
@@ -368,7 +562,7 @@ export const ModalHeader: React.FC<{ title: React.ReactNode; subtitle?: string; 
     <button
       onClick={onClose}
       aria-label="Close dialog"
-      className="p-2 rounded-lg bg-cardLight hover:bg-cardHover text-sage hover:text-bone transition-colors border border-line shrink-0"
+      className="rounded-sm border border-white/10 bg-white/[0.035] p-2 text-sage transition-colors hover:border-white/20 hover:bg-white/[0.07] hover:text-bone shrink-0"
     >
       <X size={18} aria-hidden="true" />
     </button>
@@ -383,7 +577,7 @@ export const ConfirmBar: React.FC<{
   onConfirm: () => void;
   onCancel: () => void;
 }> = ({ message, confirmLabel, busyLabel = 'Working…', busy, onConfirm, onCancel }) => (
-  <div className="mt-3 p-3 rounded-xl border border-ember/40 bg-ember/[0.08] flex flex-wrap items-center justify-between gap-3" role="alertdialog" aria-label={message}>
+  <div className="mt-3 p-3 rounded-md border border-ember/35 bg-ember/[0.07] flex flex-wrap items-center justify-between gap-3" role="alertdialog" aria-label={message}>
     <p className="text-[13px] text-bone/90 min-w-0 text-pretty">{message}</p>
     <div className="flex items-center gap-2 shrink-0">
       <GhostButton onClick={onCancel} disabled={busy}>

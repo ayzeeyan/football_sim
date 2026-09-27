@@ -207,13 +207,7 @@ func TestChunk1TenSeasonIntegrationSoak(t *testing.T) {
 			if tm.IsPlayerRetired(done.PlayerID) {
 				continue
 			}
-			foundAtBuyer := false
-			for _, p := range tm.Clubs[done.BuyerID].Squad {
-				if p != nil && p.PlayerID == done.PlayerID {
-					foundAtBuyer = p.ClubID == done.BuyerID
-					break
-				}
-			}
+			foundAtBuyer := playerPersistsAtBuyer(tm, te, done.PlayerID, done.BuyerID)
 			// A later-season transfer can legitimately move a player again. Only
 			// demand the historical buyer when it is still the player's latest deal.
 			latest := done
@@ -250,4 +244,39 @@ func TestChunk1TenSeasonIntegrationSoak(t *testing.T) {
 	t.Logf("10-season observations: transfers=%d, prevented duplicate probes=%d, wonderkid annual OVR range=%+d..%+d, reputation range=%d..%d, observed warchests=%s..%s",
 		totalTransfers, preventedDuplicateChecks, minGrowth, maxGrowth, lowestRep, highestRep,
 		models.FormatCurrency(minBudget), models.FormatCurrency(maxBudget))
+}
+
+func playerPersistsAtBuyer(tm *TournamentManager, te *transfers.TransferEngine, playerID, buyerID string) bool {
+	if tm == nil || buyerID == "" {
+		return false
+	}
+	buyer := tm.Clubs[buyerID]
+	if buyer != nil {
+		for _, p := range buyer.Squad {
+			if p != nil && p.PlayerID == playerID && p.ClubID == buyerID {
+				return true
+			}
+		}
+	}
+	for _, club := range tm.ClubsList {
+		if club == nil {
+			continue
+		}
+		for _, p := range club.Squad {
+			if p == nil || p.PlayerID != playerID {
+				continue
+			}
+			if p.OnLoan && p.ParentClubID == buyerID {
+				return true
+			}
+		}
+	}
+	if te != nil {
+		for _, p := range te.FreeAgents {
+			if p != nil && p.PlayerID == playerID {
+				return false
+			}
+		}
+	}
+	return false
 }

@@ -2,7 +2,10 @@ package tournament
 
 import (
 	"math"
+	"strings"
 	"testing"
+
+	"football_sim/pkg/models"
 )
 
 func TestValidateWorldStateAcceptsFreshUniverse(t *testing.T) {
@@ -10,6 +13,55 @@ func TestValidateWorldStateAcceptsFreshUniverse(t *testing.T) {
 	if err := tm.ValidateWorldState(); err != nil {
 		t.Fatalf("fresh universe failed validation: %v", err)
 	}
+}
+
+func TestValidateEuropeanWorldRejectsCareerHealthCorruption(t *testing.T) {
+	tm, _, _ := loadEuropeanWorldForTest(t)
+	club := tm.ClubsList[0]
+	player := club.Squad[0]
+	assertRejected := func(fragment string) {
+		t.Helper()
+		err := tm.ValidateWorldState()
+		if err == nil || !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("expected validation error containing %q, got %v", fragment, err)
+		}
+	}
+
+	oldContract := player.ContractYears
+	player.ContractYears = 0
+	if err := tm.ValidateWorldState(); err != nil {
+		t.Fatalf("expired contract length 0 must round-trip, got %v", err)
+	}
+	player.ContractYears = -1
+	assertRejected("contract length")
+	player.ContractYears = oldContract
+
+	oldValue := player.MarketValueEUR
+	player.MarketValueEUR = models.MinPlayerValueEUR - 1
+	assertRejected("valuation")
+	player.MarketValueEUR = oldValue
+
+	oldMorale := player.Morale
+	player.Morale = 101
+	assertRejected("dynamics")
+	player.Morale = oldMorale
+
+	oldSquad := club.Squad
+	club.Squad = append([]*models.Player(nil), oldSquad...)
+	for len(club.Squad) <= models.MaxSeniorSquadSize {
+		club.Squad = append(club.Squad, &models.Player{PlayerID: "OVER_CAP", ClubID: club.ClubID})
+	}
+	assertRejected("above the")
+	club.Squad = oldSquad
+
+	manager := tm.Managers[club.ClubID]
+	delete(tm.Managers, club.ClubID)
+	assertRejected("active managers")
+	tm.Managers[club.ClubID] = manager
+
+	player.OnLoan, player.ParentClubID = true, "UNKNOWN"
+	assertRejected("unknown parent club")
+	player.OnLoan, player.ParentClubID = false, ""
 }
 
 func TestValidateWorldStateRejectsUnknownPhase(t *testing.T) {

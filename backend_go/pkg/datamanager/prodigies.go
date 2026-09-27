@@ -21,7 +21,7 @@ type EliteProdigyConfig struct {
 }
 
 // EliteProdigyConfigs lists the 12 canonical Under-17 Outfield Franchise Prodigies.
-// Notice potentials are strictly clamped in [93, 96] and are never 99.
+// All canonical wonderkids share the requested 99 potential ceiling.
 var EliteProdigyConfigs = []EliteProdigyConfig{
 	{
 		ClubID:         "LAL-BAR",
@@ -31,7 +31,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       173.0,
 		WeightKG:       61.0,
 		BaselineOVR:    78,
-		Potential:      96,
+		Potential:      99,
 		AdultHeightAge: 19,
 	},
 	{
@@ -42,7 +42,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       169.0,
 		WeightKG:       57.0,
 		BaselineOVR:    77,
-		Potential:      95,
+		Potential:      99,
 		AdultHeightAge: 18,
 	},
 	{
@@ -53,7 +53,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       171.0,
 		WeightKG:       60.0,
 		BaselineOVR:    75,
-		Potential:      93,
+		Potential:      99,
 		AdultHeightAge: 19,
 	},
 	{
@@ -64,7 +64,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       170.0,
 		WeightKG:       58.0,
 		BaselineOVR:    76,
-		Potential:      95,
+		Potential:      99,
 		AdultHeightAge: 18,
 	},
 	{
@@ -75,7 +75,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       178.0,
 		WeightKG:       66.0,
 		BaselineOVR:    76,
-		Potential:      94,
+		Potential:      99,
 		AdultHeightAge: 20,
 	},
 	{
@@ -86,7 +86,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       176.0,
 		WeightKG:       64.0,
 		BaselineOVR:    76,
-		Potential:      95,
+		Potential:      99,
 		AdultHeightAge: 19,
 	},
 	{
@@ -97,7 +97,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       168.0,
 		WeightKG:       57.0,
 		BaselineOVR:    75,
-		Potential:      95,
+		Potential:      99,
 		AdultHeightAge: 19,
 	},
 	{
@@ -108,7 +108,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       169.0,
 		WeightKG:       58.0,
 		BaselineOVR:    75,
-		Potential:      94,
+		Potential:      99,
 		AdultHeightAge: 20,
 	},
 	{
@@ -119,7 +119,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       172.0,
 		WeightKG:       61.0,
 		BaselineOVR:    77,
-		Potential:      96,
+		Potential:      99,
 		AdultHeightAge: 19,
 	},
 	{
@@ -130,7 +130,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       170.0,
 		WeightKG:       59.0,
 		BaselineOVR:    75,
-		Potential:      94,
+		Potential:      99,
 		AdultHeightAge: 19,
 	},
 	{
@@ -141,7 +141,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       170.0,
 		WeightKG:       59.0,
 		BaselineOVR:    75,
-		Potential:      94,
+		Potential:      99,
 		AdultHeightAge: 18,
 	},
 	{
@@ -152,7 +152,7 @@ var EliteProdigyConfigs = []EliteProdigyConfig{
 		HeightCM:       174.0,
 		WeightKG:       62.0,
 		BaselineOVR:    75,
-		Potential:      94,
+		Potential:      99,
 		AdultHeightAge: 19,
 	},
 }
@@ -229,7 +229,7 @@ type ProdigyDrawRow struct {
 }
 
 // InitializeEliteProdigies configures the 12 canonical U-17 outfield franchise wonderkids.
-// Enforces age 17, high-school/academy status, category FWD, WK_ ID, exact potential [93, 96],
+// Enforces age 17, high-school/academy status, category FWD, WK_ ID, and exact 99 potential,
 // registers with GrowthEngine, and recalculates clamped baseline valuations.
 // Default club homes come from the dataset; they are not pinned (Guinita included)
 // and can be reshuffled onto any of the twelve designated clubs.
@@ -412,6 +412,9 @@ func (dm *DataManager) AdoptCanonicalProdigies() bool {
 	}
 
 	changed := false
+	if dm.GrowthEngine != nil && dm.GrowthEngine.UpgradeCanonicalWonderkidPotentials() {
+		changed = true
+	}
 	for _, p := range dm.Wonderkids {
 		cfg, ok := byName[strings.ToLower(p.FullName)]
 		if !ok {
@@ -426,7 +429,7 @@ func (dm *DataManager) AdoptCanonicalProdigies() bool {
 			p.PlayerID = expectedID
 			// Every franchise prodigy is an attacker, CAMs included; the
 			// category feeds attribute seeding below, so fix it first.
-			// Potential always comes from EliteProdigyConfigs ([93, 96]).
+			// Potential always comes from EliteProdigyConfigs (99).
 			p.Category = "FWD"
 			if dm.GrowthEngine != nil {
 				_, attrs := dm.GrowthEngine.RegisterProdigy(
@@ -453,7 +456,7 @@ func (dm *DataManager) AdoptCanonicalProdigies() bool {
 
 // CanonicalPotential returns the configured potential for a franchise
 // wonderkid by full name. Used where only the player record (not its
-// biometric profile) is at hand; keeps bioless edge states inside [93, 96].
+// biometric profile) is at hand.
 func CanonicalPotential(fullName string) (int, bool) {
 	for _, cfg := range EliteProdigyConfigs {
 		if cfg.FullName == fullName {

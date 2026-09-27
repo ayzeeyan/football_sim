@@ -17,8 +17,8 @@ type Fixture struct {
 	Stage           string                   `json:"stage"`       // league, group, qf, sf, final
 	HomeID          string                   `json:"home_id"`
 	AwayID          string                   `json:"away_id"`
-	Home            *models.Club             `json:"home"`
-	Away            *models.Club             `json:"away"`
+	Home            *models.Club             `json:"-"`
+	Away            *models.Club             `json:"-"`
 	Status          string                   `json:"status"` // scheduled, playing, finished
 	HomeGoals       *int                     `json:"home_goals"`
 	AwayGoals       *int                     `json:"away_goals"`

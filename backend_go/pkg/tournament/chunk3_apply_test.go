@@ -339,7 +339,8 @@ func TestChunk3Injuries(t *testing.T) {
 		home, away := chunk3mkClub("H"), chunk3mkClub("A")
 		tm := chunk3injuryTM(seed, nil)
 		hBefore, aBefore := countInjured(home), countInjured(away)
-		tm.MaybeInjure(home, away, chunk3injuryReport(home, away), 5, "F1")
+		rep := chunk3injuryReport(home, away)
+		tm.MaybeInjure(home, away, rep, 5, "F1")
 		if dh := countInjured(home) - hBefore; dh > 1 {
 			t.Fatalf("seed %d: %d home casualties, max 1", seed, dh)
 		}
@@ -374,6 +375,28 @@ func TestChunk3Injuries(t *testing.T) {
 				if p.InjuredMatches > 3 && !isSeriousKind(p.Injury) {
 					t.Errorf("long layoff without serious kind: %+v", p)
 				}
+			}
+		}
+		injuredIDs := map[string]bool{}
+		for _, club := range []*models.Club{home, away} {
+			for _, p := range club.Squad {
+				if p.InjuredMatches > 0 {
+					injuredIDs[p.PlayerID] = true
+				}
+			}
+		}
+		if len(injuredIDs) > 0 {
+			found := false
+			for _, e := range rep.Events {
+				if e.Type == "injury" && injuredIDs[e.PlayerID] {
+					found = true
+					if e.Display == "" || e.PlayerName == "" {
+						t.Errorf("injury event missing identity: %+v", e)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("seed %d injured players %v but report has no injury event", seed, injuredIDs)
 			}
 		}
 	}

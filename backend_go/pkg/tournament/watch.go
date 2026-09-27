@@ -1,13 +1,11 @@
 package tournament
 
-// Watch-one / sim-the-rest week (Feature 2).
-//
-// My club is a persisted favourite club id. The client watches that club's
-// fixture live; at full time the rest of the slate is simulated instantly,
-// excluding the already-committed live result. Same-week cup fixtures ride
-// the same slate and are offered as jump targets.
+// Legacy viewing-preference compatibility. A selected club can filter an
+// inspection view, but all clubs remain AI-controlled and the world slate is
+// authoritative. A watched fixture may be excluded only while it is live.
 
-// SetFavouriteClubID pins the watched club. Returns false for unknown clubs.
+// SetFavouriteClubID stores a legacy save-compatible viewing preference. It
+// never grants control or changes AI/simulation ownership.
 func (tm *TournamentManager) SetFavouriteClubID(clubID string) bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
@@ -18,14 +16,14 @@ func (tm *TournamentManager) SetFavouriteClubID(clubID string) bool {
 	return true
 }
 
-// FavouriteClub returns the persisted favourite club id (may be empty).
+// FavouriteClub returns the persisted viewing-preference club id (may be empty).
 func (tm *TournamentManager) FavouriteClub() string {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 	return tm.FavouriteClubID
 }
 
-// WeekWatch resolves the favourite's fixture on the current slate plus any
+// WeekWatch resolves the viewing preference's fixture on the current slate plus any
 // same-week cup fixtures available as jump targets. No simulation occurs.
 func (tm *TournamentManager) WeekWatch() (favID string, fav *Fixture, cups []Fixture, mw int) {
 	tm.mu.RLock()
@@ -90,7 +88,7 @@ func (tm *TournamentManager) simulateRemainingExcludingUnlocked(excludeID string
 		base = tm.RNG.Int63()
 	}
 	for _, id := range filtered {
-		if fx := tm.findFixtureUnlocked(id); fx != nil && fx.Status != "finished" {
+		if fx := tm.findFixtureUnlocked(id); fx != nil && fx.Status == "scheduled" {
 			tm.EnsureFixtureWeather(fx)
 		}
 	}

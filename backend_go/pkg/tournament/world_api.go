@@ -39,6 +39,15 @@ func (tm *TournamentManager) GetCompetitions() []map[string]interface{} {
 		}
 		out = append(out, entry)
 	}
+	if tm.World.NationalTeams != nil {
+		competition := tm.World.NationalTeams
+		out = append(out, map[string]interface{}{
+			"id": competition.ID, "name": competition.Name, "country": competition.Country,
+			"kind": competition.Kind, "stage": competition.Stage, "prestige": competition.Prestige,
+			"participants": len(competition.TeamOrder), "champion": nationalTeamName(competition, competition.ChampionID),
+			"champion_id": competition.ChampionID,
+		})
+	}
 	return out
 }
 
@@ -48,6 +57,9 @@ func (tm *TournamentManager) GetCompetitions() []map[string]interface{} {
 func (tm *TournamentManager) GetCompetition(id string) map[string]interface{} {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
+	if id == nationalTeamsCompetitionID {
+		return tm.getNationalCompetitionUnlocked()
+	}
 	comp := tm.worldCompetitionUnlocked(id)
 	if comp == nil {
 		return nil

@@ -305,7 +305,7 @@ func TestChunk3LivePhaseCoverage(t *testing.T) {
 func TestChunk3LiveResolveShotMatrix(t *testing.T) {
 	var sawGoal, sawSave, sawMiss, sawOG, sawPenalty, sawBooking bool
 	var sawWKGoal, sawMentorTag, sawVision, sawPlain bool
-	for seed := int64(0); seed < 400 && !(sawGoal && sawSave && sawMiss && sawOG && sawPenalty && sawBooking); seed++ {
+	for seed := int64(0); seed < 400 && !(sawGoal && sawSave && sawMiss && sawOG && sawPenalty && sawBooking && sawWKGoal && sawVision && sawPlain); seed++ {
 		e := chunk3LiveEngine(seed)
 		for _, p := range e.HomeStarters {
 			if p.UniverseWonderkid {

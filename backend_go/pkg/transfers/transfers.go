@@ -155,7 +155,133 @@ func (te *TransferEngine) SyncAllManagerBudgets() {
 }
 
 func canAfford(club *models.Club, fee int64) bool {
-	return club != nil && fee > 0 && club.Finances.TransferBudget >= fee && club.Finances.Balance >= fee
+	if club == nil || fee < 0 {
+		return false
+	}
+	if fee == 0 {
+		return true
+	}
+	return club.Finances.TransferBudget >= fee && club.Finances.Balance >= fee
+}
+
+func buyerMarketWeight(club *models.Club) int {
+	if club == nil {
+		return 0
+	}
+	weight := 25 + club.Identity.Clamp().TransferAggressiveness
+	budgetBoost := int(club.Finances.TransferBudget / (5 * models.EuroMillion))
+	if budgetBoost > 25 {
+		budgetBoost = 25
+	}
+	wageHeadroom := club.WageCap() - club.WageBill()
+	wageBoost := int(wageHeadroom / (20 * models.EuroMillion))
+	if wageBoost > 15 {
+		wageBoost = 15
+	}
+	return weight * (100 + budgetBoost + wageBoost) / 100
+}
+
+func sellerMarketWeight(club *models.Club) int {
+	if club == nil {
+		return 0
+	}
+	return 25 + club.Identity.Clamp().SellingTendency
+}
+
+func (te *TransferEngine) weightedClubChoice(clubs []*models.Club, weight func(*models.Club) int) *models.Club {
+	if te == nil || len(clubs) == 0 || weight == nil {
+		return nil
+	}
+	total := 0
+	for _, club := range clubs {
+		total += weight(club)
+	}
+	if total <= 0 {
+		return nil
+	}
+	pick := te.RNG.Intn(total)
+	for _, club := range clubs {
+		pick -= weight(club)
+		if pick < 0 {
+			return club
+		}
+	}
+	return clubs[len(clubs)-1]
+}
+
+func sellerCounterPremium(club *models.Club) float64 {
+	if club == nil {
+		return 0.10
+	}
+	// Reluctant sellers can demand up to an additional 20%; willing sellers
+	// preserve the existing 10% negotiation floor.
+	return 0.10 + float64(100-club.Identity.Clamp().SellingTendency)*0.002
+}
+
+func transferPriceAnchor(player *models.Player) int64 {
+	if player == nil {
+		return 0
+	}
+	if player.MarketValueEUR > 0 {
+		return player.MarketValueEUR
+	}
+	return models.BaselineValue(player.OVR, player.Age, player.UniverseWonderkid)
+}
+
+// sellerAskingPrice reflects the seller's willingness and the leverage left
+// on the player's contract. Long deals make a player harder to prise away;
+// a request to leave and a short deal reduce the asking price.
+func sellerAskingPrice(player *models.Player, seller *models.Club) int64 {
+	anchor := transferPriceAnchor(player)
+	if anchor <= 0 {
+		return 0
+	}
+	premium := sellerCounterPremium(seller)
+	multiplier := 1.0 + premium
+	switch {
+	case player.ContractYears <= 1:
+		multiplier -= 0.12
+	case player.ContractYears >= 4:
+		multiplier += 0.12
+	case player.ContractYears == 3:
+		multiplier += 0.04
+	}
+	if player.TransferRequested {
+		multiplier -= 0.10
+	}
+	if player.Morale > 0 && player.Morale < 45 {
+		multiplier -= 0.04
+	}
+	if multiplier < 0.70 {
+		multiplier = 0.70
+	}
+	return models.ClampValue(int64(float64(anchor)*multiplier), player.OVR, player.Age, player.UniverseWonderkid)
+}
+
+func sellerAcceptanceFloor(askingPrice int64, player *models.Player, seller *models.Club) int64 {
+	if askingPrice <= 0 {
+		return 0
+	}
+	// Selling clubs with a high selling tendency accept a closer compromise.
+	acceptance := 0.94 - float64(seller.Identity.Clamp().SellingTendency)*0.001
+	if player != nil {
+		if player.TransferRequested {
+			acceptance -= 0.05
+		}
+		if player.ContractYears <= 1 {
+			acceptance -= 0.04
+		}
+		if player.ContractYears >= 4 {
+			acceptance += 0.04
+		}
+	}
+	if acceptance < 0.75 {
+		acceptance = 0.75
+	}
+	if acceptance > 0.97 {
+		acceptance = 0.97
+	}
+	return int64(float64(askingPrice) * acceptance)
 }
 
 // annualWageFor returns the persisted weekly wage as an annual cost, falling
@@ -175,17 +301,48 @@ func annualWageFor(p *models.Player) int64 {
 // canAffordWithWage enforces both the fee budget and the real wage cap.
 // Financial power sets the cap via Club.WageCap; valuation clamps stay
 // separate and are never bypassed here.
-func canAffordWithWage(club *models.Club, fee int64, annualWage int64) bool {
+func (te *TransferEngine) canAffordWithWage(club *models.Club, fee int64, annualWage int64) bool {
 	if !canAfford(club, fee) {
 		return false
 	}
 	if club == nil {
 		return false
 	}
+	size := len(club.Squad)
+	if te != nil {
+		size = te.committedSquadSize(club.ClubID)
+	}
+	if size >= models.MaxSeniorSquadSize {
+		return false
+	}
 	if annualWage < 0 {
 		return false
 	}
 	return club.WageBill()+annualWage <= club.WageCap()
+}
+
+// committedSquadSize counts active squad members plus players temporarily out
+// on loan. A loan must not create a fake transfer slot that overflows when the
+// player returns at the season boundary.
+func (te *TransferEngine) committedSquadSize(clubID string) int {
+	if te == nil || clubID == "" {
+		return 0
+	}
+	n := 0
+	if club := te.Clubs[clubID]; club != nil {
+		n = len(club.Squad)
+	}
+	for _, club := range te.Clubs {
+		if club == nil || club.ClubID == clubID {
+			continue
+		}
+		for _, p := range club.Squad {
+			if p != nil && p.OnLoan && p.ParentClubID == clubID {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // TransferEngine oversees the transfer market, negotiations, roster mutations, and news wire.
@@ -205,7 +362,11 @@ type TransferEngine struct {
 	TransferFeed          []TransferFeedItem
 	CompletedTransfers    []CompletedTransfer
 	AllTimeTransfers      []CompletedTransfer
+	FreeAgents            []*models.Player
 	RNG                   *rand.Rand
+	// ScriptedSwapDone is retained only to read and write older career saves.
+	// The former scripted player swap has been removed and this value is ignored.
+	ScriptedSwapDone bool
 }
 
 func NewTransferEngine(clubs []*models.Club, mgrs map[string]*managers.ManagerProfile, seed int64) *TransferEngine {
@@ -232,11 +393,12 @@ func NewTransferEngine(clubs []*models.Club, mgrs map[string]*managers.ManagerPr
 		mgrs = managers.BuildManagers(clubs)
 	}
 	te := &TransferEngine{
-		Clubs: clubsMap, Managers: mgrs, CurrentMatchweek: 1, CurrentDay: 1, CurrentWeek: 1,
+		Clubs: clubsMap, Managers: mgrs, CurrentMatchweek: 1,
 		WindowType:            WindowClosed,
 		TransferredThisWindow: make(map[string]bool), ActiveNegotiations: []*TransferNegotiation{},
 		TransferFeed: []TransferFeedItem{}, CompletedTransfers: []CompletedTransfer{}, AllTimeTransfers: []CompletedTransfer{},
-		RNG: rand.New(rand.NewSource(seed)),
+		FreeAgents: []*models.Player{},
+		RNG:        rand.New(rand.NewSource(seed)),
 	}
 	for cid := range clubsMap {
 		te.syncManagerBudget(cid)
@@ -274,6 +436,59 @@ func (te *TransferEngine) windowWeeks() int {
 	default:
 		return 0
 	}
+}
+
+// ValidateWindowState is the canonical finite-state validator shared by live
+// world checks and persistence. A closed market has no active week; Week 1 is
+// reserved for the first week of a newly opened summer or winter window.
+func ValidateWindowState(kind WindowType, open, offSeason bool, currentWeek, processedWeeks int) error {
+	if currentWeek < 0 || processedWeeks < 0 {
+		return fmt.Errorf("transfer window counters cannot be negative (week=%d processed=%d)", currentWeek, processedWeeks)
+	}
+	if kind == WindowClosed {
+		if open || offSeason || currentWeek != 0 || processedWeeks != 0 {
+			return fmt.Errorf("closed transfer market must have open=false, offseason=false, week=0 and processed=0")
+		}
+		return nil
+	}
+	weeks := 0
+	switch kind {
+	case WindowSummer:
+		weeks = TransferWindowWeeks
+		if !offSeason {
+			return fmt.Errorf("summer transfer window must be offseason")
+		}
+	case WindowWinter:
+		weeks = WinterTransferWindowWeeks
+		if offSeason {
+			return fmt.Errorf("winter transfer window cannot be offseason")
+		}
+	default:
+		return fmt.Errorf("unknown transfer window type %q", kind)
+	}
+	if currentWeek < 1 || currentWeek > weeks {
+		return fmt.Errorf("%s transfer week %d outside legal range 1..%d", kind, currentWeek, weeks)
+	}
+	if open {
+		if processedWeeks != currentWeek-1 {
+			return fmt.Errorf("open %s window week %d must have %d processed weeks, got %d", kind, currentWeek, currentWeek-1, processedWeeks)
+		}
+		return nil
+	}
+	if currentWeek != weeks || processedWeeks != weeks {
+		return fmt.Errorf("completed %s window must finish at week %d with %d processed weeks", kind, weeks, weeks)
+	}
+	return nil
+}
+
+func (te *TransferEngine) HasCompletedSummerWindow() bool {
+	if te == nil {
+		return false
+	}
+	te.mu.RLock()
+	defer te.mu.RUnlock()
+	return te.WindowType == WindowSummer && te.IsOffSeason && !te.WindowOpen &&
+		te.CurrentWeek == TransferWindowWeeks && te.ProcessedWeeks == TransferWindowWeeks
 }
 
 func (te *TransferEngine) GetWindowName() string {
@@ -374,9 +589,9 @@ func (te *TransferEngine) ResetForNewSeason() {
 	defer te.mu.Unlock()
 	te.ActiveNegotiations = te.ActiveNegotiations[:0]
 	te.CompletedTransfers = te.CompletedTransfers[:0]
-	te.CurrentDay = 1
+	te.CurrentDay = 0
 	te.CurrentMatchweek = 1
-	te.CurrentWeek = 1
+	te.CurrentWeek = 0
 	te.IsOffSeason = false
 	te.WindowType = WindowClosed
 	te.WindowOpen = false
@@ -422,6 +637,7 @@ func (te *TransferEngine) AdvanceWinterForMatchweek(completedMatchweek int) {
 }
 
 func (te *TransferEngine) advanceWeeklyMarketUnlocked() {
+	te.signFreeAgentsLocked()
 	var surviving []*TransferNegotiation
 	for _, neg := range te.ActiveNegotiations {
 		if !te.progressNegotiation(neg) {
@@ -503,7 +719,7 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("DEAL COLLAPSED: %s cannot fund %s move for %s due to budget limits", neg.Buyer.ShortName, models.FormatCurrency(neg.CurrentBid), neg.Player.FullName), Category: "REJECTED", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 		return true
 	}
-	if !canAffordWithWage(neg.Buyer, neg.CurrentBid, annualWageFor(neg.Player)) {
+	if !te.canAffordWithWage(neg.Buyer, neg.CurrentBid, annualWageFor(neg.Player)) {
 		neg.StageName = "COLLAPSED"
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("DEAL COLLAPSED: %s cannot fit %s wages under the cap", neg.Buyer.ShortName, neg.Player.FullName), Category: "REJECTED", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 		return true
@@ -513,22 +729,20 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 	switch neg.StageIndex {
 	case 2:
 		neg.StageName, neg.ProgressPct = "COUNTER_OFFER", 40
-		newBid := neg.CurrentBid + int64(float64(neg.CurrentBid)*(0.10+te.RNG.Float64()*0.15))
+		newBid := neg.CurrentBid + int64(float64(neg.CurrentBid)*(sellerCounterPremium(neg.Seller)+te.RNG.Float64()*0.15))
 		available := neg.Buyer.Finances.TransferBudget
 		if neg.Buyer.Finances.Balance < available {
 			available = neg.Buyer.Finances.Balance
 		}
-		if newBid > available {
-			newBid = available
-		}
 		// Fees keep the valuation corridor on every escalation, floor and
 		// ceiling alike (3.0x anchor / €500M top, 0.35x / €300k bottom).
 		newBid = models.ClampValue(newBid, neg.Player.OVR, neg.Player.Age, neg.Player.UniverseWonderkid)
-		if newBid <= 0 {
+		if newBid <= 0 || newBid > available {
 			neg.StageName = "COLLAPSED"
 			return true
 		}
-		neg.AskingPrice, neg.CurrentBid = newBid, newBid
+		neg.CurrentBid = newBid
+		neg.History = append(neg.History, fmt.Sprintf("Improved bid: %s", models.FormatCurrency(newBid)))
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s submit improved bid of %s for %s (%s)", neg.Buyer.ShortName, models.FormatCurrency(newBid), neg.Player.FullName, neg.Seller.ShortName), Category: "TWIST", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 		return false
 	case 3:
@@ -546,7 +760,7 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 				if isCanonicalWonderkid(neg.Player) && !isSuperLeagueClub(c.ClubID) {
 					continue
 				}
-				if canAffordWithWage(c, hijackCost, annualWageFor(neg.Player)) {
+				if te.canAffordWithWage(c, hijackCost, annualWageFor(neg.Player)) {
 					rivals = append(rivals, c)
 				}
 			}
@@ -568,6 +782,13 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 		}
 		return false
 	case 4:
+		minimumAccepted := sellerAcceptanceFloor(neg.AskingPrice, neg.Player, neg.Seller)
+		if neg.CurrentBid < minimumAccepted {
+			neg.StageName, neg.ProgressPct = "COLLAPSED", 80
+			neg.History = append(neg.History, fmt.Sprintf("Seller rejected %s offer below its %s asking price", models.FormatCurrency(neg.CurrentBid), models.FormatCurrency(neg.AskingPrice)))
+			te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("TALKS BREAK DOWN: %s reject %s offer of %s for %s", neg.Seller.ShortName, neg.Buyer.ShortName, models.FormatCurrency(neg.CurrentBid), neg.Player.FullName), Category: "REJECTED", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
+			return true
+		}
 		neg.StageName, neg.ProgressPct = "TERMS_MEDICAL", 80
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("Medical booked: %s arrives at %s training ground ahead of final signature", neg.Player.FullName, neg.Buyer.ShortName), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 		return false
@@ -586,11 +807,20 @@ func (te *TransferEngine) progressNegotiation(neg *TransferNegotiation) bool {
 // executeTransfer performs final backend commit validation and only mutates
 // transfer eligibility/finances after every invariant has passed.
 func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
-	if neg == nil || neg.Player == nil || neg.Seller == nil || neg.Buyer == nil || neg.CurrentBid <= 0 {
+	if neg == nil || neg.Player == nil || neg.Seller == nil || neg.Buyer == nil || neg.CurrentBid < 0 {
 		return false
 	}
 	p := neg.Player
+	if neg.CurrentBid == 0 && !p.OutOfContract() {
+		return false
+	}
 	if te.TransferredThisWindow[p.PlayerID] || neg.Seller.ClubID == neg.Buyer.ClubID {
+		return false
+	}
+	if len(neg.Seller.Squad) <= models.MinSeniorSquadSize {
+		return false
+	}
+	if te.committedSquadSize(neg.Buyer.ClubID) >= models.MaxSeniorSquadSize {
 		return false
 	}
 	if isCanonicalWonderkid(p) && !isSuperLeagueClub(neg.Buyer.ClubID) {
@@ -599,7 +829,7 @@ func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
 	if !canAfford(neg.Buyer, neg.CurrentBid) {
 		return false
 	}
-	if !canAffordWithWage(neg.Buyer, neg.CurrentBid, annualWageFor(p)) {
+	if !te.canAffordWithWage(neg.Buyer, neg.CurrentBid, annualWageFor(p)) {
 		te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s cannot fit %s wages under the cap", neg.Buyer.ShortName, p.FullName), Category: "REJECTED", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 		return false
 	}
@@ -622,6 +852,15 @@ func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
 			return false
 		}
 	}
+	if te != nil && te.committedSquadSize(neg.Buyer.ClubID) >= models.MaxSeniorSquadSize {
+		return false
+	}
+	// Affordability was checked against this fallback above. Persist it too so
+	// the committed wage bill continues to reflect the cap calculation after
+	// the player joins the buyer.
+	if p.WageEUR <= 0 {
+		p.WageEUR = models.WageForOVR(p.OVR)
+	}
 
 	newSellerSquad := make([]*models.Player, 0, len(neg.Seller.Squad)-1)
 	for _, sp := range neg.Seller.Squad {
@@ -633,14 +872,21 @@ func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
 	p.ClubID = neg.Buyer.ClubID
 	// OriginalClubID is historical metadata. Permanent transfers never rewrite it.
 	neg.Buyer.Squad = append(neg.Buyer.Squad, p)
+	// Permanent moves agree a three-year term. Season-end ticking now happens
+	// before the summer window opens, so summer and winter deals share the
+	// same remaining duration into the next campaign.
+	p.ContractYears = 3
+	p.TransferRequested = false
 
-	neg.Buyer.Finances.TransferBudget -= neg.CurrentBid
-	neg.Buyer.Finances.Balance -= neg.CurrentBid
-	neg.Seller.Finances.Balance += neg.CurrentBid
-	reinvest := neg.CurrentBid * transferIncomeReinvestmentPct / 100
-	neg.Seller.Finances.TransferBudget += reinvest
-	if neg.Seller.Finances.TransferBudget > neg.Seller.Finances.Balance {
-		neg.Seller.Finances.TransferBudget = neg.Seller.Finances.Balance
+	if neg.CurrentBid > 0 {
+		neg.Buyer.Finances.TransferBudget -= neg.CurrentBid
+		neg.Buyer.Finances.Balance -= neg.CurrentBid
+		neg.Seller.Finances.Balance += neg.CurrentBid
+		reinvest := neg.CurrentBid * transferIncomeReinvestmentPct / 100
+		neg.Seller.Finances.TransferBudget += reinvest
+		if neg.Seller.Finances.TransferBudget > neg.Seller.Finances.Balance {
+			neg.Seller.Finances.TransferBudget = neg.Seller.Finances.Balance
+		}
 	}
 	te.syncManagerBudget(neg.Buyer.ClubID)
 	te.syncManagerBudget(neg.Seller.ClubID)
@@ -648,11 +894,49 @@ func (te *TransferEngine) executeTransfer(neg *TransferNegotiation) bool {
 	neg.Seller.RecalculateRatings()
 	neg.Buyer.RecalculateRatings()
 
-	completed := CompletedTransfer{PlayerID: p.PlayerID, PlayerName: p.FullName, PlayerPos: p.Position, PlayerOVR: p.OVR, IsWonderkid: neg.IsWonderkid, SellerID: neg.Seller.ClubID, SellerName: neg.Seller.ClubName, SellerShort: neg.Seller.ShortName, BuyerID: neg.Buyer.ClubID, BuyerName: neg.Buyer.ClubName, BuyerShort: neg.Buyer.ShortName, FeeEUR: neg.CurrentBid, FormattedFee: models.FormatCurrency(neg.CurrentBid), Matchweek: te.CurrentMatchweek}
+	feeLabel := models.FormatCurrency(neg.CurrentBid)
+	if neg.CurrentBid == 0 {
+		feeLabel = "a free"
+	}
+	completed := CompletedTransfer{PlayerID: p.PlayerID, PlayerName: p.FullName, PlayerPos: p.Position, PlayerOVR: p.OVR, IsWonderkid: neg.IsWonderkid, SellerID: neg.Seller.ClubID, SellerName: neg.Seller.ClubName, SellerShort: neg.Seller.ShortName, BuyerID: neg.Buyer.ClubID, BuyerName: neg.Buyer.ClubName, BuyerShort: neg.Buyer.ShortName, FeeEUR: neg.CurrentBid, FormattedFee: feeLabel, Matchweek: te.CurrentMatchweek}
 	te.CompletedTransfers = append(te.CompletedTransfers, completed)
 	te.AllTimeTransfers = append(te.AllTimeTransfers, completed)
-	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("HERE WE GO: %s signs for %s in %s deal from %s!", p.FullName, neg.Buyer.ShortName, models.FormatCurrency(neg.CurrentBid), neg.Seller.ShortName), Category: "HERE_WE_GO", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
+	moveType := models.MovePermanent
+	if neg.CurrentBid == 0 {
+		moveType = models.MoveFree
+	}
+	p.MarkRegistered(neg.Buyer.ClubID)
+	p.RecordMove("", neg.Seller.ClubID, neg.Buyer.ClubID, moveType, neg.CurrentBid, te.CurrentMatchweek)
+	p.RecordContractEvent("", neg.Buyer.ClubID, models.ContractEventSigned, p.ContractYears)
+	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("HERE WE GO: %s signs for %s in %s deal from %s!", p.FullName, neg.Buyer.ShortName, feeLabel, neg.Seller.ShortName), Category: "HERE_WE_GO", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 	return true
+}
+
+// RecordCompletedTransfer appends a finished move that did not go through
+// executeTransfer, such as a loan buy clause. Callers must not hold te.mu.
+func (te *TransferEngine) RecordCompletedTransfer(done CompletedTransfer) {
+	if te == nil || done.PlayerID == "" || done.BuyerID == "" {
+		return
+	}
+	te.mu.Lock()
+	defer te.mu.Unlock()
+	te.CompletedTransfers = append(te.CompletedTransfers, done)
+	te.AllTimeTransfers = append(te.AllTimeTransfers, done)
+	if te.TransferredThisWindow == nil {
+		te.TransferredThisWindow = map[string]bool{}
+	}
+	te.TransferredThisWindow[done.PlayerID] = true
+	headline := fmt.Sprintf("HERE WE GO: %s joins %s from %s", done.PlayerName, done.BuyerShort, done.SellerShort)
+	if done.FormattedFee != "" {
+		headline = fmt.Sprintf("HERE WE GO: %s joins %s in %s deal from %s", done.PlayerName, done.BuyerShort, done.FormattedFee, done.SellerShort)
+	}
+	te.prependFeed(TransferFeedItem{
+		Headline:    headline,
+		Category:    "HERE_WE_GO",
+		IsWonderkid: done.IsWonderkid,
+		Matchweek:   done.Matchweek,
+		Timestamp:   fmt.Sprintf("MW %d", done.Matchweek),
+	})
 }
 
 func (te *TransferEngine) aiInitiateBid() {
@@ -676,10 +960,13 @@ func (te *TransferEngine) aiInitiateBid() {
 		return
 	}
 	sort.Slice(solvent, func(i, j int) bool { return solvent[i].ClubID < solvent[j].ClubID })
-	buyer := solvent[te.RNG.Intn(len(solvent))]
+	buyer := te.weightedClubChoice(solvent, buyerMarketWeight)
+	if buyer == nil {
+		return
+	}
 	var sellers []*models.Club
 	for _, c := range clubs {
-		if c.ClubID != buyer.ClubID && len(c.Squad) > 15 {
+		if c.ClubID != buyer.ClubID && len(c.Squad) > models.MinSeniorSquadSize {
 			sellers = append(sellers, c)
 		}
 	}
@@ -687,7 +974,10 @@ func (te *TransferEngine) aiInitiateBid() {
 		return
 	}
 	sort.Slice(sellers, func(i, j int) bool { return sellers[i].ClubID < sellers[j].ClubID })
-	seller := sellers[te.RNG.Intn(len(sellers))]
+	seller := te.weightedClubChoice(sellers, sellerMarketWeight)
+	if seller == nil {
+		return
+	}
 
 	var validTargets []*models.Player
 	for _, p := range seller.Squad {
@@ -707,12 +997,11 @@ func (te *TransferEngine) aiInitiateBid() {
 		if isCanonicalWonderkid(p) && (!isSuperLeagueClub(buyer.ClubID) || !isSuperLeagueClub(seller.ClubID)) {
 			continue
 		}
-		baseVal := models.BaselineValue(p.OVR, p.Age, p.UniverseWonderkid)
-		estBid := int64(float64(baseVal) * 1.10)
-		if !canAffordWithWage(buyer, estBid, annualWageFor(p)) {
+		estBid := int64(float64(transferPriceAnchor(p)) * 1.05)
+		if !te.canAffordWithWage(buyer, estBid, annualWageFor(p)) {
 			continue
 		}
-		if p.OVR >= 76 || isCanonicalWonderkid(p) || p.TransferRequested {
+		if p.OVR >= 76 || isCanonicalWonderkid(p) || p.TransferRequested || p.OutOfContract() {
 			if PlayerAcceptsDestination(p, seller, buyer) {
 				validTargets = append(validTargets, p)
 			}
@@ -729,19 +1018,17 @@ func (te *TransferEngine) aiInitiateBid() {
 		return validTargets[i].PlayerID < validTargets[j].PlayerID
 	})
 	target := validTargets[0]
-	baseVal := models.BaselineValue(target.OVR, target.Age, target.UniverseWonderkid)
-	initialBid := int64(float64(baseVal) * (0.95 + te.RNG.Float64()*0.20))
+	baseVal := transferPriceAnchor(target)
+	initialBid := models.ClampValue(int64(float64(baseVal)*(0.90+te.RNG.Float64()*0.16)), target.OVR, target.Age, target.UniverseWonderkid)
 	available := buyer.Finances.TransferBudget
 	if buyer.Finances.Balance < available {
 		available = buyer.Finances.Balance
 	}
-	if initialBid > available {
-		initialBid = available
-	}
-	if initialBid <= 0 {
+	if initialBid <= 0 || initialBid > available || !te.canAffordWithWage(buyer, initialBid, annualWageFor(target)) {
 		return
 	}
-	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, target.PlayerID, te.CurrentDay), Player: target, Buyer: buyer, Seller: seller, CurrentBid: initialBid, AskingPrice: initialBid, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(target), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(initialBid))}}
+	askingPrice := sellerAskingPrice(target, seller)
+	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, target.PlayerID, te.CurrentDay), Player: target, Buyer: buyer, Seller: seller, CurrentBid: initialBid, AskingPrice: askingPrice, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(target), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(initialBid)), fmt.Sprintf("Seller valuation: %s", models.FormatCurrency(askingPrice))}}
 	te.ActiveNegotiations = append(te.ActiveNegotiations, neg)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s open talks with %s for %s with opening %s bid", buyer.ShortName, seller.ShortName, target.FullName, models.FormatCurrency(initialBid)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 }
@@ -817,10 +1104,11 @@ func (te *TransferEngine) InitiateBid(playerID string, buyerID string, bidAmount
 	// Caller-supplied fees keep the valuation corridor like every other bid
 	// path (floor and ceiling alike).
 	bidAmount = models.ClampValue(bidAmount, target.OVR, target.Age, target.UniverseWonderkid)
-	if !canAffordWithWage(buyer, bidAmount, annualWageFor(target)) {
+	if !te.canAffordWithWage(buyer, bidAmount, annualWageFor(target)) {
 		return nil
 	}
-	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, target.PlayerID, te.CurrentDay), Player: target, Buyer: buyer, Seller: seller, CurrentBid: bidAmount, AskingPrice: bidAmount, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(target), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(bidAmount))}}
+	askingPrice := sellerAskingPrice(target, seller)
+	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, target.PlayerID, te.CurrentDay), Player: target, Buyer: buyer, Seller: seller, CurrentBid: bidAmount, AskingPrice: askingPrice, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(target), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(bidAmount)), fmt.Sprintf("Seller valuation: %s", models.FormatCurrency(askingPrice))}}
 	te.ActiveNegotiations = append(te.ActiveNegotiations, neg)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("%s open talks with %s for %s with opening %s bid", buyer.ShortName, seller.ShortName, target.FullName, models.FormatCurrency(bidAmount)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 	return neg
@@ -884,7 +1172,7 @@ func (te *TransferEngine) TriggerSpecificBid(buyerID, sellerID, playerID string)
 	if isCanonicalWonderkid(player) {
 		mult = 1.30
 	}
-	initialBid := int64(float64(player.MarketValueEUR) * mult)
+	initialBid := int64(float64(transferPriceAnchor(player)) * mult)
 	cap := int64(float64(models.BaselineValue(player.OVR, player.Age, player.UniverseWonderkid)) * 2.5)
 	if cap > 0 && initialBid > cap {
 		initialBid = cap
@@ -895,13 +1183,14 @@ func (te *TransferEngine) TriggerSpecificBid(buyerID, sellerID, playerID string)
 	// A depressed market value must not produce a below-corridor fee: floor
 	// the bid itself (the 2.5x ceiling above already respects the top end).
 	initialBid = models.ClampValue(initialBid, player.OVR, player.Age, player.UniverseWonderkid)
-	if !canAffordWithWage(buyer, initialBid, annualWageFor(player)) {
+	if !te.canAffordWithWage(buyer, initialBid, annualWageFor(player)) {
 		// Rejected bids leave no trace: valuation clamps never fire here.
 		return nil
 	}
 	// Accepted talks track the corridor-clamped valuation from here on.
 	models.ClampPlayer(player)
-	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, player.PlayerID, te.CurrentDay), Player: player, Buyer: buyer, Seller: seller, CurrentBid: initialBid, AskingPrice: initialBid, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(player), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(initialBid))}}
+	askingPrice := sellerAskingPrice(player, seller)
+	neg := &TransferNegotiation{NegotiationID: fmt.Sprintf("NEG_%s_%s_%d", buyer.ClubID, player.PlayerID, te.CurrentDay), Player: player, Buyer: buyer, Seller: seller, CurrentBid: initialBid, AskingPrice: askingPrice, CreatedMatchweek: te.CurrentMatchweek, StageIndex: 1, StageName: "INQUIRY", ProgressPct: 20, IsWonderkid: isCanonicalWonderkid(player), History: []string{fmt.Sprintf("Initial bid: %s", models.FormatCurrency(initialBid)), fmt.Sprintf("Seller valuation: %s", models.FormatCurrency(askingPrice))}}
 	te.ActiveNegotiations = append([]*TransferNegotiation{neg}, te.ActiveNegotiations...)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("EXCLUSIVE: %s submit official offer to %s for %s worth %s!", buyer.ClubName, seller.ClubName, player.FullName, models.FormatCurrency(initialBid)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 	return neg

@@ -141,7 +141,10 @@ func TestSeasonResetAgesWorldAndRestartDoesNot(t *testing.T) {
 		}
 	}
 	prepareCompletedSeasonForMacro(srv.TournamentManager)
-	srv.TransferEngine.CurrentWeek = transfers.TransferWindowWeeks + 1
+	srv.TransferEngine.BeginOffSeasonWindow()
+	for i := 0; i < transfers.TransferWindowWeeks; i++ {
+		srv.TransferEngine.AdvanceOpenWindow()
+	}
 	srv.worldMu.Unlock()
 
 	resp, err = http.Post(ts.URL+"/api/season/reset", "application/json", nil)
@@ -162,7 +165,7 @@ func TestSeasonResetAgesWorldAndRestartDoesNot(t *testing.T) {
 	if srv.TournamentManager.SeasonPhase != "season" || srv.TournamentManager.CurrentMatchweek != 1 {
 		t.Fatalf("reset calendar mw=%d phase=%s", srv.TournamentManager.CurrentMatchweek, srv.TournamentManager.SeasonPhase)
 	}
-	if srv.TransferEngine.CurrentDay != 1 {
+	if srv.TransferEngine.CurrentDay != 0 || srv.TransferEngine.CurrentWeek != 0 {
 		t.Fatalf("new season should reset the market day, got %d", srv.TransferEngine.CurrentDay)
 	}
 	for _, club := range srv.TournamentManager.ClubsList {

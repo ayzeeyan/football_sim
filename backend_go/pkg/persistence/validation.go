@@ -54,6 +54,15 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 			return fmt.Errorf("career snapshot open %s window has invalid week %d", snap.Transfers.WindowType, snap.Transfers.CurrentWeek)
 		}
 	}
+	if snap.Version >= 5 {
+		kind := snap.Transfers.WindowType
+		if kind == "" {
+			kind = transfers.WindowClosed
+		}
+		if err := transfers.ValidateWindowState(kind, snap.Transfers.WindowOpen, snap.Transfers.IsOffSeason, snap.Transfers.CurrentWeek, snap.Transfers.ProcessedWeeks); err != nil {
+			return fmt.Errorf("career snapshot has invalid transfer lifecycle: %w", err)
+		}
+	}
 
 	// Legacy saves are exactly twelve clubs. World saves are intentionally
 	// larger and validate membership through their persisted competitions.
@@ -273,8 +282,12 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 			canonical = c
 		}
 		if models.IsCanonicalWonderkidID(canonical) {
-			if bio.Potential < 93 || bio.Potential > 96 {
-				return fmt.Errorf("career snapshot canonical wonderkid %q potential %d outside [93, 96]", pid, bio.Potential)
+			if snap.Version < 8 {
+				if bio.Potential < 93 || bio.Potential > 99 {
+					return fmt.Errorf("legacy career snapshot canonical wonderkid %q potential %d outside [93, 99]", pid, bio.Potential)
+				}
+			} else if bio.Potential != 99 {
+				return fmt.Errorf("career snapshot canonical wonderkid %q potential %d must be 99", pid, bio.Potential)
 			}
 		}
 		if bio.CurrentHeightCM < 0 || bio.BaselineHeightCM < 0 || bio.CurrentWeightKG < 0 {

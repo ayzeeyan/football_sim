@@ -1,14 +1,17 @@
 import React from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
-import { TABS, type TabId } from '../../lib/constants';
-import type { ConnectionStatus } from '../../services/matchSocket';
+import {
+  Activity, CalendarDays, CircleDot, History, Home, Inbox, Medal, Plus,
+  Sparkles, Trophy, Users, UserRound, Volume2, VolumeX, WalletCards, Globe2,
+} from 'lucide-react';
+import { NAV_GROUPS, TABS, type TabId } from '../../lib/constants';
 import { soundManager } from '../../audio/webAudio';
 import { cx } from '../../lib/format';
+import { GlobalSearch } from './GlobalSearch';
+import { usePlayerSheet } from '../clubs/PlayerSheet';
 
 interface TopBarProps {
   activeTab: TabId;
   onTab: (t: TabId) => void;
-  wsStatus: ConnectionStatus;
   muted: boolean;
   onToggleMute: () => void;
   onOpenAwards: () => void;
@@ -21,137 +24,135 @@ interface TopBarProps {
   seasonName?: string;
   calendarLabel?: string;
   inboxUnread?: number;
-  world?: boolean;
+  onOpenClub?: (clubId: string) => void;
+  onOpenPlayer?: (playerId: string) => void;
+  onOpenCompetition?: (competitionId: string) => void;
 }
 
-function statusCopy(s: ConnectionStatus): { live: boolean; label: string } {
-  if (s === 'CONNECTED') return { live: true, label: 'Live' };
-  if (s === 'CONNECTING' || s === 'RECONNECTING') return { live: false, label: s === 'RECONNECTING' ? 'Reconnecting' : 'Connecting' };
-  return { live: false, label: 'Offline' };
-}
+const TAB_ICONS: Record<TabId, React.ElementType> = {
+  8: Home, 0: CircleDot, 7: Trophy, 2: Medal, 3: Users, 9: UserRound,
+  4: WalletCards, 6: Inbox, 5: History, 1: Sparkles,
+};
 
-const MacroControls: React.FC<Pick<TopBarProps, 'onContinue' | 'onSimWeek' | 'onSimMonth' | 'onSimSeason' | 'simulating'>> = ({
-  onContinue,
-  onSimWeek,
-  onSimMonth,
-  onSimSeason,
-  simulating = false,
-}) => (
-  <div className="hidden lg:flex items-center gap-1 border border-line bg-cardLight/50 p-1" aria-label="Commissioner simulation controls">
-    {onContinue && (
-      <button disabled={simulating} onClick={onContinue} className="px-2.5 py-1.5 text-[12px] font-semibold bg-bone text-ink hover:bg-[#fff6dc] disabled:opacity-40">
-        <span className="font-mono mr-1">C</span>Continue
-      </button>
-    )}
-    <button disabled={simulating} onClick={onSimWeek} className="px-2.5 py-1.5 text-[12px] font-semibold text-bone hover:bg-cardHover disabled:opacity-40">
-      <span className="font-mono text-brass mr-1">W</span>Week
-    </button>
-    <button disabled={simulating} onClick={onSimMonth} className="px-2.5 py-1.5 text-[12px] font-semibold text-bone hover:bg-cardHover disabled:opacity-40">
-      <span className="font-mono text-brass mr-1">M</span>Month
-    </button>
-    <button disabled={simulating} onClick={onSimSeason} className="px-2.5 py-1.5 text-[12px] font-semibold text-bone hover:bg-cardHover disabled:opacity-40">
-      <span className="font-mono text-brass mr-1">⇧S</span>Season
-    </button>
-  </div>
-);
+export const TopBar = React.memo<TopBarProps>(function TopBar({
+  activeTab, onTab, muted, onToggleMute, onOpenAwards, onNewCareer,
+  onSimWeek, onSimMonth, onSimSeason, onContinue, simulating = false,
+  seasonName = '2026-27', calendarLabel, inboxUnread = 0,
+  onOpenClub, onOpenPlayer, onOpenCompetition,
+}) {
+  const playerSheet = usePlayerSheet();
+  const activate = (id: TabId) => {
+    soundManager.playClick();
+    onTab(id);
+  };
 
-export const TopBar: React.FC<TopBarProps> = ({
-  activeTab, onTab, wsStatus, muted, onToggleMute, onOpenAwards, onNewCareer,
-  onSimWeek, onSimMonth, onSimSeason, onContinue, simulating = false, seasonName = '2026-27',
-  calendarLabel, inboxUnread = 0, world = false,
-}) => {
-  const status = statusCopy(wsStatus);
   return (
-    <header
-      className="sticky top-0 z-40 bg-obsidian/95 backdrop-blur border-b border-line"
-      style={{ paddingTop: 'env(safe-area-inset-top)' }}
-    >
-      <div className="page-shell py-3 flex items-center justify-between gap-3">
-        <div className="min-w-0 shrink-0">
-          <h1 className="font-display text-[26px] leading-none font-semibold tracking-tight text-bone">{world ? 'Europe' : 'Super League'}</h1>
-          <p className="text-[13px] text-sage mt-1">
-            {calendarLabel || `Season ${seasonName.replace('-', '–')}`}
-          </p>
-        </div>
+    <>
+      <aside className="career-sidebar hidden lg:flex" aria-label="Career navigation">
+        <button type="button" onClick={() => activate(8)} className="career-club-lockup text-left">
+          <span className="career-club-crest grid h-[46px] w-[46px] place-items-center rounded-full border border-brass/30 bg-brass/10 text-brass"><Globe2 size={24} /></span>
+          <span className="min-w-0">
+            <span className="block font-display text-[20px] font-bold leading-none text-bone truncate">
+              Football World
+            </span>
+            <span className="block mt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-brass/70 truncate">
+              Neutral career simulation
+            </span>
+          </span>
+        </button>
 
-        <nav className="hidden xl:flex items-center gap-0.5 min-w-0" aria-label="Primary">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => {
-                soundManager.playClick();
-                onTab(t.id);
-              }}
-              aria-current={activeTab === t.id ? 'page' : undefined}
-              className={cx(
-                'px-2.5 py-1.5 text-[13px] font-medium transition-colors',
-                activeTab === t.id ? 'bg-bone text-ink' : 'text-sage hover:text-bone',
-              )}
-            >
-              {t.label}
-              {t.slug === 'inbox' && inboxUnread > 0 && (
-                <span className="ml-1.5 font-mono text-[11px] text-brass">{inboxUnread}</span>
-              )}
-            </button>
+        <nav className="career-nav" aria-label="World sections">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="mb-1">
+              <div className="px-4 pb-1.5 pt-3 text-[9px] font-semibold uppercase tracking-[0.18em] text-sage/50">{group.label}</div>
+              {group.slugs.map((slug) => {
+                const tab = TABS.find((t) => t.slug === slug)!;
+                const Icon = TAB_ICONS[tab.id];
+                const active = tab.id === activeTab;
+                return (
+                  <button key={tab.id} type="button" onClick={() => activate(tab.id)} aria-current={active ? 'page' : undefined}
+                    className={cx('career-nav-item', active && 'career-nav-item-active')}>
+                    <Icon size={17} strokeWidth={active ? 2.2 : 1.7} aria-hidden="true" />
+                    <span>{tab.label}</span>
+                    {tab.slug === 'inbox' && inboxUnread > 0 && <span className="nav-count">{inboxUnread}</span>}
+                  </button>
+                );
+              })}
+            </div>
           ))}
         </nav>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <MacroControls
-            onContinue={onContinue}
-            onSimWeek={onSimWeek}
-            onSimMonth={onSimMonth}
-            onSimSeason={onSimSeason}
-            simulating={simulating}
-          />
-          <div className="hidden sm:flex items-center gap-2 text-[13px]" role="status">
-            <span className={cx('w-2 h-2 rounded-full', status.live ? 'bg-ember' : 'bg-sage/50')} aria-hidden="true" />
-            <span className={status.live ? 'text-ember font-semibold' : 'text-sage'}>{status.label}</span>
+        <div className="mt-auto border-t border-white/[0.07] p-4 space-y-2">
+          <button type="button" onClick={onOpenAwards} className="sidebar-utility"><Trophy size={15} /> Honours</button>
+          <button type="button" onClick={onNewCareer} className="sidebar-utility"><Plus size={15} /> New career</button>
+        </div>
+      </aside>
+
+      <header className="career-topbar sticky top-0 z-40 lg:ml-[216px]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="px-4 sm:px-6 lg:px-7 min-h-[66px] flex flex-wrap items-center justify-between gap-2 py-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="lg:hidden grid h-9 w-9 shrink-0 place-items-center rounded-full border border-brass/30 bg-brass/10 text-brass"><Globe2 size={19} /></div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-sage/60">
+                <CalendarDays size={12} /><span className="truncate">{calendarLabel || `Season ${seasonName.replace('-', '–')}`}</span>
+              </div>
+              <h1 className="mt-0.5 truncate font-display text-[18px] font-semibold leading-none text-bone">
+                {TABS.find((tab) => tab.id === activeTab)?.label || 'Career'}
+              </h1>
+            </div>
           </div>
-          <button onClick={onToggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute sound' : 'Mute sound'} className="p-2 text-sage hover:text-bone transition-colors">
-            {muted ? <VolumeX size={16} aria-hidden="true" /> : <Volume2 size={16} aria-hidden="true" />}
-          </button>
-          <button onClick={onNewCareer} className="hidden sm:block px-3 py-1.5 text-[13px] font-semibold text-sage hover:text-bone border border-line hover:border-sage/50 transition-colors">
-            New career
-          </button>
-          <button onClick={onOpenAwards} className="px-3 py-1.5 text-[13px] font-semibold text-ink bg-bone hover:bg-[#fff6dc] transition-colors">
-            Honours
-          </button>
-        </div>
-      </div>
 
-      <div className="lg:hidden page-shell pb-2">
-        <div className="grid grid-cols-4 border border-line bg-cardLight/50 p-1">
-          <button disabled={simulating} onClick={onContinue} className="py-1.5 text-[12px] font-semibold text-ink bg-bone disabled:opacity-40">C · Continue</button>
-          <button disabled={simulating} onClick={onSimWeek} className="py-1.5 text-[12px] font-semibold text-bone disabled:opacity-40"><span className="font-mono text-brass">W</span> · Week</button>
-          <button disabled={simulating} onClick={onSimMonth} className="py-1.5 text-[12px] font-semibold text-bone disabled:opacity-40"><span className="font-mono text-brass">M</span> · Month</button>
-          <button disabled={simulating} onClick={onSimSeason} className="py-1.5 text-[12px] font-semibold text-bone disabled:opacity-40"><span className="font-mono text-brass">⇧S</span> · Season</button>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+            {onOpenClub && onOpenCompetition && (
+              <div className="hidden min-w-0 xl:block">
+                <GlobalSearch
+                  onOpenClub={onOpenClub}
+                  onOpenPlayer={onOpenPlayer ?? playerSheet.openPlayer}
+                  onOpenCompetition={onOpenCompetition}
+                />
+              </div>
+            )}
+            <div className="hidden md:flex simulation-cluster shrink-0" role="group" aria-label="Simulation controls">
+              <button disabled={simulating} onClick={onSimWeek} title="Simulate one week (W)">Week</button>
+              <button disabled={simulating} onClick={onSimMonth} title="Simulate one month (M)">Month</button>
+              <button disabled={simulating} onClick={onSimSeason} title="Simulate season (Shift+S)">Season</button>
+            </div>
+            <button type="button" onClick={onToggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute sound' : 'Mute sound'} className="icon-button hidden sm:grid shrink-0">
+              {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
+            </button>
+            {onContinue && (
+              <button disabled={simulating} onClick={onContinue} className="continue-button shrink-0">
+                <Activity size={16} /><span>{simulating ? 'Advancing…' : 'Continue'}</span><kbd>C</kbd>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      <nav className="xl:hidden page-shell pb-3" aria-label="Primary">
-        <div className="flex gap-1 overflow-x-auto overscroll-x-contain">
-          {TABS.map((t) => (
+        <nav className="lg:hidden flex gap-1.5 overflow-x-auto border-t border-white/[0.06] px-3 py-2.5 no-scrollbar" aria-label="Mobile career navigation">
+          {TABS.map((tab) => (
             <button
-              key={t.id}
-              onClick={() => {
-                soundManager.playClick();
-                onTab(t.id);
-              }}
-              aria-current={activeTab === t.id ? 'page' : undefined}
+              key={tab.id}
+              type="button"
+              onClick={() => activate(tab.id)}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
               className={cx(
-                'px-3 py-1.5 text-[14px] font-medium whitespace-nowrap transition-colors',
-                activeTab === t.id ? 'bg-bone text-ink' : 'text-sage hover:text-bone',
+                'relative flex min-h-10 shrink-0 items-center gap-2 border px-3 text-[12px] font-semibold transition-colors',
+                activeTab === tab.id
+                  ? 'border-brass/50 bg-bone text-ink shadow-md'
+                  : 'border-transparent text-sage hover:border-white/10 hover:bg-white/[0.04] hover:text-bone',
               )}
             >
-              {t.label}
-              {t.slug === 'inbox' && inboxUnread > 0 && (
-                <span className="ml-1.5 font-mono text-[11px] text-brass">{inboxUnread}</span>
+              {React.createElement(TAB_ICONS[tab.id], { size: 15, strokeWidth: activeTab === tab.id ? 2.2 : 1.8, 'aria-hidden': true })}
+              <span>{tab.label}</span>
+              {tab.slug === 'inbox' && inboxUnread > 0 && (
+                <span className={cx('min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] font-bold', activeTab === tab.id ? 'bg-ink/10 text-ink' : 'bg-ember text-white')}>
+                  {inboxUnread}
+                </span>
               )}
             </button>
           ))}
-        </div>
-      </nav>
+</nav>
     </header>
+    </>
   );
-};
+});

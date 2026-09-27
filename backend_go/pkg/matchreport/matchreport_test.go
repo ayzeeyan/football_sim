@@ -121,6 +121,59 @@ func TestGenerateTouchHeatmap(t *testing.T) {
 	}
 }
 
+func TestCompactForArchiveDropsVisualPayload(t *testing.T) {
+	report := &MatchReport{
+		HomeGoals: 2,
+		AwayGoals: 1,
+		Heatmap: TouchHeatmapData{
+			HomePoints: [][]float64{{0.2, 0.4}},
+			AwayPoints: [][]float64{{0.8, 0.6}},
+			HomeZones:  ZoneSplit{Midfield: 100},
+		},
+		ShotMap: ShotMapData{
+			Shots:       []ShotMapItem{{Minute: 12, Outcome: "goal"}},
+			XGFlow:      []XGFlowPoint{{Minute: 12, HomeXG: 0.4}},
+			TotalHomeXG: 1.2,
+		},
+		HomeBench: []MatchPlayerRow{
+			{PlayerID: "ON", FullName: "Sub On", Played: true, Rating: floatPtr(6.8)},
+			{PlayerID: "OFF", FullName: "Unused", Played: false},
+		},
+	}
+	CompactForArchive(report)
+	if report.Heatmap.HomePoints != nil || report.Heatmap.AwayPoints != nil {
+		t.Fatalf("archived heatmap points should be cleared")
+	}
+	if report.ShotMap.XGFlow != nil || report.ShotMap.Shots != nil {
+		t.Fatalf("archived shot visuals should be cleared")
+	}
+	if report.HomeGoals != 2 || report.ShotMap.TotalHomeXG != 1.2 || report.Heatmap.HomeZones.Midfield != 100 {
+		t.Fatalf("authoritative match facts must survive archive compaction")
+	}
+	if len(report.HomeBench) != 1 || report.HomeBench[0].PlayerID != "ON" {
+		t.Fatalf("played substitutes must survive archive compaction: %+v", report.HomeBench)
+	}
+}
+
+func floatPtr(v float64) *float64 { return &v }
+
+func TestFillBigChancesCountsHighXGShots(t *testing.T) {
+	report := &MatchReport{
+		ShotMap: ShotMapData{
+			Shots: []ShotMapItem{
+				{Team: "home", XG: 0.41, Outcome: "goal"},
+				{Team: "home", XG: 0.12, Outcome: "miss"},
+				{Team: "away", XG: 0.30, Outcome: "save"},
+				{Team: "away", XG: 0.05, Outcome: "miss"},
+			},
+		},
+	}
+	FillBigChances(report)
+	if report.Stats.Home.BigChances != 1 || report.Stats.Away.BigChances != 1 {
+		t.Fatalf("big chances home=%d away=%d", report.Stats.Home.BigChances, report.Stats.Away.BigChances)
+	}
+}
+
 func TestGeneratePressConference(t *testing.T) {
 	homeClub := &models.Club{ClubID: "BAR", ClubName: "FC Barcelona", ShortName: "BAR", HomeStadium: "Camp Nou"}
 	awayClub := &models.Club{ClubID: "RMA", ClubName: "Real Madrid", ShortName: "RMA", HomeStadium: "Santiago Bernabéu"}

@@ -46,12 +46,32 @@ func (tm *TournamentManager) ValidateWorldState() error {
 		if mapped := tm.Clubs[club.ClubID]; mapped != club {
 			return fmt.Errorf("world validation: club %q map/list references disagree", club.ClubID)
 		}
-		if err := validateClubState(club, playerClub); err != nil {
+		if err := validateClubState(club, playerClub, tm.World != nil); err != nil {
 			return err
 		}
 	}
 	if len(tm.Clubs) != len(clubIDs) {
 		return fmt.Errorf("world validation: club map/list size mismatch map=%d list=%d", len(tm.Clubs), len(clubIDs))
+	}
+	if err := validateFreeAgents(tm, playerClub); err != nil {
+		return err
+	}
+	for _, club := range tm.ClubsList {
+		for _, player := range club.Squad {
+			if player == nil {
+				continue
+			}
+			if player.OnLoan {
+				if player.ParentClubID == "" || player.ParentClubID == club.ClubID {
+					return fmt.Errorf("world validation: loan player %q has invalid parent club %q", player.PlayerID, player.ParentClubID)
+				}
+				if _, ok := clubIDs[player.ParentClubID]; !ok {
+					return fmt.Errorf("world validation: loan player %q references unknown parent club %q", player.PlayerID, player.ParentClubID)
+				}
+			} else if player.ParentClubID != "" {
+				return fmt.Errorf("world validation: player %q is not on loan but retains parent club %q", player.PlayerID, player.ParentClubID)
+			}
+		}
 	}
 
 	if tm.World != nil {
@@ -97,6 +117,9 @@ func (tm *TournamentManager) ValidateWorldState() error {
 			return fmt.Errorf("world validation: manager %q has negative budget %d", manager.Name, manager.BudgetEur)
 		}
 	}
+	if tm.World != nil && len(tm.Managers) != len(clubIDs) {
+		return fmt.Errorf("world validation: active managers=%d want one for each of %d clubs", len(tm.Managers), len(clubIDs))
+	}
 	for _, entry := range tm.ManagerHistory {
 		if entry.ClubID != "" {
 			if _, ok := clubIDs[entry.ClubID]; !ok {
@@ -110,15 +133,8 @@ func (tm *TournamentManager) ValidateWorldState() error {
 
 	if tm.TransferEngine != nil {
 		te := tm.TransferEngine
-		if te.WindowType != transfers.WindowClosed && te.WindowType != transfers.WindowSummer && te.WindowType != transfers.WindowWinter {
-			return fmt.Errorf("world validation: unknown transfer window type %q", te.WindowType)
-		}
-		if te.IsWindowOpen() {
-			if te.CurrentWeek < 1 || te.CurrentWeek > te.WindowWeeks() {
-				return fmt.Errorf("world validation: open %s window week %d outside legal range 1..%d", te.WindowType, te.CurrentWeek, te.WindowWeeks())
-			}
-		} else if te.CurrentWeek < 0 || te.CurrentWeek > transfers.TransferWindowWeeks {
-			return fmt.Errorf("world validation: closed transfer week %d outside legal range 0..%d", te.CurrentWeek, transfers.TransferWindowWeeks)
+		if err := transfers.ValidateWindowState(te.WindowType, te.WindowOpen, te.IsOffSeason, te.CurrentWeek, te.ProcessedWeeks); err != nil {
+			return fmt.Errorf("world validation: %w", err)
 		}
 		if te.CurrentDay < 0 || te.CurrentMatchweek < 0 {
 			return fmt.Errorf("world validation: transfer counters cannot be negative (day=%d matchweek=%d)", te.CurrentDay, te.CurrentMatchweek)
@@ -201,15 +217,15 @@ func (tm *TournamentManager) ValidateWorldState() error {
 			if bio.Age < 0 || bio.Potential < 0 || bio.Potential > 100 || bio.CurrentHeightCM <= 0 || bio.CurrentWeightKG <= 0 || bio.LevelXPTarget < 0 || bio.AccumulatedXP < 0 {
 				return fmt.Errorf("world validation: player %q has invalid biometric bounds", playerID)
 			}
-			if models.IsCanonicalWonderkidID(playerID) && (bio.Potential < 93 || bio.Potential > 96) {
-				return fmt.Errorf("world validation: canonical wonderkid %q potential %d outside [93, 96]", playerID, bio.Potential)
+			if models.IsCanonicalWonderkidID(playerID) && bio.Potential != 99 {
+				return fmt.Errorf("world validation: canonical wonderkid %q potential %d must be 99", playerID, bio.Potential)
 			}
 		}
 	}
 	return nil
 }
 
-func validateClubState(club *models.Club, playerIDs map[string]string) error {
+func validateClubState(club *models.Club, playerIDs map[string]string, strictCareer bool) error {
 	identity := club.Identity
 	traits := map[string]int{
 		"reputation": identity.Reputation, "historical_prestige": identity.HistoricalPrestige,
@@ -244,6 +260,12 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 	if club.Coefficient < 0 {
 		return fmt.Errorf("world validation: club %q has negative coefficient %d", club.ClubID, club.Coefficient)
 	}
+	if len(club.Squad) > models.MaxSeniorSquadSize {
+		return fmt.Errorf("world validation: club %q has %d players, above the %d-player cap", club.ClubID, len(club.Squad), models.MaxSeniorSquadSize)
+	}
+	if strictCareer && len(club.Squad) < models.MinSeniorSquadSize {
+		return fmt.Errorf("world validation: club %q has %d players, below the playable minimum %d", club.ClubID, len(club.Squad), models.MinSeniorSquadSize)
+	}
 	for i, player := range club.Squad {
 		if player == nil || player.PlayerID == "" {
 			return fmt.Errorf("world validation: club %q has nil/empty-id player at index %d", club.ClubID, i)
@@ -252,10 +274,13 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 			return fmt.Errorf("world validation: duplicate player id %q in clubs %q and %q", player.PlayerID, previousClub, club.ClubID)
 		}
 		playerIDs[player.PlayerID] = club.ClubID
+		if player.IsFreeAgent() {
+			return fmt.Errorf("world validation: free agent %q appears in club %q squad", player.PlayerID, club.ClubID)
+		}
 		if player.ClubID != club.ClubID {
 			return fmt.Errorf("world validation: player %q claims club %q but is in squad %q", player.PlayerID, player.ClubID, club.ClubID)
 		}
-		if transfers.IsCanonicalWonderkid(player) && !transfers.IsDesignatedSuperLeagueClub(player.ClubID) {
+		if transfers.IsCanonicalWonderkid(player) && player.ClubID != "" && !transfers.IsDesignatedSuperLeagueClub(player.ClubID) {
 			return fmt.Errorf("world validation: canonical wonderkid %q is outside designated 12-club ecosystem at %q", player.PlayerID, player.ClubID)
 		}
 		if player.Goals < 0 || player.Assists < 0 || player.Appearances < 0 || player.CareerGoals < 0 || player.CareerAssists < 0 || player.CareerApps < 0 {
@@ -263,6 +288,26 @@ func validateClubState(club *models.Club, playerIDs map[string]string) error {
 		}
 		if player.OVR < 0 || player.OVR > 100 || player.Age < 0 || player.MarketValueEUR < 0 || player.WageEUR < 0 {
 			return fmt.Errorf("world validation: player %q has invalid OVR/age/value/wage", player.PlayerID)
+		}
+		if strictCareer && (player.MarketValueEUR < models.MinPlayerValueEUR || player.MarketValueEUR > models.MaxPlayerValueEUR) {
+			return fmt.Errorf("world validation: player %q valuation %d outside €300k–€500M", player.PlayerID, player.MarketValueEUR)
+		}
+		if player.ContractYears < 0 {
+			return fmt.Errorf("world validation: player %q has invalid contract length %d", player.PlayerID, player.ContractYears)
+		}
+		if player.Morale < 0 || player.Morale > 100 || player.Fitness < 0 || player.Fitness > 100 || player.Sharpness < 0 || player.Sharpness > 100 || player.Loyalty < 0 || player.Loyalty > 100 || player.Composure < 0 || player.Composure > 100 {
+			return fmt.Errorf("world validation: player %q has out-of-bounds dynamics", player.PlayerID)
+		}
+		if player.InjuredMatches < 0 || player.SuspendedMatches < 0 || player.ConsecutiveStarts < 0 {
+			return fmt.Errorf("world validation: player %q has negative availability counters", player.PlayerID)
+		}
+		for competitionID, stats := range player.CompetitionStats {
+			if stats == nil || stats.Appearances < 0 || stats.Starts < 0 || stats.Minutes < 0 || stats.Goals < 0 || stats.Assists < 0 {
+				return fmt.Errorf("world validation: player %q has invalid stats for competition %q", player.PlayerID, competitionID)
+			}
+			if stats.Starts > stats.Appearances {
+				return fmt.Errorf("world validation: player %q has %d starts but %d appearances in %q", player.PlayerID, stats.Starts, stats.Appearances, competitionID)
+			}
 		}
 		if player.LoanBuyClauseEUR < 0 || player.LoanBuyClauseEUR > 500_000_000 {
 			return fmt.Errorf("world validation: player %q has out-of-bounds loan buy clause %d", player.PlayerID, player.LoanBuyClauseEUR)
@@ -499,6 +544,38 @@ func validateFixtureState(scope string, index int, fixture *Fixture, clubIDs map
 	}
 	if fixture.Status == "finished" && fixture.HomeGoals == nil {
 		return fmt.Errorf("world validation: finished fixture %q has no result", fixture.FixtureID)
+	}
+	return nil
+}
+
+func validateFreeAgents(tm *TournamentManager, playerClub map[string]string) error {
+	if tm == nil || tm.TransferEngine == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	for i, p := range tm.TransferEngine.FreeAgents {
+		if p == nil || p.PlayerID == "" {
+			return fmt.Errorf("world validation: free-agent pool has nil/empty-id player at index %d", i)
+		}
+		if seen[p.PlayerID] {
+			return fmt.Errorf("world validation: duplicate free agent %q", p.PlayerID)
+		}
+		seen[p.PlayerID] = true
+		if previous, ok := playerClub[p.PlayerID]; ok {
+			return fmt.Errorf("world validation: free agent %q still appears in club %q squad", p.PlayerID, previous)
+		}
+		if p.ClubID != "" {
+			return fmt.Errorf("world validation: free agent %q still claims club %q", p.PlayerID, p.ClubID)
+		}
+		if !p.IsFreeAgent() {
+			return fmt.Errorf("world validation: pool player %q is not a free agent", p.PlayerID)
+		}
+		if p.ContractYears < 0 {
+			return fmt.Errorf("world validation: free agent %q has invalid contract length %d", p.PlayerID, p.ContractYears)
+		}
+		if transfers.IsCanonicalWonderkid(p) && p.ClubID != "" && !transfers.IsDesignatedSuperLeagueClub(p.ClubID) {
+			return fmt.Errorf("world validation: canonical wonderkid %q is outside designated 12-club ecosystem at %q", p.PlayerID, p.ClubID)
+		}
 	}
 	return nil
 }

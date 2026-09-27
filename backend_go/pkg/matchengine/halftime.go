@@ -2,6 +2,21 @@ package matchengine
 
 import "football_sim/pkg/models"
 
+// ResumeHalfTimeAI returns a spectator match to play with both clubs under
+// manager-AI authority. No user-owned side is implied.
+func (e *LiveMatchEngine) ResumeHalfTimeAI() bool {
+	if e.State != "HALF_TIME" {
+		return false
+	}
+	diff := e.HomeScore - e.AwayScore
+	e.ApplyAIManagerDecision("home", diff, 45)
+	e.ApplyAIManagerDecision("away", -diff, 45)
+	e.halfTimeReached = true
+	e.State = "PLAYING"
+	e.AddCommentary(45, "Both managers send their teams out for the second half.", "KICKOFF", false)
+	return true
+}
+
 // ResumeHalfTime validates the whole dugout choice before changing the match.
 // Empty stance keeps the current tactic; empty player IDs mean no substitution.
 func (e *LiveMatchEngine) ResumeHalfTime(side, stance, outID, inID string) bool {

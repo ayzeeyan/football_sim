@@ -542,16 +542,13 @@ func TestChallenger_Wonderkids_InvariantsAndPotentialBounds(t *testing.T) {
 			t.Errorf("wonderkid %s UniverseWonderkid is false", wk.FullName)
 		}
 
-		// 6. Potential strictly in [93, 96] and NEVER 99
+		// 6. Every canonical wonderkid has exact potential 99.
 		bio := ge.Biometrics[wk.PlayerID]
 		if bio == nil {
 			t.Fatalf("wonderkid %s not found in GrowthEngine biometrics", wk.FullName)
 		}
-		if bio.Potential < 93 || bio.Potential > 96 {
-			t.Errorf("wonderkid %s potential %d out of bounds [93, 96]", wk.FullName, bio.Potential)
-		}
-		if bio.Potential == 99 {
-			t.Fatalf("CRITICAL INVARIANT VIOLATION: wonderkid %s potential is 99!", wk.FullName)
+		if bio.Potential != 99 {
+			t.Fatalf("CRITICAL INVARIANT VIOLATION: wonderkid %s potential=%d; want 99", wk.FullName, bio.Potential)
 		}
 		if bio.Potential != cfg.Potential {
 			t.Errorf("wonderkid %s potential %d != config potential %d", wk.FullName, bio.Potential, cfg.Potential)
@@ -1347,11 +1344,8 @@ func TestChallenger_R2_ExhaustiveWholeDatabaseSanity(t *testing.T) {
 		if profile == nil {
 			t.Errorf("wonderkid %s has no BiometricProfile in GrowthEngine", wk.FullName)
 		} else {
-			if profile.Potential < 93 || profile.Potential > 96 {
-				t.Errorf("wonderkid %s potential %d out of [93, 96] bounds", wk.FullName, profile.Potential)
-			}
-			if profile.Potential == 99 {
-				t.Errorf("wonderkid %s potential is 99 (forbidden ceiling)", wk.FullName)
+			if profile.Potential != 99 {
+				t.Errorf("wonderkid %s potential %d; want 99", wk.FullName, profile.Potential)
 			}
 		}
 	}

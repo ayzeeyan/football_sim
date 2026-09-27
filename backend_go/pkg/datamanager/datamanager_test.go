@@ -323,18 +323,18 @@ func TestInitializeEliteProdigies_CanonicalWonderkids(t *testing.T) {
 	}
 
 	expectedPotentials := map[string]int{
-		"Venjamin Valerio":         96,
-		"Maverick Cantalejo":       95,
-		"Yeshua Emmanuel Gocotano": 93,
-		"Izyan Levin Bantol":       95,
-		"James Bernard Rizon":      94,
-		"Reid Randell Libatan":     95,
-		"Ashle Zylle Baguio":       95,
-		"Cliergy Jave Lanticse":    94,
-		"Ezail Zamora":             96,
-		"Earl Josh Hernando":       94,
-		"Rich Lorenz Suico":        94,
-		"Jhed Anthony Guinita":     94,
+		"Venjamin Valerio":         99,
+		"Maverick Cantalejo":       99,
+		"Yeshua Emmanuel Gocotano": 99,
+		"Izyan Levin Bantol":       99,
+		"James Bernard Rizon":      99,
+		"Reid Randell Libatan":     99,
+		"Ashle Zylle Baguio":       99,
+		"Cliergy Jave Lanticse":    99,
+		"Ezail Zamora":             99,
+		"Earl Josh Hernando":       99,
+		"Rich Lorenz Suico":        99,
+		"Jhed Anthony Guinita":     99,
 	}
 
 	for _, w := range dm.Wonderkids {
@@ -365,7 +365,7 @@ func TestInitializeEliteProdigies_CanonicalWonderkids(t *testing.T) {
 			t.Errorf("wonderkid %s UniverseWonderkid is false", w.FullName)
 		}
 
-		// Potential invariant: [93, 96], never 99
+		// All canonical wonderkids have exact potential 99.
 		expPot, ok := expectedPotentials[w.FullName]
 		if !ok {
 			t.Fatalf("unknown wonderkid %s", w.FullName)
@@ -377,11 +377,8 @@ func TestInitializeEliteProdigies_CanonicalWonderkids(t *testing.T) {
 		if bio.Potential != expPot {
 			t.Errorf("wonderkid %s potential %d != expected %d", w.FullName, bio.Potential, expPot)
 		}
-		if bio.Potential < 93 || bio.Potential > 96 {
-			t.Errorf("wonderkid %s potential %d out of bounds [93, 96]", w.FullName, bio.Potential)
-		}
-		if bio.Potential == 99 {
-			t.Errorf("wonderkid %s potential is 99 (forbidden!)", w.FullName)
+		if bio.Potential != 99 {
+			t.Errorf("wonderkid %s potential %d; want 99", w.FullName, bio.Potential)
 		}
 
 		// Composure and OVR calculated from GrowthEngine
@@ -752,7 +749,9 @@ func TestYouthIntake_GoldenGeneration(t *testing.T) {
 		}
 		for _, g := range grads {
 			bio := ge.Biometrics[g.PlayerID]
-			if bio != nil && bio.Potential >= 90 {
+			// Regular prospects can also reach 90–92 potential, so identify the
+			// golden-generation band by its paired senior-ready OVR as well.
+			if bio != nil && bio.Potential >= 90 && g.OVR >= 72 {
 				foundGolden = true
 				if g.OVR < 72 || g.OVR > 78 {
 					t.Errorf("golden generation OVR %d out of expected range [72, 78]", g.OVR)

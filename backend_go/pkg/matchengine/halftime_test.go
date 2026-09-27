@@ -43,6 +43,21 @@ func TestHalfTimePauseAndInstantBypass(t *testing.T) {
 	}
 }
 
+func TestSpectatorHalfTimeResumesUnderBothAIManagers(t *testing.T) {
+	e := chunk3LiveEngine(2026)
+	e.State = "HALF_TIME"
+	e.CurrentMinute = 45
+	if !e.ResumeHalfTimeAI() {
+		t.Fatal("AI half-time resume was rejected")
+	}
+	if e.State != "PLAYING" || !e.halfTimeReached {
+		t.Fatalf("AI interval left state=%s reached=%v", e.State, e.halfTimeReached)
+	}
+	if len(e.Commentary) == 0 || e.Commentary[len(e.Commentary)-1].Category != "KICKOFF" {
+		t.Fatal("AI interval did not record the second-half restart")
+	}
+}
+
 func TestHalfTimeChoicesAndSecondHalf(t *testing.T) {
 	for _, side := range []string{"home", "away"} {
 		for _, stance := range []string{"OVERLOAD", "PARK_BUS"} {

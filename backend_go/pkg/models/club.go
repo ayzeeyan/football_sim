@@ -397,184 +397,44 @@ func sortPlayersForXI(players []*Player, competition string, matchweek int, styl
 	})
 }
 
-// StartingSlot is one non-overlapping tactical place in the default 4-3-3.
-// Keeping the slot beside the player lets API consumers render an XI without
-// guessing which of two centre-backs or full-backs belongs on each side.
-type StartingSlot struct {
-	Slot string `json:"slot"`
-	*Player
-}
-
-// GetStartingEleven selects the best 11 players in a 4-3-3 formation
-// (1 GK, 4 DEF, 3 MID, 3 FWD) with wonderkid priority and fatigue rotation.
+// GetStartingEleven selects the best 11 players in the historical default
+// 4-3-3 while retaining the legacy []*Player return type.
 func (c *Club) GetStartingEleven(fixture ...string) []*Player {
 	slots := c.GetStartingElevenSlots(fixture...)
-	startingXI := make([]*Player, 0, len(slots))
-	for _, slot := range slots {
-		if slot.Player != nil {
-			startingXI = append(startingXI, slot.Player)
-		}
-	}
-	return startingXI
+	return PlayersFromStartingSlots(slots)
 }
 
 // GetStartingElevenWithBias applies a manager's style and recruitment focus
 // on top of fitness, form, and match importance.
 func (c *Club) GetStartingElevenWithBias(style, focus string, fixture ...string) []*Player {
 	slots := c.GetStartingElevenSlotsWithBias(style, focus, fixture...)
-	startingXI := make([]*Player, 0, len(slots))
-	for _, slot := range slots {
-		if slot.Player != nil {
-			startingXI = append(startingXI, slot.Player)
-		}
-	}
-	return startingXI
+	return PlayersFromStartingSlots(slots)
 }
 
 // GetStartingElevenSlots returns the selected XI in stable 4-3-3 tactical
 // slots. Natural positions are preferred before a category-compatible
 // fallback, and each player can only be assigned once.
 func (c *Club) GetStartingElevenSlots(fixture ...string) []StartingSlot {
-	return c.GetStartingElevenSlotsWithBias("", "", fixture...)
+	return c.GetStartingElevenSlotsForFormation(Formation433, "", "", fixture...)
 }
 
 // GetStartingElevenSlotsWithBias is the manager-aware equivalent used by
 // squad and fixture previews. It retains the same selection priorities as
 // GetStartingElevenWithBias while exposing a renderer-safe tactical slot.
 func (c *Club) GetStartingElevenSlotsWithBias(style, focus string, fixture ...string) []StartingSlot {
+	return c.GetStartingElevenSlotsForFormation(FormationForStyle(style), style, focus, fixture...)
+}
+
+// GetStartingElevenSlotsForFormation selects one globally optimal,
+// deterministic player assignment for the formation-owned slots. Positional
+// fit carries substantially more weight than modest OVR differences.
+func (c *Club) GetStartingElevenSlotsForFormation(formation, style, focus string, fixture ...string) []StartingSlot {
 	pool := c.AvailableSquad(fixture...)
 	if len(pool) == 0 {
 		return nil
 	}
-	// Preserve the long-standing no-keeper safety rule: malformed short
-	// squads open with their first available player rather than silently
-	// changing that fallback because the tactical ranking is sorted below.
-	firstAvailable := pool[0]
 	comp, week := parseFixtureArgs(fixture)
-	sortPlayersForXI(pool, comp, week, style, focus)
-
-	type slotRule struct {
-		slot     string
-		category string
-		exact    map[string]bool
-		compat   map[string]bool
-	}
-	set := func(vals ...string) map[string]bool {
-		m := make(map[string]bool, len(vals))
-		for _, v := range vals {
-			m[v] = true
-		}
-		return m
-	}
-	rules := []slotRule{
-		{"GK", "GK", set("GK"), nil},
-		{"LB", "DEF", set("LB"), set("LWB")},
-		{"LCB", "DEF", set("CB"), nil},
-		{"RCB", "DEF", set("CB"), nil},
-		{"RB", "DEF", set("RB"), set("RWB")},
-		{"LCM", "MID", set("CM", "CAM"), set("LM")},
-		{"CM", "MID", set("CDM", "CM"), set("CAM")},
-		{"RCM", "MID", set("CM", "CAM"), set("RM")},
-		{"LW", "FWD", set("LW"), set("LM", "LF")},
-		{"ST", "FWD", set("ST", "CF"), set("CAM")},
-		{"RW", "FWD", set("RW"), set("RM", "RF")},
-	}
-
-	used := make(map[string]bool, len(pool))
-	filled := make([]*Player, len(rules))
-	hasGK := false
-	for _, p := range pool {
-		if p != nil && p.Category == "GK" {
-			hasGK = true
-			break
-		}
-	}
-	if !hasGK && firstAvailable != nil {
-		filled[0] = firstAvailable
-		used[firstAvailable.PlayerID] = true
-	}
-	posOf := func(p *Player) (string, string) {
-		return strings.ToUpper(strings.TrimSpace(p.Position)), strings.ToUpper(strings.TrimSpace(p.SecondaryPosition))
-	}
-	tier := func(p *Player, rule slotRule) int {
-		pos, sec := posOf(p)
-		switch {
-		case rule.exact[pos]:
-			return 4
-		case sec != "" && rule.exact[sec]:
-			return 3
-		case rule.compat[pos]:
-			return 2
-		case sec != "" && rule.compat[sec]:
-			return 1
-		default:
-			return 0
-		}
-	}
-	pick := func(minTier int, categoryOnly bool) {
-		for i, rule := range rules {
-			if filled[i] != nil {
-				continue
-			}
-			var best *Player
-			bestTier, bestWK, bestAdj := -2, -1, -1000
-			for _, p := range pool {
-				if p == nil || used[p.PlayerID] {
-					continue
-				}
-				t := tier(p, rule)
-				if minTier > 0 && t < minTier {
-					continue
-				}
-				if minTier == 0 && categoryOnly && t == 0 && p.Category != rule.category {
-					continue
-				}
-				if minTier == 0 && !categoryOnly && t == 0 && p.Category != rule.category {
-					t = -1
-				}
-				wk, adj := sortKey(p, comp, week)
-				adj += applyManagerBias(p, style, focus)
-				better := best == nil || t > bestTier ||
-					(t == bestTier && wk > bestWK) ||
-					(t == bestTier && wk == bestWK && adj > bestAdj) ||
-					(t == bestTier && wk == bestWK && adj == bestAdj && p.PlayerID < best.PlayerID)
-				if better {
-					best, bestTier, bestWK, bestAdj = p, t, wk, adj
-				}
-			}
-			if best != nil {
-				filled[i] = best
-				used[best.PlayerID] = true
-			}
-		}
-	}
-	pick(3, false) // exact primary/secondary
-	pick(1, false) // compatible wide/secondary roles
-	pick(0, true)  // same category
-	pick(0, false) // emergency leftover
-
-	slots := make([]StartingSlot, 0, 11)
-	for i, rule := range rules {
-		p := filled[i]
-		if p == nil && rule.slot == "GK" && firstAvailable != nil && !used[firstAvailable.PlayerID] {
-			p = firstAvailable
-			used[p.PlayerID] = true
-		}
-		if p == nil {
-			for _, fallback := range pool {
-				if fallback != nil && !used[fallback.PlayerID] {
-					p = fallback
-					used[p.PlayerID] = true
-					break
-				}
-			}
-		}
-		if p == nil {
-			continue
-		}
-		slots = append(slots, StartingSlot{Slot: rule.slot, Player: p})
-	}
-	return slots
+	return assignPlayersToFormation(pool, formation, comp, week, style, focus)
 }
 
 // FixtureContext builds the competition:matchweek key used by XI/bench selection

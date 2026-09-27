@@ -15,18 +15,18 @@ type canonicalProdigyTestDef struct {
 
 // 12 Canonical Outfield Franchise Wonderkids from dataset / prodigies.go
 var canonicalTestProdigies = []canonicalProdigyTestDef{
-	{"WK_Venjamin_Valerio", "Venjamin Valerio", 78, 96},
-	{"WK_Maverick_Cantalejo", "Maverick Cantalejo", 77, 95},
-	{"WK_Yeshua_Gocotano", "Yeshua Emmanuel Gocotano", 75, 93},
-	{"WK_Izyan_Bantol", "Izyan Levin Bantol", 76, 95},
-	{"WK_James_Rizon", "James Bernard Rizon", 76, 94},
-	{"WK_Reid_Libatan", "Reid Randell Libatan", 76, 95},
-	{"WK_Ashle_Baguio", "Ashle Zylle Baguio", 75, 95},
-	{"WK_Cliergy_Lanticse", "Cliergy Jave Lanticse", 75, 94},
-	{"WK_Ezail_Zamora", "Ezail Zamora", 77, 96},
-	{"WK_Earl_Hernando", "Earl Josh Hernando", 75, 94},
-	{"WK_Rich_Suico", "Rich Lorenz Suico", 75, 94},
-	{"WK_Jhed_Guinita", "Jhed Anthony Guinita", 75, 94},
+	{"WK_Venjamin_Valerio", "Venjamin Valerio", 78, 99},
+	{"WK_Maverick_Cantalejo", "Maverick Cantalejo", 77, 99},
+	{"WK_Yeshua_Emmanuel_Gocotano", "Yeshua Emmanuel Gocotano", 75, 99},
+	{"WK_Izyan_Levin_Bantol", "Izyan Levin Bantol", 76, 99},
+	{"WK_James_Bernard_Rizon", "James Bernard Rizon", 76, 99},
+	{"WK_Reid_Randell_Libatan", "Reid Randell Libatan", 76, 99},
+	{"WK_Ashle_Zylle_Baguio", "Ashle Zylle Baguio", 75, 99},
+	{"WK_Cliergy_Jave_Lanticse", "Cliergy Jave Lanticse", 75, 99},
+	{"WK_Ezail_Zamora", "Ezail Zamora", 77, 99},
+	{"WK_Earl_Josh_Hernando", "Earl Josh Hernando", 75, 99},
+	{"WK_Rich_Lorenz_Suico", "Rich Lorenz Suico", 75, 99},
+	{"WK_Jhed_Anthony_Guinita", "Jhed Anthony Guinita", 75, 99},
 }
 
 // simulateSeasonMatches executes a full 44-week season for a wonderkid with regular starts.
@@ -102,7 +102,7 @@ func TestWonderkid_SingleSeasonGrowthCurve(t *testing.T) {
 
 // TestWonderkid_MultiYearTrajectory verifies that wonderkids develop along a realistic multi-year
 // trajectory reaching ~79–82 OVR by age 16, ~85–88 OVR by age 18, and approaching canonical
-// 93–96 ceiling in their early 20s.
+// 99 ceiling in their early 20s.
 func TestWonderkid_MultiYearTrajectory(t *testing.T) {
 	for seed := int64(2001); seed <= 2005; seed++ {
 		ge := NewGrowthEngine(seed)
@@ -142,7 +142,7 @@ func TestWonderkid_MultiYearTrajectory(t *testing.T) {
 			t.Errorf("[Seed %d] At age 18 expected ~85–88 OVR, got %d", seed, ovr18)
 		}
 
-		// Milestone 3: Early 20s (Age 21-22): approaching canonical ceiling [93, 96]
+		// Milestone 3: Early 20s (Age 21-22): approaching the canonical 99 ceiling
 		ovr22 := ovrHistory[22]
 		if ovr22 < 91 || ovr22 > wk.potential {
 			t.Errorf("[Seed %d] In early 20s expected approaching ceiling (>= 91, <= %d), got %d",
@@ -151,12 +151,12 @@ func TestWonderkid_MultiYearTrajectory(t *testing.T) {
 	}
 }
 
-// TestWonderkid_PotentialBoundsStrictness verifies that all canonical wonderkid potentials
-// are strictly within [93, 96] and cannot be exceeded even under extreme circumstances.
+// TestWonderkid_PotentialBoundsStrictness verifies that every canonical wonderkid
+// has exact potential 99 and cannot exceed it under extreme circumstances.
 func TestWonderkid_PotentialBoundsStrictness(t *testing.T) {
 	for _, wk := range canonicalTestProdigies {
-		if wk.potential < 93 || wk.potential > 96 {
-			t.Errorf("Prodigy %s potential %d is out of strict range [93, 96]", wk.name, wk.potential)
+		if wk.potential != 99 {
+			t.Errorf("Prodigy %s potential %d; want exactly 99", wk.name, wk.potential)
 		}
 
 		ge := NewGrowthEngine(42)
@@ -178,6 +178,33 @@ func TestWonderkid_PotentialBoundsStrictness(t *testing.T) {
 		if seasonalOVR > wk.potential {
 			t.Fatalf("Prodigy %s seasonal OVR %d exceeded potential %d!", wk.name, seasonalOVR, wk.potential)
 		}
+	}
+}
+
+func TestCanonicalPotentialUpgradePreservesCareerProgress(t *testing.T) {
+	ge := NewGrowthEngine(1001)
+	bio, attrs := ge.RegisterProdigy(
+		"WK_Jhed_Anthony_Guinita", "Jhed Anthony Guinita", 18, 174, 62, "FWD", 78, 94, 19,
+	)
+	if bio.Potential != 99 {
+		t.Fatalf("canonical registration potential=%d; want 99", bio.Potential)
+	}
+	bio.Potential = 94 // simulate a profile restored from a legacy career save
+	bio.AccumulatedXP = 37.5
+	attrs.Shooting = 91
+	ovrBefore := ge.CalculateOVR(bio.PlayerID, "FWD")
+
+	if !ge.UpgradeCanonicalWonderkidPotentials() {
+		t.Fatal("legacy canonical potential was not upgraded")
+	}
+	if bio.Potential != 99 || bio.AccumulatedXP != 37.5 || attrs.Shooting != 91 {
+		t.Fatalf("migration changed career progress: bio=%+v shooting=%d", bio, attrs.Shooting)
+	}
+	if got := ge.CalculateOVR(bio.PlayerID, "FWD"); got != ovrBefore {
+		t.Fatalf("migration changed current OVR: before=%d after=%d", ovrBefore, got)
+	}
+	if ge.UpgradeCanonicalWonderkidPotentials() {
+		t.Fatal("second migration should be a no-op")
 	}
 }
 

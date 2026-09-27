@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -19,6 +20,23 @@ func europeanPersistenceWorld(t *testing.T) (*tournament.TournamentManager, *gro
 	te := transfers.NewTransferEngine(dm.ClubsList, tm.Managers, 705)
 	tm.TransferEngine = te
 	return tm, ge, te
+}
+
+func TestRestoreLegacyWorldAdoptsNationalCompetition(t *testing.T) {
+	tm, ge, te := europeanPersistenceWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+	snap.Version = 7
+	snap.World.NationalTeams = nil
+	fresh, freshGE, freshTE := europeanPersistenceWorld(t)
+	if err := RestoreCareer(fresh, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("restore legacy world: %v", err)
+	}
+	if fresh.World == nil || fresh.World.NationalTeams == nil || len(fresh.World.NationalTeams.TeamOrder) != 5 {
+		t.Fatalf("national competition missing after migration: %+v", fresh.World)
+	}
+	if err := fresh.ValidateWorldState(); err != nil {
+		t.Fatalf("migrated world invalid: %v", err)
+	}
 }
 
 func TestRestoreCareerReconcilesCaptainFlagsWithClubIDs(t *testing.T) {
@@ -172,5 +190,144 @@ func TestEuropeanWorldSnapshotRestoresNewLedgers(t *testing.T) {
 	ucl := fresh.World.Competitions["champions-league"]
 	if len(ucl.Pots) != 4 {
 		t.Fatalf("pots lost on restore: %d", len(ucl.Pots))
+	}
+}
+
+func TestRestoreExpiredWonderkidContractLoads(t *testing.T) {
+	tm, ge, te := europeanPersistenceWorld(t)
+	var kid *models.Player
+	for _, club := range tm.ClubsList {
+		for _, p := range club.Squad {
+			if p != nil && p.PlayerID == "WK_Izyan_Levin_Bantol" {
+				kid = p
+			}
+		}
+	}
+	if kid == nil {
+		t.Fatal("expected WK_Izyan_Levin_Bantol in the European world")
+	}
+	kid.Age = 20
+	kid.ContractYears = 0
+	kid.Loyalty = 80
+	kid.Personality = "dedicated_pro"
+	kid.TransferRequested = false
+
+	path := filepath.Join(t.TempDir(), "career.json")
+	if _, err := SaveCareer(tm, ge, te, path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	snap, err := LoadCareer(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if err := ValidateCareerSnapshot(snap); err != nil {
+		t.Fatalf("snapshot validation: %v", err)
+	}
+	fresh, freshGE, freshTE := europeanPersistenceWorld(t)
+	if err := RestoreCareer(fresh, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if err := fresh.ValidateWorldState(); err != nil {
+		t.Fatalf("restored world invalid: %v", err)
+	}
+	var restored *models.Player
+	for _, club := range fresh.ClubsList {
+		for _, p := range club.Squad {
+			if p != nil && p.PlayerID == "WK_Izyan_Levin_Bantol" {
+				restored = p
+			}
+		}
+	}
+	if restored == nil {
+		t.Fatal("wonderkid missing after restore")
+	}
+	if restored.ContractYears != 0 {
+		t.Fatalf("expired deal must survive restore unchanged, years=%d", restored.ContractYears)
+	}
+}
+
+func TestRestoreCareerUsesSavedSquadNotDatasetOverlay(t *testing.T) {
+	tm, ge, te := europeanPersistenceWorld(t)
+	inter := tm.Clubs["SEA-INT"]
+	if inter == nil || len(inter.Squad) < 3 {
+		t.Fatal("need Inter squad")
+	}
+	departed := inter.Squad[len(inter.Squad)-1]
+	inter.Squad = inter.Squad[:len(inter.Squad)-1]
+	academy := &models.Player{
+		PlayerID: "AC_SEA-INT_Test_Regen_1001", FullName: "Test Regen", Position: "CM",
+		Category: "MID", OVR: 62, Age: 17, ClubID: inter.ClubID, OriginalClubID: inter.ClubID,
+		ContractYears: 3, WageEUR: 10000, MarketValueEUR: models.MinPlayerValueEUR,
+	}
+	inter.Squad = append(inter.Squad, academy)
+	want := len(inter.Squad)
+
+	path := filepath.Join(t.TempDir(), "career.json")
+	if _, err := SaveCareer(tm, ge, te, path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	snap, err := LoadCareer(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	fresh, freshGE, freshTE := europeanPersistenceWorld(t)
+	if err := RestoreCareer(fresh, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	got := fresh.Clubs["SEA-INT"]
+	if len(got.Squad) != want {
+		t.Fatalf("Inter squad=%d want saved %d (dataset overlay leaked departed players)", len(got.Squad), want)
+	}
+	for _, p := range got.Squad {
+		if p.PlayerID == departed.PlayerID {
+			t.Fatalf("departed dataset player %s still on Inter after restore", departed.PlayerID)
+		}
+	}
+	foundAcademy := false
+	for _, p := range got.Squad {
+		if p.PlayerID == academy.PlayerID {
+			foundAcademy = true
+		}
+	}
+	if !foundAcademy {
+		t.Fatal("academy signing missing after restore")
+	}
+	if err := fresh.ValidateWorldState(); err != nil {
+		t.Fatalf("restored world invalid: %v", err)
+	}
+}
+
+func TestRestoreCareerTrimsSavedSquadOverflow(t *testing.T) {
+	tm, ge, te := europeanPersistenceWorld(t)
+	inter := tm.Clubs["SEA-INT"]
+	if inter == nil {
+		t.Fatal("missing Inter")
+	}
+	for len(inter.Squad) < models.MaxSeniorSquadSize+2 {
+		i := len(inter.Squad)
+		inter.Squad = append(inter.Squad, &models.Player{
+			PlayerID: fmt.Sprintf("AC_SEA-INT_Overflow_%02d", i), FullName: fmt.Sprintf("Overflow %d", i),
+			Position: "CM", Category: "MID", OVR: 58, Age: 18, ClubID: inter.ClubID,
+			OriginalClubID: inter.ClubID, ContractYears: 2, WageEUR: 8000,
+			MarketValueEUR: models.MinPlayerValueEUR,
+		})
+	}
+	path := filepath.Join(t.TempDir(), "career.json")
+	if _, err := SaveCareer(tm, ge, te, path); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	snap, err := LoadCareer(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	fresh, freshGE, freshTE := europeanPersistenceWorld(t)
+	if err := RestoreCareer(fresh, freshGE, freshTE, snap); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if got := len(fresh.Clubs["SEA-INT"].Squad); got > models.MaxSeniorSquadSize {
+		t.Fatalf("Inter still over cap after restore: %d", got)
+	}
+	if err := fresh.ValidateWorldState(); err != nil {
+		t.Fatalf("restored world invalid: %v", err)
 	}
 }

@@ -1,9 +1,16 @@
+export type PositionFit = 'NATURAL' | 'SECONDARY' | 'OUT_OF_POSITION' | 'OUT_OF_SLOT' | string;
+export type FormationName = '4-3-3' | '4-2-3-1' | '3-4-3' | '4-4-2' | '5-3-2' | string;
+
 export interface Player {
   player_id: string;
   full_name: string;
   position: string;
   /** Explicit 4-3-3 placement supplied for a pre-match starting XI. */
   starting_slot?: string;
+  tactical_slot?: string;
+  natural_position?: string;
+  position_fit?: PositionFit;
+  formation?: string;
   ovr: number;
   age: number;
   market_value_eur: number;
@@ -81,6 +88,50 @@ export interface Player {
   versatility?: number;
   promise_kind?: string;
   promise_season?: string;
+  registration_status?: string;
+  previous_club_id?: string;
+  is_free_agent?: boolean;
+  season_history?: PlayerSeasonRecord[];
+  transfer_history?: PlayerMoveRecord[];
+  contract_history?: PlayerContractEvent[];
+  awards_history?: PlayerHonourRecord[];
+}
+
+export interface PlayerSeasonRecord {
+  season: string;
+  club_id?: string;
+  club_name?: string;
+  competition_id?: string;
+  appearances: number;
+  starts?: number;
+  minutes?: number;
+  goals: number;
+  assists: number;
+  clean_sheets?: number;
+  ovr: number;
+  avg_rating?: number;
+}
+
+export interface PlayerMoveRecord {
+  season?: string;
+  from_club_id?: string;
+  to_club_id?: string;
+  type: string;
+  fee_eur?: number;
+  matchweek?: number;
+}
+
+export interface PlayerContractEvent {
+  season?: string;
+  club_id?: string;
+  kind: string;
+  years?: number;
+}
+
+export interface PlayerHonourRecord {
+  season?: string;
+  title: string;
+  kind?: string;
 }
 
 export interface ManagerHistoryEntry {
@@ -98,6 +149,7 @@ export interface ManagerHistoryEntry {
 export interface ManagerInfo {
   name: string;
   tactic: string;
+  formation?: string;
   archetype?: 'high_press' | 'possession' | 'low_block' | 'free_flowing';
   archetype_label?: string;
   style: string;
@@ -179,67 +231,6 @@ export interface Club {
   budget_eur?: number;
 }
 
-export interface CommentaryItem {
-  minute: number;
-  text: string;
-  category: 'NORMAL' | 'KICKOFF' | 'CHANCE' | 'SAVE' | 'GOAL' | 'FOUL' | 'WONDERKID' | 'FULLTIME';
-  is_wonderkid: boolean;
-  timestamp: string;
-}
-
-export interface MatchTickPayload {
-  tick_type?: 'full' | 'delta';
-  seq?: number;
-  state: 'NOT_STARTED' | 'PLAYING' | 'PAUSED' | 'HALF_TIME' | 'GOAL_PAUSE' | 'FULL_TIME';
-  minute: number;
-  speed: number;
-  phase: string;
-  active_third: 'DEFENSIVE' | 'MIDFIELD' | 'ATTACKING';
-  home_score: number;
-  away_score: number;
-  home_shots: number;
-  away_shots: number;
-  home_shots_on_target: number;
-  away_shots_on_target: number;
-  home_corners: number;
-  away_corners: number;
-  home_possession_pct: number;
-  away_possession_pct: number;
-  possession_momentum: number;
-  ball: {
-    x: number;
-    y: number;
-    height: number;
-    is_shot: boolean;
-  };
-  pass_trail: {
-    from: [number, number];
-    to: [number, number];
-    is_shot: boolean;
-    color: [number, number, number];
-  } | null;
-  home_coords: Array<{ x: number; y: number; player: Player; sent_off?: boolean }>;
-  away_coords: Array<{ x: number; y: number; player: Player; sent_off?: boolean }>;
-  goal_banner: string | null;
-  commentary: CommentaryItem[];
-  match_events?: MatchEventItem[];
-  league_fixture: { id: string; status: 'scheduled' | 'finished' } | null;
-  home_bench?: LiveBenchRow[];
-  away_bench?: LiveBenchRow[];
-  home_tactical_stance?: 'NORMAL' | 'OVERLOAD' | 'PARK_BUS';
-  away_tactical_stance?: 'NORMAL' | 'OVERLOAD' | 'PARK_BUS';
-  latest_tactical_shift?: TacticalShiftItem | null;
-  home_manager?: ManagerInfo | null;
-  away_manager?: ManagerInfo | null;
-  weather?: string;
-}
-
-export interface LiveBenchRow {
-  player: Player;
-  status: 'bench' | 'on';
-  on_minute: number | null;
-}
-
 // --- Career match centre ----------------------------------------------------
 
 export interface MatchMiniPlayer {
@@ -256,7 +247,7 @@ export interface MatchEventItem {
   minute: number;
   display: string;
   seq: number;
-  type: 'goal' | 'penalty' | 'penalty_miss' | 'own_goal' | 'corner_goal' | 'free_kick_goal' | 'yellow' | 'red' | 'sub' | 'var_review';
+  type: 'goal' | 'penalty' | 'penalty_miss' | 'own_goal' | 'corner_goal' | 'free_kick_goal' | 'yellow' | 'red' | 'sub' | 'var_review' | 'injury';
   side: 'home' | 'away';
   beneficiary?: 'home' | 'away' | null;
   scorer?: MatchMiniPlayer | null;
@@ -266,6 +257,8 @@ export interface MatchEventItem {
   player_out?: MatchMiniPlayer | null;
   player_id?: string | null;
   player_name?: string | null;
+  assist_player_id?: string | null;
+  assist_player_name?: string | null;
   club_id?: string | null;
   club_name?: string | null;
   sent_off?: boolean | null;
@@ -290,19 +283,27 @@ export interface MatchPlayerRow extends MatchMiniPlayer {
   off_minute?: number | null;
   starter?: boolean;
   played?: boolean;
+  tactical_slot?: string;
+  natural_position?: string;
+  position_fit?: PositionFit;
 }
 
 export interface TeamMatchStats {
   shots: number;
   on_target: number;
+  shots_on_target?: number;
   possession: number;
   corners: number;
   passes: number;
   pass_accuracy: number;
   fouls: number;
   yellows: number;
+  yellow_cards?: number;
   reds: number;
+  red_cards?: number;
   xg?: number;
+  saves?: number;
+  big_chances?: number;
 }
 
 export interface ShotItem {
@@ -381,6 +382,7 @@ export interface HeadToHeadRow {
 
 export interface Fixture {
   id: string;
+  fixture_id?: string;
   matchweek: number;
   competition: string;
   stage: string;
@@ -388,6 +390,8 @@ export interface Fixture {
   tie_id: string | null;
   status: 'scheduled' | 'finished';
   method: 'instant' | 'live' | null;
+  home_id: string;
+  away_id: string;
   home: Club;
   away: Club;
   home_goals: number | null;
@@ -420,6 +424,47 @@ export interface Fixture {
   home_manager?: ManagerInfo | null;
   away_manager?: ManagerInfo | null;
   tactical_shifts?: TacticalShiftItem[];
+  importance?: string | null;
+  home_formation?: string;
+  away_formation?: string;
+  date_label?: string;
+  story_facts?: StoryFact[];
+  table_impact?: TableImpact | null;
+  competition_impact?: string | null;
+}
+
+export interface StoryFact {
+  kind: string;
+  minute?: number;
+  player_id?: string;
+  player_name?: string;
+  side?: string;
+}
+
+export interface TableDelta {
+  club_id: string;
+  short_name: string;
+  before_pos: number;
+  after_pos: number;
+  before_pts: number;
+  after_pts: number;
+  before_gd: number;
+  after_gd: number;
+}
+
+export interface NearbyStanding {
+  pos: number;
+  club_id: string;
+  short_name: string;
+  pts: number;
+  gd: number;
+}
+
+export interface TableImpact {
+  applicable: boolean;
+  home: TableDelta;
+  away: TableDelta;
+  nearby?: NearbyStanding[];
 }
 
 export interface EuropeanNight {
@@ -450,6 +495,12 @@ export interface FixturePreview {
   away_missing: Player[];
   home_xi_avg: number;
   away_xi_avg: number;
+  home_formation?: string;
+  away_formation?: string;
+  home_gd?: number;
+  away_gd?: number;
+  home_key_player?: Player | null;
+  away_key_player?: Player | null;
 }
 
 export interface FixturesResponse {
@@ -881,6 +932,23 @@ export interface ProdigyWatchRow {
 
 export interface SeasonAwards {
   season_name?: string;
+  world?: boolean;
+  league_champions?: Array<{
+    club_id?: string;
+    club_name: string;
+    short_name: string;
+    pts: number;
+    league?: string;
+    competition_id?: string;
+  }>;
+  europa_champion?: {
+    club_name: string;
+    short_name: string;
+  } | null;
+  conference_champion?: {
+    club_name: string;
+    short_name: string;
+  } | null;
   super_league_champion: {
     club_name: string;
     short_name: string;
@@ -1020,7 +1088,82 @@ export interface SuperLeagueState {
   world?: boolean;
 }
 
-export type CompetitionKind = 'LEAGUE' | 'DOMESTIC_CUP' | 'EUROPEAN';
+export type CompetitionKind = 'LEAGUE' | 'DOMESTIC_CUP' | 'EUROPEAN' | 'INTERNATIONAL';
+
+export interface NationalTeamPlayer {
+  player_id: string;
+  full_name: string;
+  position: string;
+  category: string;
+  ovr: number;
+  age: number;
+  club_id: string;
+  club_name: string;
+}
+
+export interface NationalTeam {
+  id: string;
+  name: string;
+  country: string;
+  rating: number;
+  players: NationalTeamPlayer[];
+}
+
+export interface NationsCupTableRow {
+  team_id: string;
+  name?: string;
+  country?: string;
+  rating?: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goals_for: number;
+  goals_against: number;
+  goal_difference: number;
+  points: number;
+}
+
+export interface NationsCupFixture {
+  id: string;
+  fixture_id?: string;
+  matchweek: number;
+  stage: string;
+  status: string;
+  home_id: string;
+  away_id: string;
+  home: Pick<NationalTeam, 'id' | 'name' | 'country' | 'rating'> | null;
+  away: Pick<NationalTeam, 'id' | 'name' | 'country' | 'rating'> | null;
+  home_goals: number | null;
+  away_goals: number | null;
+  decided_by?: string | null;
+  home_penalties?: number | null;
+  away_penalties?: number | null;
+  has_report?: boolean;
+}
+
+export interface NationsCupHistoryEntry {
+  season: string;
+  champion_id?: string | null;
+  champion?: Pick<NationalTeam, 'id' | 'name' | 'country' | 'rating'> | null;
+  table: NationsCupTableRow[];
+  fixtures: NationsCupFixture[];
+}
+
+export interface NationsCupResponse {
+  id: string;
+  name: string;
+  country: string;
+  kind: 'INTERNATIONAL';
+  prestige: number;
+  stage: string;
+  champion?: Pick<NationalTeam, 'id' | 'name' | 'country' | 'rating'> | null;
+  champion_id?: string | null;
+  participants: NationalTeam[];
+  table: NationsCupTableRow[];
+  fixtures: NationsCupFixture[];
+  history: NationsCupHistoryEntry[];
+}
 
 export interface CompetitionClub {
   club_id: string;
@@ -1050,7 +1193,7 @@ export interface CompetitionSummary {
   stage: string;
   prestige: number;
   participants: number;
-  champion?: CompetitionClub | null;
+  champion?: CompetitionClub | NationalTeam | null;
   champion_id?: string;
 }
 
@@ -1085,6 +1228,7 @@ export interface CompetitionFixtureRow {
   penalties?: number[] | null;
   leg?: number | null;
   tie_id?: string | null;
+  importance?: string | null;
 }
 
 export interface CompetitionRound {
@@ -1141,6 +1285,25 @@ export interface CompetitionDetail {
   }>;
 }
 
+export interface ClubPulse {
+  club_id: string;
+  club_name: string;
+  short_name: string;
+  board_confidence: number;
+  board_objective?: string;
+  squad_morale: number;
+  recent_form?: string[];
+  financial_health: string;
+  transfer_budget: number;
+  balance: number;
+  wage_bill: number;
+  wage_cap: number;
+  fatigued_count: number;
+  unhappy_count: number;
+  in_form_count: number;
+  contract_expiring: number;
+}
+
 export interface WorldDashboard {
   world: boolean;
   season_name: string;
@@ -1150,6 +1313,8 @@ export interface WorldDashboard {
   favourite_club_id?: string;
   favourite_club?: CompetitionClub | null;
   next_fixture?: CompetitionFixtureRow | null;
+  club_pulse?: ClubPulse | null;
+  storylines?: string[];
   league_leaders: Array<CompetitionClub & {
     competition_id: string;
     competition_name: string;
@@ -1297,12 +1462,15 @@ export interface TransferNegotiation {
 }
 
 export interface CompletedTransfer {
+  player_id: string;
   player_name: string;
   player_pos: string;
   player_ovr: number;
   is_wonderkid: boolean;
+  seller_id?: string;
   seller_name: string;
   seller_short: string;
+  buyer_id?: string;
   buyer_name: string;
   buyer_short: string;
   fee_eur: number;
@@ -1361,6 +1529,47 @@ export interface PlayerProfile {
   last_matches: PlayerMatchLog[];
   avg_rating: number | null;
   apps_rated: number;
+  season_history?: PlayerSeasonRecord[];
+  transfer_history?: PlayerMoveRecord[];
+  contract_history?: PlayerContractEvent[];
+  awards_history?: PlayerHonourRecord[];
+  previous_clubs?: string[];
+  timeline?: Array<{ season?: string; age?: number; ovr?: number; note?: string }>;
+}
+
+export interface ClubProfile {
+  club: Club;
+  competitions: Array<{ id: string; name: string; kind?: string; stage?: string; source?: string }>;
+  league_position: number;
+  league_size: number;
+  points: number;
+  form: string[];
+  next_fixture: Fixture | null;
+  previous_result: Fixture | null;
+  formation?: string;
+  squad_avg_ovr: number;
+  average_age: number;
+  squad_morale: number;
+  injuries: Player[];
+  top_scorer: Player | null;
+  top_assister: Player | null;
+  best_recent: Player | null;
+  storylines: string[];
+  season_record: { p: number; w: number; d: number; l: number; gf: number; ga: number; gd: number; pts: number };
+  board_objective?: string;
+  expected_finish?: number;
+  reputation?: number;
+}
+
+export interface ClubTransferActivity {
+  club_id?: string;
+  arrivals: CompletedTransfer[];
+  departures: CompletedTransfer[];
+  loans_in: Array<{ player_id: string; full_name: string; from_club_id?: string }>;
+  loans_out: Array<{ player_id: string; full_name: string; to_club_id?: string; to_club_name?: string }>;
+  spent: number;
+  received: number;
+  net_spend: number;
 }
 
 export interface TrophyItem {

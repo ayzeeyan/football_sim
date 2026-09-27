@@ -61,6 +61,14 @@ func NewInboxItem(
 		PlayerID:   playerID,
 		FixtureID:  fixtureID,
 		Unread:     true,
-		CreatedAt:  time.Now(),
+		CreatedAt:  inboxTimestamp(seasonName, matchweek, 0),
 	}
+}
+
+func inboxTimestamp(seasonName string, matchweek, seq int) time.Time {
+	if matchweek < 1 {
+		matchweek = 1
+	}
+	year := CalendarYear(seasonName, matchweek)
+	return time.Date(year, time.August, 1, 12, 0, 0, 0, time.UTC).Add(time.Duration(matchweek*24+seq) * time.Hour)
 }

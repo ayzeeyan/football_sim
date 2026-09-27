@@ -102,10 +102,23 @@ func (tm *TournamentManager) executeLoanBuyClausesUnlocked() int {
 		p.ParentClubID = ""
 		p.LoanBuyClauseEUR = 0
 		p.TransferRequested = false
+		p.ContractYears = 3
+		p.MarkRegistered(dest.ClubID)
+		p.RecordMove("", parent.ClubID, dest.ClubID, models.MovePermanent, fee, tm.CurrentMatchweek)
+		p.RecordContractEvent("", dest.ClubID, models.ContractEventSigned, p.ContractYears)
 		p.AdjustMorale(4)
 		dest.RecalculateRatings()
 		parent.RecalculateRatings()
 		bought++
+		if tm.TransferEngine != nil {
+			tm.TransferEngine.RecordCompletedTransfer(transfers.CompletedTransfer{
+				PlayerID: p.PlayerID, PlayerName: p.FullName, PlayerPos: p.Position, PlayerOVR: p.OVR,
+				IsWonderkid: p.UniverseWonderkid,
+				SellerID:    parent.ClubID, SellerName: parent.ClubName, SellerShort: parent.ShortName,
+				BuyerID: dest.ClubID, BuyerName: dest.ClubName, BuyerShort: dest.ShortName,
+				FeeEUR: fee, FormattedFee: models.FormatCurrency(fee), Matchweek: tm.CurrentMatchweek,
+			})
+		}
 		tm.PushInbox("transfer", dest.ShortName+" trigger "+p.FullName+" buy clause",
 			fmt.Sprintf("%s pay %s to %s to make %s's loan permanent.", dest.ClubName, models.FormatCurrency(fee), parent.ClubName, p.FullName),
 			tm.CurrentMatchweek, []string{parent.ClubID, dest.ClubID}, p.PlayerID, "")
@@ -146,18 +159,25 @@ func (tm *TournamentManager) ReturnLoansUnlocked() int {
 				kept = append(kept, p)
 				continue
 			}
-		p.OnLoan = false
-		p.ParentClubID = ""
-		p.LoanBuyClauseEUR = 0
-		p.ClubID = parent.ClubID
-		if !inSquad(parent, p) {
-			parent.Squad = append(parent.Squad, p)
-		}
-		returned++
-		returnedTo[parent.ClubID] = parent
-		tm.PushInbox("transfer", p.FullName+" returns from loan",
-			fmt.Sprintf("%s is back at %s after a season away.", p.FullName, parent.ClubName),
-			tm.CurrentMatchweek, []string{parent.ClubID, club.ClubID}, p.PlayerID, "")
+			if !inSquad(parent, p) {
+				if len(parent.Squad) >= models.MaxSeniorSquadSize {
+					kept = append(kept, p)
+					tm.PushInbox("transfer", p.FullName+" loan return delayed",
+						fmt.Sprintf("%s remain at the squad limit. %s stays on loan at %s until a return slot is available.", parent.ClubName, p.FullName, club.ClubName),
+						tm.CurrentMatchweek, []string{parent.ClubID, club.ClubID}, p.PlayerID, "")
+					continue
+				}
+				parent.Squad = append(parent.Squad, p)
+			}
+			p.OnLoan = false
+			p.ParentClubID = ""
+			p.LoanBuyClauseEUR = 0
+			p.ClubID = parent.ClubID
+			returned++
+			returnedTo[parent.ClubID] = parent
+			tm.PushInbox("transfer", p.FullName+" returns from loan",
+				fmt.Sprintf("%s is back at %s after a season away.", p.FullName, parent.ClubName),
+				tm.CurrentMatchweek, []string{parent.ClubID, club.ClubID}, p.PlayerID, "")
 		}
 		club.Squad = kept
 	}
@@ -236,11 +256,11 @@ func (tm *TournamentManager) arrangeLoansUnlocked(maxOut, maxIn, maxApps int) in
 			if p.OriginalClubID != "" && p.OriginalClubID != club.ClubID {
 				continue
 			}
-		// Playing time is minutes-weighted like development: a stack of
-		// ten-minute cameos must not read as a busy season.
-		if effectiveAppearances(p) > maxApps {
-			continue
-		}
+			// Playing time is minutes-weighted like development: a stack of
+			// ten-minute cameos must not read as a busy season.
+			if effectiveAppearances(p) > maxApps {
+				continue
+			}
 			if p.SquadRole != models.RoleProspect && p.SquadRole != models.RoleSquad {
 				continue
 			}
@@ -286,7 +306,7 @@ func (tm *TournamentManager) arrangeLoansUnlocked(maxOut, maxIn, maxApps int) in
 			if club.OverallTeamRating >= cand.parent.OverallTeamRating {
 				continue
 			}
-			if len(club.Squad) >= 32 || incoming[club.ClubID] >= maxIn {
+			if len(club.Squad) >= models.MaxSeniorSquadSize-maxIn || incoming[club.ClubID] >= maxIn {
 				continue
 			}
 			if club.WageBill()+annual > club.WageCap() {

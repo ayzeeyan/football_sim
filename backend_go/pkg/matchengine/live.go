@@ -21,7 +21,10 @@ type Coordinate struct {
 type LivePlayerRadar struct {
 	PlayerID          string  `json:"player_id"`
 	FullName          string  `json:"full_name"`
-	Position          string  `json:"position"`
+	Position          string  `json:"position"` // natural position
+	NaturalPosition   string  `json:"natural_position"`
+	TacticalSlot      string  `json:"tactical_slot"`
+	PositionFit       string  `json:"position_fit"`
 	Category          string  `json:"category"`
 	OVR               int     `json:"ovr"`
 	X                 float64 `json:"x"`
@@ -113,8 +116,10 @@ type LiveMatchEngine struct {
 	AwayStance          string         `json:"away_stance"`
 	LatestTacticalShift *TacticalShift `json:"latest_tactical_shift,omitempty"`
 
-	HomePlayers []LivePlayerRadar `json:"home_players"`
-	AwayPlayers []LivePlayerRadar `json:"away_players"`
+	HomePlayers   []LivePlayerRadar `json:"home_players"`
+	AwayPlayers   []LivePlayerRadar `json:"away_players"`
+	HomeFormation string            `json:"home_formation"`
+	AwayFormation string            `json:"away_formation"`
 
 	Commentary []CommentaryItem             `json:"commentary"`
 	Events     []matchreport.MatchEventItem `json:"events"`
@@ -124,6 +129,10 @@ type LiveMatchEngine struct {
 	AwayStarters        []*models.Player
 	HomeKickoffXI       []*models.Player
 	AwayKickoffXI       []*models.Player
+	HomeSlots           []models.StartingSlot
+	AwaySlots           []models.StartingSlot
+	HomeKickoffSlots    []models.StartingSlot
+	AwayKickoffSlots    []models.StartingSlot
 	HomeBench           []*models.Player
 	AwayBench           []*models.Player
 	PlannedSubs         []PlannedSub
@@ -164,7 +173,7 @@ var positionHomeCoords = map[string][2]float64{
 	"RWB": {0.24, 0.86},
 	"CDM": {0.32, 0.50},
 	"CM":  {0.40, 0.50},
-	"CAM": {0.50, 0.50},
+	"CAM": {0.52, 0.50},
 	"LM":  {0.40, 0.16},
 	"RM":  {0.40, 0.84},
 	"LW":  {0.58, 0.18},
@@ -184,7 +193,7 @@ var positionAwayCoords = map[string][2]float64{
 	"LWB": {0.76, 0.86},
 	"CDM": {0.68, 0.50},
 	"CM":  {0.60, 0.50},
-	"CAM": {0.50, 0.50},
+	"CAM": {0.48, 0.50},
 	"RM":  {0.60, 0.16},
 	"LM":  {0.60, 0.84},
 	"RW":  {0.42, 0.18},
@@ -224,35 +233,6 @@ func staggerDuplicates(players []LivePlayerRadar) {
 			players[idx].Y = newY
 		}
 	}
-}
-
-// Keep legacy arrays for backward compat with tests that reference them.
-var baseHomeCoords = [][2]float64{
-	{0.06, 0.50}, // GK
-	{0.20, 0.16}, // LB
-	{0.18, 0.38}, // CB
-	{0.18, 0.62}, // CB
-	{0.20, 0.84}, // RB
-	{0.32, 0.50}, // CDM
-	{0.40, 0.32}, // CM
-	{0.40, 0.68}, // CM
-	{0.58, 0.20}, // LW
-	{0.62, 0.50}, // ST
-	{0.58, 0.80}, // RW
-}
-
-var baseAwayCoords = [][2]float64{
-	{0.94, 0.50}, // GK
-	{0.80, 0.16}, // RB
-	{0.82, 0.38}, // CB
-	{0.82, 0.62}, // CB
-	{0.80, 0.84}, // LB
-	{0.68, 0.50}, // CDM
-	{0.60, 0.32}, // CM
-	{0.60, 0.68}, // CM
-	{0.42, 0.20}, // RW
-	{0.38, 0.50}, // ST
-	{0.42, 0.80}, // LW
 }
 
 // NewLiveMatchEngine creates and initializes a live match engine.
@@ -303,12 +283,33 @@ func managerBias(mgr *managers.ManagerProfile) (string, string) {
 func (e *LiveMatchEngine) initPlayers() {
 	hs, hf := managerBias(e.HomeManager)
 	as, af := managerBias(e.AwayManager)
-	e.initPlayersForXI(e.HomeClub.GetStartingElevenWithBias(hs, hf), e.AwayClub.GetStartingElevenWithBias(as, af))
+	e.HomeFormation = models.FormationForStyle(hs)
+	e.AwayFormation = models.FormationForStyle(as)
+	e.HomeSlots = e.HomeClub.GetStartingElevenSlotsForFormation(e.HomeFormation, hs, hf)
+	e.AwaySlots = e.AwayClub.GetStartingElevenSlotsForFormation(e.AwayFormation, as, af)
+	e.initPlayersForSlots(e.HomeSlots, e.AwaySlots)
 }
 
+// initPlayersForXI is the legacy entry point for tests and older callers. It
+// reconstructs explicit slots from formation + natural positions before any
+// coordinates are assigned.
 func (e *LiveMatchEngine) initPlayersForXI(homeXI, awayXI []*models.Player) {
-	e.HomePlayers = radarPlayersPositional(homeXI, positionHomeCoords)
-	e.AwayPlayers = radarPlayersPositional(awayXI, positionAwayCoords)
+	if e.HomeFormation == "" {
+		hs, _ := managerBias(e.HomeManager)
+		e.HomeFormation = models.FormationForStyle(hs)
+	}
+	if e.AwayFormation == "" {
+		as, _ := managerBias(e.AwayManager)
+		e.AwayFormation = models.FormationForStyle(as)
+	}
+	e.HomeSlots = models.AssignPlayersToFormation(homeXI, e.HomeFormation)
+	e.AwaySlots = models.AssignPlayersToFormation(awayXI, e.AwayFormation)
+	e.initPlayersForSlots(e.HomeSlots, e.AwaySlots)
+}
+
+func (e *LiveMatchEngine) initPlayersForSlots(homeSlots, awaySlots []models.StartingSlot) {
+	e.HomePlayers = radarPlayersSlotted(homeSlots, positionHomeCoords)
+	e.AwayPlayers = radarPlayersSlotted(awaySlots, positionAwayCoords)
 }
 
 // syncRadarActor keeps the on-pitch actor identity aligned with a live
@@ -318,29 +319,37 @@ func (e *LiveMatchEngine) syncRadarActor(side, oldID string, replacement *models
 		return
 	}
 	actors := &e.HomePlayers
-	coordMap := positionHomeCoords
+	slots := &e.HomeSlots
 	if side != "home" {
 		actors = &e.AwayPlayers
-		coordMap = positionAwayCoords
+		slots = &e.AwaySlots
+	}
+	for i := range *slots {
+		assignment := &(*slots)[i]
+		if assignment.Player != nil && assignment.PlayerID == oldID {
+			assignment.Player = replacement
+			assignment.NaturalPosition = strings.ToUpper(strings.TrimSpace(replacement.Position))
+			assignment.PositionFit = models.PositionFitForPlayer(replacement, assignment.Slot)
+			break
+		}
 	}
 	for i := range *actors {
 		actor := &(*actors)[i]
 		if actor.PlayerID != oldID {
 			continue
 		}
-		// Use the sub's natural position for new coords, but keep old
-		// coords if position matches (so the dot doesn't teleport).
+		// A substitution replaces the actor in the existing tactical role;
+		// it must never teleport to the substitute's natural-position lane.
 		x, y := actor.X, actor.Y
-		if replacement.Position != actor.Position {
-			if c, ok := coordMap[replacement.Position]; ok {
-				x, y = c[0], c[1]
-			}
-		}
 		number := actor.Number
 		*actor = LivePlayerRadar{
 			PlayerID: replacement.PlayerID, FullName: replacement.FullName,
-			Position: replacement.Position, Category: replacement.Category,
-			OVR: replacement.OVR, X: x, Y: y,
+			Position:        replacement.Position,
+			NaturalPosition: strings.ToUpper(strings.TrimSpace(replacement.Position)),
+			TacticalSlot:    actor.TacticalSlot,
+			PositionFit:     string(models.PositionFitForPlayer(replacement, actor.TacticalSlot)),
+			Category:        replacement.Category,
+			OVR:             replacement.OVR, X: x, Y: y,
 			IsWonderkid:       replacement.UniverseWonderkid,
 			UniverseWonderkid: replacement.UniverseWonderkid, Number: number,
 			BaseX: x,
@@ -351,9 +360,65 @@ func (e *LiveMatchEngine) syncRadarActor(side, oldID string, replacement *models
 
 	// Fallback: rebuild side from scratch
 	if side == "home" {
-		e.HomePlayers = radarPlayersPositional(e.HomeStarters, positionHomeCoords)
+		if len(e.HomeSlots) == 0 {
+			e.HomeSlots = models.AssignPlayersToFormation(e.HomeStarters, e.HomeFormation)
+		}
+		e.HomePlayers = radarPlayersSlotted(e.HomeSlots, positionHomeCoords)
 	} else {
-		e.AwayPlayers = radarPlayersPositional(e.AwayStarters, positionAwayCoords)
+		if len(e.AwaySlots) == 0 {
+			e.AwaySlots = models.AssignPlayersToFormation(e.AwayStarters, e.AwayFormation)
+		}
+		e.AwayPlayers = radarPlayersSlotted(e.AwaySlots, positionAwayCoords)
+	}
+}
+
+// radarPlayersSlotted derives all base coordinates from the assigned tactical
+// slot. Natural Position remains display/identity metadata only.
+func radarPlayersSlotted(assignments []models.StartingSlot, coordMap map[string][2]float64) []LivePlayerRadar {
+	players := make([]LivePlayerRadar, 0, len(assignments))
+	for _, assignment := range assignments {
+		player := assignment.Player
+		if player == nil {
+			continue
+		}
+		slot := strings.ToUpper(strings.TrimSpace(assignment.Slot))
+		coord, ok := coordMap[slot]
+		if !ok {
+			coord = coordMap["CM"]
+		}
+		players = append(players, LivePlayerRadar{
+			PlayerID: player.PlayerID, FullName: player.FullName,
+			Position:        player.Position,
+			NaturalPosition: strings.ToUpper(strings.TrimSpace(player.Position)),
+			TacticalSlot:    slot,
+			PositionFit:     string(models.PositionFitForPlayer(player, slot)),
+			Category:        player.Category, OVR: player.OVR,
+			X: coord[0], Y: coord[1], BaseX: coord[0], BaseY: coord[1],
+			IsWonderkid: player.UniverseWonderkid, UniverseWonderkid: player.UniverseWonderkid,
+			Number: len(players) + 1,
+		})
+	}
+	return players
+}
+
+// radarBaseCoordinate recovers a missing base coordinate from role metadata,
+// never from the actor's array index. TacticalSlot is authoritative; natural
+// position and category are legacy-only fallbacks.
+func radarBaseCoordinate(player LivePlayerRadar, coordMap map[string][2]float64) [2]float64 {
+	for _, position := range []string{player.TacticalSlot, player.NaturalPosition, player.Position} {
+		if coord, ok := coordMap[strings.ToUpper(strings.TrimSpace(position))]; ok {
+			return coord
+		}
+	}
+	switch player.Category {
+	case "GK":
+		return coordMap["GK"]
+	case "DEF":
+		return coordMap["CB"]
+	case "MID":
+		return coordMap["CM"]
+	default:
+		return coordMap["ST"]
 	}
 }
 
@@ -384,6 +449,9 @@ func radarPlayersPositional(xi []*models.Player, coordMap map[string][2]float64)
 			PlayerID:          p.PlayerID,
 			FullName:          p.FullName,
 			Position:          p.Position,
+			NaturalPosition:   pos,
+			TacticalSlot:      pos,
+			PositionFit:       string(models.PositionFitNatural),
 			Category:          p.Category,
 			OVR:               p.OVR,
 			X:                 coord[0],
@@ -399,37 +467,6 @@ func radarPlayersPositional(xi []*models.Player, coordMap map[string][2]float64)
 	for i := range players {
 		players[i].BaseX = players[i].X
 		players[i].BaseY = players[i].Y
-	}
-	return players
-}
-
-// radarPlayers is the legacy slot-based coordinate assignment, kept for
-// backward compatibility with existing tests.
-func radarPlayers(xi []*models.Player, coords [][2]float64) []LivePlayerRadar {
-	capacity := len(xi)
-	if len(coords) < capacity {
-		capacity = len(coords)
-	}
-	players := make([]LivePlayerRadar, 0, capacity)
-	for _, p := range xi {
-		if p == nil || len(players) >= len(coords) {
-			continue
-		}
-		i := len(players)
-		players = append(players, LivePlayerRadar{
-			PlayerID:          p.PlayerID,
-			FullName:          p.FullName,
-			Position:          p.Position,
-			Category:          p.Category,
-			OVR:               p.OVR,
-			X:                 coords[i][0],
-			Y:                 coords[i][1],
-			IsWonderkid:       p.UniverseWonderkid,
-			UniverseWonderkid: p.UniverseWonderkid,
-			Number:            i + 1,
-			BaseX:             coords[i][0],
-			BaseY:             coords[i][1],
-		})
 	}
 	return players
 }
@@ -499,11 +536,8 @@ func (e *LiveMatchEngine) Tick(dt float64) {
 		baseX := e.HomePlayers[i].BaseX
 		baseY := e.HomePlayers[i].BaseY
 		if baseX == 0 && baseY == 0 {
-			if i < len(baseHomeCoords) {
-				baseX, baseY = baseHomeCoords[i][0], baseHomeCoords[i][1]
-			} else {
-				baseX, baseY = e.HomePlayers[i].X, e.HomePlayers[i].Y
-			}
+			base := radarBaseCoordinate(e.HomePlayers[i], positionHomeCoords)
+			baseX, baseY = base[0], base[1]
 		}
 		offset := 0.0
 		if e.HomeStance == "OVERLOAD" && e.HomePlayers[i].Category != "GK" {
@@ -524,11 +558,8 @@ func (e *LiveMatchEngine) Tick(dt float64) {
 		baseX := e.AwayPlayers[i].BaseX
 		baseY := e.AwayPlayers[i].BaseY
 		if baseX == 0 && baseY == 0 {
-			if i < len(baseAwayCoords) {
-				baseX, baseY = baseAwayCoords[i][0], baseAwayCoords[i][1]
-			} else {
-				baseX, baseY = e.AwayPlayers[i].X, e.AwayPlayers[i].Y
-			}
+			base := radarBaseCoordinate(e.AwayPlayers[i], positionAwayCoords)
+			baseX, baseY = base[0], base[1]
 		}
 		offset := 0.0
 		if e.AwayStance == "OVERLOAD" && e.AwayPlayers[i].Category != "GK" {
@@ -658,10 +689,16 @@ func (e *LiveMatchEngine) ResetMatch() {
 	fx := models.FixtureContext(e.Competition, e.Matchweek)
 	hs, hf := managerBias(e.HomeManager)
 	as, af := managerBias(e.AwayManager)
-	e.HomeStarters = e.HomeClub.GetStartingElevenWithBias(hs, hf, fx)
-	e.AwayStarters = e.AwayClub.GetStartingElevenWithBias(as, af, fx)
+	e.HomeFormation = models.FormationForStyle(hs)
+	e.AwayFormation = models.FormationForStyle(as)
+	e.HomeSlots = e.HomeClub.GetStartingElevenSlotsForFormation(e.HomeFormation, hs, hf, fx)
+	e.AwaySlots = e.AwayClub.GetStartingElevenSlotsForFormation(e.AwayFormation, as, af, fx)
+	e.HomeStarters = models.PlayersFromStartingSlots(e.HomeSlots)
+	e.AwayStarters = models.PlayersFromStartingSlots(e.AwaySlots)
 	e.HomeKickoffXI = append([]*models.Player(nil), e.HomeStarters...)
 	e.AwayKickoffXI = append([]*models.Player(nil), e.AwayStarters...)
+	e.HomeKickoffSlots = append([]models.StartingSlot(nil), e.HomeSlots...)
+	e.AwayKickoffSlots = append([]models.StartingSlot(nil), e.AwaySlots...)
 	e.HomeBench = e.HomeClub.GetBench(e.HomeKickoffXI, 7, fx)
 	e.AwayBench = e.AwayClub.GetBench(e.AwayKickoffXI, 7, fx)
 	e.PlannedSubs = nil
@@ -671,7 +708,7 @@ func (e *LiveMatchEngine) ResetMatch() {
 	for _, sub := range matchreport.PlanSubstitutions(e.AwayKickoffXI, e.AwayBench, 5, e.RNG) {
 		e.PlannedSubs = append(e.PlannedSubs, PlannedSub{Minute: sub.Minute, Out: sub.Out, In: sub.In, Side: "away"})
 	}
-	e.initPlayersForXI(e.HomeStarters, e.AwayStarters)
+	e.initPlayersForSlots(e.HomeSlots, e.AwaySlots)
 	e.AddCommentary(0, fmt.Sprintf("Welcome to %s! %s take on %s.", e.HomeClub.HomeStadium, e.HomeClub.ClubName, e.AwayClub.ClubName), "KICKOFF", false)
 }
 

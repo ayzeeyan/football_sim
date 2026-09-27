@@ -45,6 +45,16 @@ func TestCompetitionTalksNeedEuropeanFootball(t *testing.T) {
 	}
 }
 
+func TestSnakePersonalityOpensLeaveTalk(t *testing.T) {
+	p := &models.Player{
+		PlayerID: "WK_Earl_Josh_Hernando", FullName: "Earl Josh Hernando",
+		Personality: "snake", Morale: 55, Appearances: 8, ContractYears: 3, Age: 17,
+	}
+	if got := conversationKindWithClub(p, 10, false); got != "leave" {
+		t.Fatalf("snake kind=%q want leave", got)
+	}
+}
+
 func TestContractAndLoanRepliesNudgeWithoutDialogueGame(t *testing.T) {
 	contractor := &models.Player{PlayerID: "K1", FullName: "Expiring", ContractYears: 1, Appearances: 10, OVR: 80, Morale: 60, Loyalty: 60}
 	if got := conversationKindWithClub(contractor, 12, false); got != "contract" {

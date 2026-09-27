@@ -88,6 +88,14 @@ type Player struct {
 	PromiseKind        string `json:"promise_kind,omitempty"`
 	PromiseSeason      string `json:"promise_season,omitempty"`
 	PromiseMatchweek   int    `json:"promise_matchweek,omitempty"`
+
+	RegistrationStatus string `json:"registration_status,omitempty"`
+	PreviousClubID     string `json:"previous_club_id,omitempty"`
+
+	SeasonHistory   []PlayerSeasonRecord  `json:"season_history,omitempty"`
+	TransferHistory []PlayerMoveRecord    `json:"transfer_history,omitempty"`
+	ContractHistory []PlayerContractEvent `json:"contract_history,omitempty"`
+	AwardsHistory   []PlayerHonourRecord  `json:"awards_history,omitempty"`
 }
 
 const (
@@ -124,6 +132,15 @@ type rawPlayerData struct {
 	playerAlias
 	EstimatedMarketValueEUR int64           `json:"estimated_market_value_eur"`
 	SeasonStats             *rawSeasonStats `json:"season_stats"`
+}
+
+func jsonHasKey(data []byte, key string) bool {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return false
+	}
+	_, ok := obj[key]
+	return ok
 }
 
 // UnmarshalJSON implements custom JSON deserialization supporting dataset.json anomalies.
@@ -166,17 +183,20 @@ func (p *Player) UnmarshalJSON(data []byte) error {
 		p.WageEUR = WageForOVR(p.OVR)
 	}
 
-	// Default contract years
-	if p.ContractYears == 0 {
+	// Default contract years only when the field is absent. 0 is a real
+	// expired deal and must round-trip, otherwise nobody can leave on a free.
+	if !jsonHasKey(data, "contract_years") {
 		p.ContractYears = 3
 	}
 
-	// Default loyalty
-	if p.Loyalty == 0 {
-		p.Loyalty = 65
-	}
-	if p.UniverseWonderkid && p.Loyalty < 70 {
-		p.Loyalty = 70
+	// Default loyalty only when missing. A saved low value is live state —
+	// wonderkids must be allowed to fall below 70.
+	if !jsonHasKey(data, "loyalty") {
+		if p.UniverseWonderkid {
+			p.Loyalty = 70
+		} else {
+			p.Loyalty = 65
+		}
 	}
 
 	// Default education
@@ -243,6 +263,48 @@ func (p *Player) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+// OutOfContract reports an expired deal. Zero is a live value after a season tick.
+func (p *Player) OutOfContract() bool {
+	return p != nil && p.ContractYears <= 0
+}
+
+// WantsToLeaveOnFree is the Bosman walk for an unhappy or already agitating player.
+func (p *Player) WantsToLeaveOnFree() bool {
+	if p == nil {
+		return false
+	}
+	return p.TransferRequested || p.Loyalty < 45
+}
+
+// ResignContractYears is a short extension for a player who stays after expiry.
+func (p *Player) ResignContractYears() int {
+	if p == nil {
+		return 2
+	}
+	if p.Loyalty >= 88 {
+		return 4
+	}
+	if p.Loyalty >= 70 {
+		return 3
+	}
+	return 2
+}
+
+// BackfillElapsedWonderkidContract repairs the original 3-year starting deal
+// when it never ticked because expired contracts were treated as missing.
+// Renewed terms (anything other than the canonical starting 3) are left alone.
+func (p *Player) BackfillElapsedWonderkidContract() {
+	if p == nil || !p.UniverseWonderkid || p.Age <= 17 || p.ContractYears != 3 {
+		return
+	}
+	elapsed := p.Age - 17
+	remaining := 3 - elapsed
+	if remaining < 0 {
+		remaining = 0
+	}
+	p.ContractYears = remaining
 }
 
 // EffectiveOVR returns the effective overall rating after fatigue drops.
@@ -529,6 +591,9 @@ func (p *Player) AdvanceEducation(clubPlace int) string {
 
 // PositionOptions returns learnable secondary positions.
 func (p *Player) PositionOptions() []string {
+	if p == nil {
+		return nil
+	}
 	return PositionOptions(p.Position)
 }
 
@@ -675,6 +740,21 @@ func (p *Player) MaybeLearnSecondary(playedPosition string) {
 	}
 	played := strings.ToUpper(strings.TrimSpace(playedPosition))
 	if played == "" || played == "GK" || strings.EqualFold(played, p.Position) {
+		p.RefreshVersatility()
+		return
+	}
+	if p.UniverseWonderkid && p.PositionPath != "" {
+		path := strings.ToUpper(strings.TrimSpace(p.PositionPath))
+		validPath := false
+		for _, option := range p.PositionOptions() {
+			if strings.EqualFold(path, option) {
+				validPath = true
+				break
+			}
+		}
+		if validPath && strings.EqualFold(played, path) && p.SecondaryPosition == "" && p.PositionXP >= 100 {
+			p.SecondaryPosition = path
+		}
 		p.RefreshVersatility()
 		return
 	}

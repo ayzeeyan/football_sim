@@ -5,6 +5,11 @@ import (
 	"math"
 )
 
+const (
+	MinPlayerValueEUR int64 = 300_000
+	MaxPlayerValueEUR int64 = 500_000_000
+)
+
 // BaselineValue computes the long-run market valuation anchor in EUR.
 // Fitted to the dataset curve (~x1.086 per OVR) with youth/wonderkid premiums
 // and veteran depreciation past 32.
@@ -48,11 +53,11 @@ func ClampValue(current int64, ovr int, age int, isWonderkid bool) int64 {
 	if val < lowCorridor {
 		val = lowCorridor
 	}
-	if val > 500000000.0 {
-		val = 500000000.0
+	if val > float64(MaxPlayerValueEUR) {
+		val = float64(MaxPlayerValueEUR)
 	}
-	if val < 300000.0 {
-		val = 300000.0
+	if val < float64(MinPlayerValueEUR) {
+		val = float64(MinPlayerValueEUR)
 	}
 	return int64(math.Round(val))
 }

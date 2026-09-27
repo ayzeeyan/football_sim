@@ -133,7 +133,9 @@ func ApplyPlayerMatchStatsInCompetition(homeClub, awayClub *models.Club, report 
 			}
 			p.Sharpness = clampDynamics(p.Sharpness-1, 20, 100)
 			p.Fitness = clampDynamics(p.Fitness+2, 25, 100)
-			if p.SquadRole == models.RoleCrucial || p.SquadRole == models.RoleImportant {
+			if p.SquadRole == models.RoleCrucial {
+				p.AdjustMorale(-2)
+			} else if p.SquadRole == models.RoleImportant {
 				p.AdjustMorale(-1)
 			}
 			if p.SuspendedMatches > 0 {
@@ -164,10 +166,17 @@ func ApplyPlayerMatchStatsInCompetition(homeClub, awayClub *models.Club, report 
 				player.CleanSheets++
 			}
 			if row.Position != "" && !strings.EqualFold(row.Position, player.Position) {
-				player.PositionXP++
-				player.MaybeLearnSecondary(row.Position)
+				if player.SecondaryPosition != "" || (player.UniverseWonderkid && player.PositionPath != "" && !strings.EqualFold(row.Position, player.PositionPath)) {
+					player.RefreshVersatility()
+				} else {
+					player.PositionXP++
+					player.MaybeLearnSecondary(row.Position)
+				}
 			} else {
 				player.RefreshVersatility()
+			}
+			if player.SquadRole == models.RoleProspect {
+				player.AdjustMorale(1)
 			}
 		}
 	}
@@ -414,6 +423,45 @@ func capitalizeKind(kind string) string {
 	return strings.ToUpper(kind[:1]) + kind[1:]
 }
 
+func appendInjuryEvent(report *matchreport.MatchReport, side string, club *models.Club, player *models.Player, row matchreport.MatchPlayerRow, kind string) {
+	if report == nil || player == nil {
+		return
+	}
+	minute := row.Minutes
+	if minute < 1 {
+		minute = 70
+	}
+	if minute > 90 {
+		minute = 90
+	}
+	mini := matchreport.ToMiniPlayer(player)
+	clubID, clubName := "", ""
+	if club != nil {
+		clubID, clubName = club.ClubID, club.ClubName
+	}
+	event := matchreport.MatchEventItem{
+		Seq:        len(report.Events) + 1,
+		Minute:     minute,
+		Type:       "injury",
+		Side:       side,
+		Player:     &mini,
+		PlayerID:   player.PlayerID,
+		PlayerName: player.FullName,
+		ClubID:     clubID,
+		ClubName:   clubName,
+		Display:    matchreport.ClockOnlyDisplay(minute, ""),
+		Detail:     kind,
+	}
+	report.Events = append(report.Events, event)
+	report.StoryFacts = append(report.StoryFacts, matchreport.StoryFact{
+		Kind:       "injury",
+		Minute:     minute,
+		PlayerID:   player.PlayerID,
+		PlayerName: player.FullName,
+		Side:       side,
+	})
+}
+
 // MaybeInjure rolls in-match knocks and rare long-term injuries (Python:
 // _maybe_injure). At most one casualty per club per fixture; keepers are
 // protected when they are the last available.
@@ -508,6 +556,7 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 				kind := seriousInjuryKinds[rng.Intn(len(seriousInjuryKinds))]
 				player.InjuredMatches = games
 				player.Injury = kind
+				appendInjuryEvent(report, sc.side, club, player, row, kind)
 				tm.PushInbox(
 					"injury",
 					fmt.Sprintf("CRUSHING BLOW: %s suffers %s", player.FullName, kind),
@@ -520,6 +569,7 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 				kind := minorInjuryKinds[rng.Intn(len(minorInjuryKinds))]
 				player.InjuredMatches = games
 				player.Injury = kind
+				appendInjuryEvent(report, sc.side, club, player, row, kind)
 				unit := "matches"
 				if games == 1 {
 					unit = "match"

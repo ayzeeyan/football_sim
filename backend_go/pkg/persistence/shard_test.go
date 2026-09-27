@@ -9,6 +9,20 @@ import (
 
 // Legacy single-file saves (inline clubs map, no club_index) must keep
 // loading after the sharded layout became the writer.
+func TestLoadMinimalInlineClubs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "legacy.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"clubs":{"A":{"club_id":"A","squad":[]}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := LoadCareer(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Clubs["A"] == nil || snap.Clubs["A"].ClubID != "A" {
+		t.Fatal("inline club was not loaded")
+	}
+}
+
 func TestLoadLegacySingleFileCareer(t *testing.T) {
 	_, ge, tm, te := setupTestWorld(t)
 	built := BuildSnapshot(tm, ge, te)

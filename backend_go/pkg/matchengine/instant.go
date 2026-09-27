@@ -1,7 +1,6 @@
 package matchengine
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
 	"sort"
@@ -113,12 +112,16 @@ func SimulateInstantMatch(
 	highHeatDerby := cfg.IsDerby || cfg.DerbyHeat > 70
 
 	homeStyle := "possession"
+	homeSelectionStyle := ""
 	if homeMgr != nil && homeMgr.Style != "" {
 		homeStyle = homeMgr.Style
+		homeSelectionStyle = homeMgr.Style
 	}
 	awayStyle := "possession"
+	awaySelectionStyle := ""
 	if awayMgr != nil && awayMgr.Style != "" {
 		awayStyle = awayMgr.Style
+		awaySelectionStyle = awayMgr.Style
 	}
 	homeEdge := managers.TacticEdge(homeStyle, awayStyle)
 
@@ -130,8 +133,12 @@ func SimulateInstantMatch(
 	if awayMgr != nil {
 		awayFocus = awayMgr.Focus
 	}
-	homeXI := homeClub.GetStartingElevenWithBias(homeStyle, homeFocus, fxKey)
-	awayXI := awayClub.GetStartingElevenWithBias(awayStyle, awayFocus, fxKey)
+	homeFormation := models.FormationForStyle(homeSelectionStyle)
+	awayFormation := models.FormationForStyle(awaySelectionStyle)
+	homeSlots := homeClub.GetStartingElevenSlotsForFormation(homeFormation, homeSelectionStyle, homeFocus, fxKey)
+	awaySlots := awayClub.GetStartingElevenSlotsForFormation(awayFormation, awaySelectionStyle, awayFocus, fxKey)
+	homeXI := models.PlayersFromStartingSlots(homeSlots)
+	awayXI := models.PlayersFromStartingSlots(awaySlots)
 	homeBench := homeClub.GetBench(homeXI, 7, fxKey)
 	awayBench := awayClub.GetBench(awayXI, 7, fxKey)
 
@@ -307,9 +314,19 @@ func SimulateInstantMatch(
 			sideBench[side] = kept
 			outMini := matchreport.ToMiniPlayer(act.out)
 			inMini := matchreport.ToMiniPlayer(act.in)
+			subClub := homeClub
+			if side == "away" {
+				subClub = awayClub
+			}
+			clubID, clubName := "", ""
+			if subClub != nil {
+				clubID, clubName = subClub.ClubID, subClub.ClubName
+			}
 			emit(matchreport.MatchEventItem{
-				Minute: m, Display: fmt.Sprintf("Substitution %s (%s ➜ %s)", disp(m), act.out.FullName, act.in.FullName),
+				Minute: m, Display: disp(m),
 				Type: "sub", Side: side, PlayerOut: &outMini, PlayerIn: &inMini,
+				PlayerID: act.in.PlayerID, PlayerName: act.in.FullName,
+				ClubID: clubID, ClubName: clubName,
 			})
 			continue
 		}
@@ -349,10 +366,6 @@ func SimulateInstantMatch(
 				bookings[booked.PlayerID] = 1
 			}
 			bMini := matchreport.ToMiniPlayer(booked)
-			label := "Yellow Card"
-			if color == "red" {
-				label = "Red Card"
-			}
 			club := homeClub
 			if side == "away" {
 				club = awayClub
@@ -362,7 +375,7 @@ func SimulateInstantMatch(
 				clubID, clubName = club.ClubID, club.ClubName
 			}
 			emit(matchreport.MatchEventItem{
-				Minute: m, Display: fmt.Sprintf("%s: %s %s", label, booked.FullName, disp(m)),
+				Minute: m, Display: disp(m),
 				Type: color, Side: side, Player: &bMini, SentOff: sentOff,
 				HomeScore: gh, AwayScore: ga, Detail: detail,
 				PlayerID: booked.PlayerID, PlayerName: booked.FullName, ClubID: clubID, ClubName: clubName,
@@ -391,7 +404,15 @@ func SimulateInstantMatch(
 		}
 
 		if kind == "penalty" {
-			taker := matchreport.PickScorer(on, m, gh == ga, rng, bigGame)
+			kickoff := homeXI
+			if side == "away" {
+				kickoff = awayXI
+			}
+			designatedID := ""
+			if d := matchreport.DesignatedPenaltyTaker(kickoff, nil); d != nil {
+				designatedID = d.PlayerID
+			}
+			taker := matchreport.PickPenaltyTaker(on, nil, designatedID)
 			if taker == nil {
 				continue
 			}
@@ -415,6 +436,14 @@ func SimulateInstantMatch(
 				}
 			}
 			tMini := matchreport.ToMiniPlayer(taker)
+			penClub := homeClub
+			if side == "away" {
+				penClub = awayClub
+			}
+			penClubID, penClubName := "", ""
+			if penClub != nil {
+				penClubID, penClubName = penClub.ClubID, penClub.ClubName
+			}
 			if rng.Float64() < conv {
 				if side == "home" {
 					gh++
@@ -422,15 +451,17 @@ func SimulateInstantMatch(
 					ga++
 				}
 				emit(matchreport.MatchEventItem{
-					Minute: m, Display: fmt.Sprintf("Penalty: %s %s", taker.FullName, disp(m)),
+					Minute: m, Display: disp(m),
 					Type: "penalty", Side: side, Scorer: &tMini,
 					PlayerID: taker.PlayerID, PlayerName: taker.FullName,
+					ClubID: penClubID, ClubName: penClubName,
 				})
 			} else {
 				emit(matchreport.MatchEventItem{
-					Minute: m, Display: fmt.Sprintf("Penalty Miss: %s %s", taker.FullName, disp(m)),
+					Minute: m, Display: disp(m),
 					Type: "penalty_miss", Side: side, Scorer: &tMini,
 					PlayerID: taker.PlayerID, PlayerName: taker.FullName,
+					ClubID: penClubID, ClubName: penClubName,
 				})
 			}
 			continue
@@ -453,10 +484,19 @@ func SimulateInstantMatch(
 				continue
 			}
 			cMini := matchreport.ToMiniPlayer(culprit)
+			ogClub := homeClub
+			if defSide == "away" {
+				ogClub = awayClub
+			}
+			ogClubID, ogClubName := "", ""
+			if ogClub != nil {
+				ogClubID, ogClubName = ogClub.ClubID, ogClub.ClubName
+			}
 			emit(matchreport.MatchEventItem{
-				Minute: m, Display: fmt.Sprintf("Own Goal: %s %s", culprit.FullName, disp(m)),
+				Minute: m, Display: disp(m),
 				Type: "own_goal", Side: defSide, Beneficiary: side, Scorer: &cMini,
 				PlayerID: culprit.PlayerID, PlayerName: culprit.FullName,
+				ClubID: ogClubID, ClubName: ogClubName,
 			})
 			if side == "home" {
 				gh++
@@ -491,14 +531,25 @@ func SimulateInstantMatch(
 		}
 		sMini := matchreport.ToMiniPlayer(scorer)
 		var aMini *matchreport.MiniPlayer
-		display := fmt.Sprintf("%s %s", scorer.FullName, disp(m))
+		assistID, assistName := "", ""
 		if assister != nil {
 			am := matchreport.ToMiniPlayer(assister)
 			aMini = &am
-			display = fmt.Sprintf("%s %s (Assist: %s)", scorer.FullName, disp(m), assister.FullName)
+			assistID, assistName = assister.PlayerID, assister.FullName
+		}
+		goalClub := homeClub
+		if side == "away" {
+			goalClub = awayClub
+		}
+		goalClubID, goalClubName := "", ""
+		if goalClub != nil {
+			goalClubID, goalClubName = goalClub.ClubID, goalClub.ClubName
 		}
 		goalEvent := matchreport.MatchEventItem{
-			Minute: m, Display: display, Type: etype, Side: side, Scorer: &sMini, Assister: aMini,
+			Minute: m, Display: disp(m), Type: etype, Side: side, Scorer: &sMini, Assister: aMini,
+			PlayerID: scorer.PlayerID, PlayerName: scorer.FullName,
+			AssistPlayerID: assistID, AssistPlayerName: assistName,
+			ClubID: goalClubID, ClubName: goalClubName,
 		}
 		if side == "home" {
 			gh++
@@ -521,16 +572,20 @@ func SimulateInstantMatch(
 					reason = "handball"
 				}
 				emit(matchreport.MatchEventItem{
-					Minute: m, Display: fmt.Sprintf("VAR Review: goal disallowed (%s) %s", reason, disp(m)),
+					Minute: m, Display: disp(m),
 					Type: "var_review", Side: side,
 					Outcome: "goal_disallowed", Reason: reason, Decision: "goal_disallowed", Disallowed: true,
+					PlayerID: scorer.PlayerID, PlayerName: scorer.FullName,
+					ClubID: goalClubID, ClubName: goalClubName,
 				})
 			} else {
 				emit(goalEvent)
 				emit(matchreport.MatchEventItem{
-					Minute: m, Display: fmt.Sprintf("VAR Review: goal stands %s", disp(m)),
+					Minute: m, Display: disp(m),
 					Type: "var_review", Side: side,
 					Outcome: "goal_stands", Reason: "check complete", Decision: "goal_stands",
+					PlayerID: scorer.PlayerID, PlayerName: scorer.FullName,
+					ClubID: goalClubID, ClubName: goalClubName,
 				})
 			}
 		} else {
@@ -630,6 +685,8 @@ func SimulateInstantMatch(
 		HomeGoals: gh, AwayGoals: ga,
 		Events: events,
 		HomeXI: homeXI, AwayXI: awayXI,
+		HomeSlots: homeSlots, AwaySlots: awaySlots,
+		HomeFormation: homeFormation, AwayFormation: awayFormation,
 		HomeBench: homeBench, AwayBench: awayBench,
 		Stats:  stats,
 		HTHome: htH, HTAway: htA,

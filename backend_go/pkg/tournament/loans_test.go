@@ -6,6 +6,7 @@ import (
 
 	"football_sim/pkg/growth"
 	"football_sim/pkg/models"
+	"football_sim/pkg/transfers"
 )
 
 func TestArrangeAndReturnLoansMovesProspects(t *testing.T) {
@@ -168,6 +169,69 @@ func TestLoanBuyClauseTriggersPermanentMove(t *testing.T) {
 	if found != 1 {
 		t.Fatalf("player in %d squads, want 1", found)
 	}
+	if kid.ContractYears != 3 {
+		t.Fatalf("bought player contract years=%d want 3", kid.ContractYears)
+	}
+}
+
+func TestLoanBuyClauseRecordsPermanentTransfer(t *testing.T) {
+	parent := &models.Club{
+		ClubID: "BIG", ClubName: "Big Town", ShortName: "BIG", League: "Premier League",
+		OverallTeamRating: 88, SquadAvgOVR: 84,
+		Identity: models.ClubIdentity{FinancialPower: 80, Reputation: 80},
+		Finances: models.ClubFinances{Balance: 200_000_000, TransferBudget: 100_000_000, WageCap: 400_000_000},
+	}
+	farm := &models.Club{
+		ClubID: "SML", ClubName: "Small Town", ShortName: "SML", League: "Premier League",
+		OverallTeamRating: 71, SquadAvgOVR: 70,
+		Identity: models.ClubIdentity{FinancialPower: 80, Reputation: 60},
+		Finances: models.ClubFinances{Balance: 500_000_000, TransferBudget: 200_000_000, WageCap: 400_000_000},
+	}
+	for i := 0; i < 24; i++ {
+		parent.Squad = append(parent.Squad, &models.Player{
+			PlayerID: fmt.Sprintf("SENB%02d", i), FullName: "Senior",
+			OVR: 82, Age: 27, Category: "MID", ClubID: parent.ClubID, SquadRole: models.RoleImportant,
+			WageEUR: 50_000,
+		})
+	}
+	kid := &models.Player{
+		PlayerID: "KIDBUY", FullName: "Bought Kid", OVR: 68, Age: 19, Category: "FWD",
+		ClubID: parent.ClubID, SquadRole: models.RoleProspect, UniverseWonderkid: false,
+		WageEUR: 10_000, TransferRequested: true, ContractYears: 2,
+	}
+	parent.Squad = append(parent.Squad, kid)
+	for i := 0; i < 18; i++ {
+		farm.Squad = append(farm.Squad, &models.Player{
+			PlayerID: fmt.Sprintf("FARMB%02d", i), FullName: "Farm", OVR: 70, Age: 24,
+			Category: "MID", ClubID: farm.ClubID, SquadRole: models.RoleSquad, WageEUR: 20_000,
+		})
+	}
+	te := transfers.NewTransferEngine([]*models.Club{parent, farm}, nil, 1)
+	tm := &TournamentManager{
+		Clubs:          map[string]*models.Club{parent.ClubID: parent, farm.ClubID: farm},
+		ClubsList:      []*models.Club{parent, farm},
+		SeasonName:     "2026-27",
+		TransferEngine: te,
+	}
+	if n := tm.ArrangeLoansUnlocked(); n < 1 {
+		t.Fatalf("expected a loan, moved=%d", n)
+	}
+	if kid.LoanBuyClauseEUR <= 0 {
+		t.Fatal("expected a buy clause on this loan")
+	}
+	if n := tm.ReturnLoansUnlocked(); n != 0 {
+		t.Fatalf("buyout should replace the return, returned=%d", n)
+	}
+	if len(te.AllTimeTransfers) != 1 {
+		t.Fatalf("buy clause should record one permanent transfer, got %d", len(te.AllTimeTransfers))
+	}
+	done := te.AllTimeTransfers[0]
+	if done.PlayerID != kid.PlayerID || done.BuyerID != farm.ClubID || done.SellerID != parent.ClubID || done.FeeEUR <= 0 {
+		t.Fatalf("recorded transfer wrong: %+v", done)
+	}
+	if kid.ClubID != farm.ClubID {
+		t.Fatalf("player club=%s want %s", kid.ClubID, farm.ClubID)
+	}
 }
 
 // Legacy 12-club careers run winter loans mid-season, so the legacy season
@@ -233,6 +297,54 @@ func TestLegacyResetReturnsLoansAndWipesSeasonTracking(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("returned loanee missing from parent squad")
+	}
+}
+
+func TestLoanReturnToFullParentPreservesEveryPlayer(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		for _, rating := range []int{50, 90} {
+			for _, size := range []int{20, models.MaxSeniorSquadSize} {
+				t.Run(fmt.Sprintf("reverse_%v_rating_%d_size_%d", reverse, rating, size), func(t *testing.T) {
+					parent := &models.Club{ClubID: "PARENT"}
+					borrower := &models.Club{ClubID: "BORROWER"}
+					for _, club := range []*models.Club{parent, borrower} {
+						n := models.MaxSeniorSquadSize
+						if club == borrower {
+							n = size - 1
+						}
+						for i := 0; i < n; i++ {
+							club.Squad = append(club.Squad, &models.Player{PlayerID: fmt.Sprintf("%s_%d", club.ClubID, i), ClubID: club.ClubID, OVR: 70})
+						}
+					}
+					kid := &models.Player{PlayerID: "LOAN", ClubID: borrower.ClubID, ParentClubID: parent.ClubID, OnLoan: true, OVR: rating}
+					borrower.Squad = append(borrower.Squad, kid)
+					clubs := []*models.Club{parent, borrower}
+					if reverse {
+						clubs[0], clubs[1] = clubs[1], clubs[0]
+					}
+					tm := &TournamentManager{ClubsList: clubs, Clubs: map[string]*models.Club{parent.ClubID: parent, borrower.ClubID: borrower}}
+					if got := tm.ReturnLoansUnlocked(); got != 0 {
+						t.Fatalf("full parent reported %d returns", got)
+					}
+					seen := map[string]bool{}
+					for _, club := range clubs {
+						for _, p := range club.Squad {
+							if seen[p.PlayerID] || p.ClubID != club.ClubID {
+								t.Fatalf("invalid ownership for %s", p.PlayerID)
+							}
+							seen[p.PlayerID] = true
+						}
+					}
+					if len(seen) != models.MaxSeniorSquadSize+size || !kid.OnLoan || kid.ParentClubID != parent.ClubID {
+						t.Fatal("blocked return lost a player or erased the parent contract")
+					}
+					parent.Squad = parent.Squad[1:]
+					if got := tm.ReturnLoansUnlocked(); got != 1 || kid.OnLoan || kid.ClubID != parent.ClubID {
+						t.Fatalf("return did not resume after capacity became available: %d", got)
+					}
+				})
+			}
+		}
 	}
 }
 

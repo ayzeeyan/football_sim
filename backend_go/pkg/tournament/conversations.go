@@ -95,7 +95,7 @@ func conversationKindWithClub(p *models.Player, clubPlayed int, inEurope bool) s
 	if p == nil {
 		return ""
 	}
-	if p.TransferRequested {
+	if p.TransferRequested || p.Personality == "snake" {
 		return "leave"
 	}
 	if p.ContractYears <= 1 && p.Appearances >= 3 && (p.OVR >= 76 || p.SquadRole == models.RoleCrucial || p.SquadRole == models.RoleImportant) {

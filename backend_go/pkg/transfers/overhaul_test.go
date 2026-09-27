@@ -25,6 +25,7 @@ func createOverhaulTestUniverse() (*TransferEngine, *models.Club, *models.Club, 
 		Squad: []*models.Player{{PlayerID: "P3", FullName: "Local Guy", OVR: 68, Age: 25, MarketValueEUR: 2_000_000, ClubID: "LOW-TIER", OriginalClubID: "LOW-TIER"}},
 	}
 	clubs := []*models.Club{barca, madrid, nonLeague}
+	fillSellerToTransferableSize(barca)
 	te := NewTransferEngine(clubs, managers.BuildManagers(clubs), 42)
 	te.BeginOffSeasonWindow()
 	return te, barca, madrid, nonLeague

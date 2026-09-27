@@ -156,7 +156,7 @@ func TestChunk3BackfillManagerFlows(t *testing.T) {
 		t.Errorf("mw 99 should error: %v", res)
 	}
 	// Fixtures pointing at missing clubs are skipped safely.
-	ghost := Fixture{FixtureID: "GHOST", Matchweek: 1, Competition: "super-league", HomeID: "NOPE", AwayID: "MISSING"}
+	ghost := Fixture{FixtureID: "GHOST", Matchweek: 1, Competition: "super-league", HomeID: "NOPE", AwayID: "MISSING", Status: "scheduled"}
 	tm0.Fixtures = []Fixture{ghost}
 	tm0.MaxMatchweeks = 33
 	if res := tm0.SimulateMatchweek(1); res["simulated_count"] != 0 {
@@ -174,7 +174,7 @@ func TestChunk3BackfillManagerFlows(t *testing.T) {
 			DerbyHeat: map[string]int{}, MilestonesFired: map[string]map[string]bool{},
 			SeasonName: "2026-27", MaxMatchweeks: 33, CurrentMatchweek: 1,
 			Fixtures: []Fixture{{FixtureID: "DB1", Matchweek: 1, Competition: "super-league",
-				HomeID: "DH", AwayID: "DA", DerbyName: "Test Derby"}},
+				HomeID: "DH", AwayID: "DA", DerbyName: "Test Derby", Status: "scheduled"}},
 		}
 		res := mini.SimulateMatchweek(1)
 		if res["simulated_count"] != 1 {
@@ -204,7 +204,7 @@ func TestChunk3BackfillManagerFlows(t *testing.T) {
 			DerbyHeat: map[string]int{"DH_DA": 99, "DA_DH": 99}, MilestonesFired: map[string]map[string]bool{},
 			SeasonName: "2026-27", MaxMatchweeks: 33, CurrentMatchweek: 1,
 			Fixtures: []Fixture{{FixtureID: "DB2", Matchweek: 1, Competition: "super-league",
-				HomeID: "DH", AwayID: "DA", DerbyName: "Test Derby"}},
+				HomeID: "DH", AwayID: "DA", DerbyName: "Test Derby", Status: "scheduled"}},
 		}
 		mini.SimulateMatchweek(1)
 		if mini.DerbyHeat["DH_DA"] == 100 {
@@ -228,7 +228,7 @@ func TestChunk3BackfillWeekTriggers(t *testing.T) {
 			DerbyHeat: map[string]int{}, MilestonesFired: map[string]map[string]bool{},
 			SeasonName: "2026-27", MaxMatchweeks: 33, CurrentMatchweek: mw,
 			Fixtures: []Fixture{{FixtureID: "WX", Matchweek: mw, Competition: "super-league",
-				HomeID: "WH", AwayID: "WA"}},
+				HomeID: "WH", AwayID: "WA", Status: "scheduled"}},
 		}
 	}
 	// NXGN wire at matchweek 24.

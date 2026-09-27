@@ -32,7 +32,7 @@ func TestValidateCareerSnapshotAllowsLegacyMissingAdditiveFields(t *testing.T) {
 	if err := RestoreCareer(freshTM, freshGE, freshTE, snap); err != nil {
 		t.Fatalf("legacy-compatible restore failed: %v", err)
 	}
-	if freshTM.SeasonPhase != "season" || freshTM.CurrentMatchweek != 1 || freshTE.CurrentWeek != 1 {
+	if freshTM.SeasonPhase != "season" || freshTM.CurrentMatchweek != 1 || freshTE.CurrentWeek != 0 {
 		t.Fatalf("safe defaults not preserved: phase=%q mw=%d transfer_week=%d", freshTM.SeasonPhase, freshTM.CurrentMatchweek, freshTE.CurrentWeek)
 	}
 	freshTM.TransferEngine = freshTE
@@ -76,6 +76,39 @@ func TestValidateCareerSnapshotRejectsCriticalCorruption(t *testing.T) {
 	}
 }
 
+func TestRestoreV4ClosedMarketMigratesIdleWeekOneToZero(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+	snap.Version = 4
+	snap.Transfers.WindowType = transfers.WindowClosed
+	snap.Transfers.WindowOpen = false
+	snap.Transfers.IsOffSeason = false
+	snap.Transfers.CurrentWeek = 1
+	snap.Transfers.CurrentDay = 1
+	snap.Transfers.ProcessedWeeks = 0
+
+	_, restoredGE, restoredTM, restoredTE := setupTestWorld(t)
+	if err := RestoreCareer(restoredTM, restoredGE, restoredTE, snap); err != nil {
+		t.Fatalf("restore v4 snapshot: %v", err)
+	}
+	if restoredTE.CurrentWeek != 0 || restoredTE.CurrentDay != 0 || restoredTE.ProcessedWeeks != 0 {
+		t.Fatalf("legacy closed market not normalized: week=%d day=%d processed=%d", restoredTE.CurrentWeek, restoredTE.CurrentDay, restoredTE.ProcessedWeeks)
+	}
+	if err := transfers.ValidateWindowState(restoredTE.WindowType, restoredTE.WindowOpen, restoredTE.IsOffSeason, restoredTE.CurrentWeek, restoredTE.ProcessedWeeks); err != nil {
+		t.Fatalf("migrated lifecycle invalid: %v", err)
+	}
+}
+
+func TestValidateV5RejectsContradictoryTransferLifecycle(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+	snap.Transfers.WindowType = transfers.WindowClosed
+	snap.Transfers.CurrentWeek = 1
+	if err := ValidateCareerSnapshot(snap); err == nil {
+		t.Fatal("v5 snapshot accepted idle closed market at Week 1")
+	}
+}
+
 func TestCareerRoundTripPreservesLogicalContinuityAndValidates(t *testing.T) {
 	_, ge, tm, te := setupTestWorld(t)
 	tm.TransferEngine = te
@@ -86,7 +119,10 @@ func TestCareerRoundTripPreservesLogicalContinuityAndValidates(t *testing.T) {
 			t.Fatalf("simulate matchweek %d failed: %v", mw, res)
 		}
 	}
-	te.CurrentWeek = 4
+	te.BeginOffSeasonWindow()
+	for i := 0; i < 3; i++ {
+		te.AdvanceOpenWindow()
+	}
 	te.CurrentDay = 22
 	te.CurrentMatchweek = tm.CurrentMatchweek
 	te.TransferredThisWindow[tm.ClubsList[0].Squad[0].PlayerID] = true
@@ -152,16 +188,20 @@ func TestValidateCareerSnapshotWonderkidPotentialBounds(t *testing.T) {
 	for pid, bio := range snap.Growth.Biometrics {
 		if models.IsCanonicalWonderkidID(pid) {
 			bio.Potential = 99
-			if err := ValidateCareerSnapshot(snap); err == nil {
-				t.Fatal("expected validation error for wonderkid potential 99")
+			if err := ValidateCareerSnapshot(snap); err != nil {
+				t.Fatalf("expected 99-potential wonderkid to validate: %v", err)
 			}
 			bio.Potential = 92
 			if err := ValidateCareerSnapshot(snap); err == nil {
 				t.Fatal("expected validation error for wonderkid potential 92")
 			}
 			bio.Potential = 95
+			if err := ValidateCareerSnapshot(snap); err == nil {
+				t.Fatal("expected current save validation error for wonderkid potential 95")
+			}
+			snap.Version = 7
 			if err := ValidateCareerSnapshot(snap); err != nil {
-				t.Fatalf("unexpected error for wonderkid potential 95: %v", err)
+				t.Fatalf("expected legacy 95-potential save to load for migration: %v", err)
 			}
 			break
 		}

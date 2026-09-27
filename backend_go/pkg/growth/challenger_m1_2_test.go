@@ -236,7 +236,7 @@ func TestChallenger2_VeteranAgingDecline_IntegrityAndIsolation(t *testing.T) {
 
 // TestChallenger2_PotentialClamping_UniversalStrictness verifies that under no circumstance
 // (bombardment of match XP, max mentor bonuses, repeated seasonal growth, direct attribute tampering)
-// can any player's OVR exceed their assigned potential or 96 for canonical wonderkids.
+// can any player's OVR exceed their assigned potential of 99 for canonical wonderkids.
 func TestChallenger2_PotentialClamping_UniversalStrictness(t *testing.T) {
 	ge := NewGrowthEngine(98765)
 
@@ -248,24 +248,24 @@ func TestChallenger2_PotentialClamping_UniversalStrictness(t *testing.T) {
 		potential int
 		posCat    string
 	}{
-		{"WK_Valerio", "Venjamin Valerio", 78, 96, "FWD"},
-		{"WK_Cantalejo", "Maverick Cantalejo", 77, 95, "MID"},
-		{"WK_Gocotano", "Yeshua Emmanuel Gocotano", 75, 93, "FWD"},
-		{"WK_Bantol", "Izyan Levin Bantol", 76, 95, "MID"},
-		{"WK_Rizon", "James Bernard Rizon", 76, 94, "FWD"},
-		{"WK_Libatan", "Reid Randell Libatan", 76, 95, "FWD"},
-		{"WK_Baguio", "Ashle Zylle Baguio", 75, 95, "MID"},
-		{"WK_Lanticse", "Cliergy Jave Lanticse", 75, 94, "MID"},
-		{"WK_Zamora", "Ezail Zamora", 77, 96, "FWD"},
-		{"WK_Hernando", "Earl Josh Hernando", 75, 94, "MID"},
-		{"WK_Suico", "Rich Lorenz Suico", 75, 94, "DEF"},
-		{"WK_Guinita", "Jhed Anthony Guinita", 75, 94, "FWD"},
+		{"WK_Venjamin_Valerio", "Venjamin Valerio", 78, 99, "FWD"},
+		{"WK_Maverick_Cantalejo", "Maverick Cantalejo", 77, 99, "MID"},
+		{"WK_Yeshua_Emmanuel_Gocotano", "Yeshua Emmanuel Gocotano", 75, 99, "FWD"},
+		{"WK_Izyan_Levin_Bantol", "Izyan Levin Bantol", 76, 99, "MID"},
+		{"WK_James_Bernard_Rizon", "James Bernard Rizon", 76, 99, "FWD"},
+		{"WK_Reid_Randell_Libatan", "Reid Randell Libatan", 76, 99, "FWD"},
+		{"WK_Ashle_Zylle_Baguio", "Ashle Zylle Baguio", 75, 99, "MID"},
+		{"WK_Cliergy_Jave_Lanticse", "Cliergy Jave Lanticse", 75, 99, "MID"},
+		{"WK_Ezail_Zamora", "Ezail Zamora", 77, 99, "FWD"},
+		{"WK_Earl_Josh_Hernando", "Earl Josh Hernando", 75, 99, "MID"},
+		{"WK_Rich_Lorenz_Suico", "Rich Lorenz Suico", 75, 99, "DEF"},
+		{"WK_Jhed_Anthony_Guinita", "Jhed Anthony Guinita", 75, 99, "FWD"},
 	}
 
 	for _, wk := range testWonderkids {
-		// Verify canonical potential invariant: must be in [93, 96]
-		if wk.potential < 93 || wk.potential > 96 {
-			t.Fatalf("CRITICAL INVARIANT VIOLATION: Prodigy %s potential %d not in [93, 96]", wk.name, wk.potential)
+		// Verify canonical potential invariant: exactly 99.
+		if wk.potential != 99 {
+			t.Fatalf("CRITICAL INVARIANT VIOLATION: Prodigy %s potential %d; want 99", wk.name, wk.potential)
 		}
 
 		bio, attrs := ge.RegisterProdigy(
@@ -292,8 +292,8 @@ func TestChallenger2_PotentialClamping_UniversalStrictness(t *testing.T) {
 				t.Fatalf("Match XP Overgrowth: %s OVR %d exceeded potential %d on match %d!",
 					wk.name, currentOVR, wk.potential, m)
 			}
-			if currentOVR > 96 {
-				t.Fatalf("CRITICAL: %s OVR %d exceeded absolute ceiling of 96!", wk.name, currentOVR)
+			if currentOVR > 99 {
+				t.Fatalf("CRITICAL: %s OVR %d exceeded absolute ceiling of 99!", wk.name, currentOVR)
 			}
 		}
 
@@ -305,8 +305,8 @@ func TestChallenger2_PotentialClamping_UniversalStrictness(t *testing.T) {
 				t.Fatalf("Seasonal Overgrowth: %s seasonal OVR %d exceeded potential %d in season %d!",
 					wk.name, grownOVR, wk.potential, s)
 			}
-			if grownOVR > 96 {
-				t.Fatalf("CRITICAL: %s seasonal OVR %d exceeded absolute ceiling of 96!", wk.name, grownOVR)
+			if grownOVR > 99 {
+				t.Fatalf("CRITICAL: %s seasonal OVR %d exceeded absolute ceiling of 99!", wk.name, grownOVR)
 			}
 			calcOVR := ge.CalculateOVR(wk.id, wk.posCat)
 			if calcOVR > wk.potential {
@@ -337,8 +337,8 @@ func TestChallenger2_PotentialClamping_UniversalStrictness(t *testing.T) {
 			t.Fatalf("Adversarial Tampering: %s OVR %d with maxed attributes exceeded potential %d!",
 				wk.name, forcedOVR, wk.potential)
 		}
-		if forcedOVR > 96 {
-			t.Fatalf("CRITICAL: %s OVR %d with maxed attributes exceeded absolute ceiling 96!",
+		if forcedOVR > 99 {
+			t.Fatalf("CRITICAL: %s OVR %d with maxed attributes exceeded absolute ceiling 99!",
 				wk.name, forcedOVR)
 		}
 
@@ -347,8 +347,8 @@ func TestChallenger2_PotentialClamping_UniversalStrictness(t *testing.T) {
 		if seasonalForced > wk.potential {
 			t.Fatalf("Seasonal growth with maxed attributes: %d > %d", seasonalForced, wk.potential)
 		}
-		if seasonalForced > 96 {
-			t.Fatalf("CRITICAL: Seasonal growth with maxed attributes exceeded 96: %d", seasonalForced)
+		if seasonalForced > 99 {
+			t.Fatalf("CRITICAL: Seasonal growth with maxed attributes exceeded 99: %d", seasonalForced)
 		}
 	}
 }
@@ -385,8 +385,8 @@ func TestChallenger2_SingleSeasonGain_BoundedNeverExceeds5(t *testing.T) {
 			if endOVR > wk.potential {
 				t.Fatalf("[%s seed %d] End OVR %d exceeded potential %d!", wk.name, seed, endOVR, wk.potential)
 			}
-			if endOVR > 96 {
-				t.Fatalf("[%s seed %d] End OVR %d exceeded absolute ceiling 96!", wk.name, seed, endOVR)
+			if endOVR > 99 {
+				t.Fatalf("[%s seed %d] End OVR %d exceeded absolute ceiling 99!", wk.name, seed, endOVR)
 			}
 		}
 	}
@@ -438,7 +438,7 @@ func TestChallenger2_AdversarialInputs_SeasonalGrowth(t *testing.T) {
 }
 
 // TestChallenger2_TrainingAndPuberty_CeilingIntegrity verifies that intensive training
-// and puberty cycles cannot cause a wonderkid's OVR to exceed their potential or 96.
+// and puberty cycles cannot cause a wonderkid's OVR to exceed their potential or 99.
 func TestChallenger2_TrainingAndPuberty_CeilingIntegrity(t *testing.T) {
 	ge := NewGrowthEngine(888)
 
@@ -452,8 +452,8 @@ func TestChallenger2_TrainingAndPuberty_CeilingIntegrity(t *testing.T) {
 			if ovr > wk.potential {
 				t.Fatalf("Puberty cycle %d: %s OVR %d exceeded potential %d", mw, wk.name, ovr, wk.potential)
 			}
-			if ovr > 96 {
-				t.Fatalf("Puberty cycle %d: %s OVR %d exceeded 96", mw, wk.name, ovr)
+			if ovr > 99 {
+				t.Fatalf("Puberty cycle %d: %s OVR %d exceeded 99", mw, wk.name, ovr)
 			}
 		}
 
@@ -470,8 +470,8 @@ func TestChallenger2_TrainingAndPuberty_CeilingIntegrity(t *testing.T) {
 			if ovr > wk.potential {
 				t.Fatalf("Training cycle %d (%s): %s OVR %d exceeded potential %d", i, f, wk.name, ovr, wk.potential)
 			}
-			if ovr > 96 {
-				t.Fatalf("Training cycle %d (%s): %s OVR %d exceeded 96", i, f, wk.name, ovr)
+			if ovr > 99 {
+				t.Fatalf("Training cycle %d (%s): %s OVR %d exceeded 99", i, f, wk.name, ovr)
 			}
 		}
 	}
@@ -509,8 +509,8 @@ func TestChallenger2_CanonicalWonderkids_10SeasonCareer_EndToEnd(t *testing.T) {
 					t.Fatalf("[%s seed %d age %d] End season OVR %d exceeded potential %d!",
 						wk.name, seed, age, endSeasonOVR, wk.potential)
 				}
-				if endSeasonOVR > 96 {
-					t.Fatalf("[%s seed %d age %d] End season OVR %d exceeded 96!",
+				if endSeasonOVR > 99 {
+					t.Fatalf("[%s seed %d age %d] End season OVR %d exceeded 99!",
 						wk.name, seed, age, endSeasonOVR)
 				}
 
@@ -546,7 +546,7 @@ func TestChallenger2_CanonicalWonderkids_10SeasonCareer_EndToEnd(t *testing.T) {
 				t.Errorf("[%s seed %d] Typical 75 OVR starter at age 18: expected 85-89 OVR, got %d", wk.name, seed, ovr18)
 			}
 
-			// Milestone 3: Early 20s (Age 22-24) should approach or reach potential ceiling [93, 96]
+			// Milestone 3: Early 20s (Age 22-24) should approach or reach 99 potential
 			ovr24 := ovrHistory[24]
 			if ovr24 < 91 || ovr24 > wk.potential {
 				t.Errorf("[%s seed %d] At age 24: expected 91-%d OVR, got %d", wk.name, seed, wk.potential, ovr24)

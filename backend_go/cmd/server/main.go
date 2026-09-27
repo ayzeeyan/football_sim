@@ -173,14 +173,19 @@ func main() {
 
 	// 6. Restore a world save after constructing the matching universe.
 	if snapshot != nil {
+		loadedVersion := snapshot.Version
 		if err := persistence.RestoreCareer(tm, ge, te, snapshot); err != nil {
 			log.Fatalf("[Server] FATAL: Could not restore existing career save: %v", err)
 		}
-		if err := tm.ValidateWorldState(); err != nil {
-			log.Fatalf("[Server] FATAL: Restored career failed world validation: %v", err)
-		}
 		if len(snapshot.ProdigyHomes) > 0 {
 			dm.ProdigyHomes = snapshot.ProdigyHomes
+		}
+		wrote, err := persistence.MaybeWriteMigratedCareer(tm, ge, te, savePath, loadedVersion)
+		if err != nil {
+			log.Fatalf("[Server] FATAL: Migrated career could not be written; original save preserved: %v", err)
+		}
+		if wrote {
+			log.Printf("[Server] Wrote upgraded career save (version %d)", persistence.SaveVersion)
 		}
 		log.Printf("[Server] Successfully restored career: Season %s, Matchweek %d", tm.SeasonName, tm.CurrentMatchweek)
 	} else {
@@ -191,14 +196,9 @@ func main() {
 		log.Fatalf("[Server] FATAL: Universe failed startup validation: %v", err)
 	}
 
-	// 7. Configure HTTP & WebSocket Server. NewServer constructs the live
-	// engine before clients can connect; replace its temporary RNG immediately
-	// with the universe-owned live-match stream.
+	// 7. Configure the simulation-only HTTP server.
 	port := getFreePort(*hostFlag, *portFlag)
 	srv := server.NewServer(dm, ge, tm, te, savePath, staticDir)
-	if srv.LiveMatchEngine != nil {
-		srv.LiveMatchEngine.RNG = rng.New("live_match")
-	}
 
 	httpServer := &http.Server{
 		Addr:              net.JoinHostPort(*hostFlag, fmt.Sprintf("%d", port)),

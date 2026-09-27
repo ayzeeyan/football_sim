@@ -13,13 +13,14 @@ import (
 
 	"football_sim/pkg/growth"
 	"football_sim/pkg/managers"
+	"football_sim/pkg/matchreport"
 	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 	"football_sim/pkg/transfers"
 )
 
 const (
-	SaveVersion     = 4
+	SaveVersion     = 8
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -66,6 +67,8 @@ type TransfersSnapshot struct {
 	AllTime               []transfers.CompletedTransfer    `json:"all_time"`
 	ActiveNegotiations    []*transfers.TransferNegotiation `json:"active_negotiations,omitempty"`
 	ManagerBudgets        map[string]int64                 `json:"manager_budgets,omitempty"`
+	FreeAgents            []*models.Player                 `json:"free_agents,omitempty"`
+	ScriptedSwapDone      bool                             `json:"scripted_swap_done,omitempty"`
 }
 
 // CareerSnapshot contains the full serialized state of the football universe across seasons.
@@ -119,6 +122,7 @@ type CareerSnapshot struct {
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
 	ReputationAppliedSeason string   `json:"reputation_applied_season,omitempty"`
+	ContractsResolvedSeason string   `json:"contracts_resolved_season,omitempty"`
 	RetiredPlayerIDs        []string `json:"retired_player_ids,omitempty"`
 }
 
@@ -200,6 +204,7 @@ func BuildSnapshot(
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
 		ReputationAppliedSeason: tm.ReputationAppliedSeason,
+		ContractsResolvedSeason: tm.ContractsResolvedSeason,
 		RetiredPlayerIDs:        retiredIDs,
 	}
 
@@ -240,6 +245,8 @@ func BuildSnapshot(
 			AllTime:               te.AllTimeTransfers,
 			ActiveNegotiations:    te.ActiveNegotiations,
 			ManagerBudgets:        budgets,
+			FreeAgents:            append([]*models.Player(nil), te.FreeAgents...),
+			ScriptedSwapDone:      te.ScriptedSwapDone,
 		}
 	}
 
@@ -264,7 +271,7 @@ func WriteSnapshot(snap *CareerSnapshot, destPath string) (string, error) {
 	if snap == nil {
 		return "", fmt.Errorf("career snapshot is nil")
 	}
-	data, err := json.MarshalIndent(snap, "", "  ")
+	data, err := json.Marshal(snap)
 	if err != nil {
 		return "", fmt.Errorf("failed to encode career snapshot: %w", err)
 	}
@@ -302,26 +309,32 @@ func safeClubFileName(clubID string) string {
 
 // writeAtomic replaces path atomically via temp file plus rename.
 func writeAtomic(path string, data []byte) error {
-	tmpFile := path + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*.tmp")
+	if err != nil {
 		return fmt.Errorf("failed to write temp save file: %w", err)
 	}
+	tmpFile := f.Name()
+	defer os.Remove(tmpFile)
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmpFile)
+		return fmt.Errorf("failed to write temp save file: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmpFile)
+		return fmt.Errorf("failed to flush temp save file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmpFile)
+		return fmt.Errorf("failed to close temp save file: %w", err)
+	}
 	if err := os.Rename(tmpFile, path); err != nil {
-		// On Windows, if destination exists, remove first then rename
-		_ = os.Remove(path)
-		if err := os.Rename(tmpFile, path); err != nil {
-			return fmt.Errorf("failed to commit save file: %w", err)
-		}
+		return fmt.Errorf("failed to commit save file: %w", err)
 	}
 	return nil
 }
 
-// writeShardedSnapshot splits full snapshot JSON into per-club sidecars plus
-// a manifest. Sections are carried as verbatim RawMessages so untouched data
-// round-trips byte-identically; club files are rewritten only when their
-// bytes differ, preserving mtimes for clean squads. Clubs are stored before
-// the manifest so a crash can never leave a manifest pointing at missing
-// squad files.
 func writeShardedSnapshot(data []byte, destPath string) (string, error) {
 	if destPath == "" {
 		destPath = SavePath()
@@ -347,44 +360,126 @@ func writeShardedSnapshot(data []byte, destPath string) (string, error) {
 		return "", fmt.Errorf("failed to create save directory: %w", err)
 	}
 
+	type sidecarDelta struct {
+		id   string
+		name string
+		raw  []byte
+		sum  [sha256.Size]byte
+	}
+	var deltas []sidecarDelta
 	index := make(map[string]map[string]string, len(clubs))
 	for id, raw := range clubs {
 		if len(raw) == 0 || string(raw) == "null" {
 			continue
 		}
 		name := safeClubFileName(id) + ".json"
-		path := filepath.Join(dir, name)
 		sum := sha256.Sum256(raw)
-		if existing, err := os.ReadFile(path); err != nil || !bytes.Equal(existing, raw) {
-			if err := writeAtomic(path, raw); err != nil {
-				return "", err
+		if existing, err := os.ReadFile(filepath.Join(dir, name)); err == nil && bytes.Equal(existing, raw) {
+			index[id] = map[string]string{
+				"file":   "clubs/" + name,
+				"sha256": hex.EncodeToString(sum[:]),
+			}
+			continue
+		}
+		deltas = append(deltas, sidecarDelta{id: id, name: name, raw: raw, sum: sum})
+	}
+
+	staged := make([]string, 0, len(deltas))
+	abort := func(failErr error) (string, error) {
+		for _, tmp := range staged {
+			_ = os.Remove(tmp)
+		}
+		return "", failErr
+	}
+	for _, delta := range deltas {
+		tmpPath := filepath.Join(dir, delta.name+".tmp")
+		if err := writeAtomicTemp(tmpPath, delta.raw); err != nil {
+			return abort(fmt.Errorf("failed to stage club save file %s: %w", delta.name, err))
+		}
+		staged = append(staged, tmpPath)
+	}
+	for _, delta := range deltas {
+		path := filepath.Join(dir, delta.name)
+		if err := os.Rename(tmpPathFor(dir, delta.name), path); err != nil {
+			if _err := os.Remove(path); _err == nil {
+				if err = os.Rename(tmpPathFor(dir, delta.name), path); err != nil {
+					return abort(fmt.Errorf("failed to commit club save file %s: %w", delta.name, err))
+				}
+			} else {
+				return abort(fmt.Errorf("failed to commit club save file %s: %w", delta.name, err))
 			}
 		}
-		index[id] = map[string]string{
-			"file":   "clubs/" + name,
-			"sha256": hex.EncodeToString(sum[:]),
+		staged = staged[1:]
+		index[delta.id] = map[string]string{
+			"file":   "clubs/" + delta.name,
+			"sha256": hex.EncodeToString(delta.sum[:]),
 		}
 	}
+
 	indexRaw, err := json.Marshal(index)
 	if err != nil {
-		return "", fmt.Errorf("failed to encode club index: %w", err)
+		return abort(fmt.Errorf("failed to encode club index: %w", err))
 	}
 	full[clubIndexKey] = indexRaw
 	delete(full, "clubs")
 
-	manifest, err := json.MarshalIndent(full, "", "  ")
+	manifest, err := json.Marshal(full)
 	if err != nil {
-		return "", fmt.Errorf("failed to encode career manifest: %w", err)
+		return abort(fmt.Errorf("failed to encode career manifest: %w", err))
 	}
-	if err := writeAtomic(destPath, manifest); err != nil {
-		return "", err
+	manifestTmp := destPath + ".tmp"
+	if err := writeAtomicTemp(manifestTmp, manifest); err != nil {
+		return abort(fmt.Errorf("failed to stage career manifest: %w", err))
 	}
+	staged = append(staged, manifestTmp)
+	if err := commitStagedFile(manifestTmp, destPath); err != nil {
+		return abort(fmt.Errorf("failed to commit career manifest: %w", err))
+	}
+	staged = staged[:len(staged)-1]
 	// Sweep sidecars the current universe no longer indexes (e.g. clubs
 	// absent from the map): without this, stale clubs/*.json accumulate and
 	// a future reader could resurrect dead squads. Runs last so a crash can
 	// never delete before the manifest is safely committed.
 	sweepStaleClubSidecars(dir, index)
 	return destPath, nil
+}
+
+// tmpPathFor builds the staging path for a club sidecar during a sharded save.
+func tmpPathFor(dir, name string) string {
+	return filepath.Join(dir, name+".tmp")
+}
+
+// writeAtomicTemp stages bytes at tmpPath with a pre-rename fsync. The rename
+// into its final name is left to the caller so multi-file publications can
+// gate every commit behind all stages succeeding.
+func writeAtomicTemp(tmpPath string, data []byte) error {
+	f, err := os.OpenFile(tmpPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+	return f.Close()
+}
+
+// commitStagedFile renames a staged temp file over its final destination,
+// falling back to remove-then-rename on Windows semantics.
+func commitStagedFile(tmpPath, path string) error {
+	if err := os.Rename(tmpPath, path); err != nil {
+		_ = os.Remove(path)
+		if err := os.Rename(tmpPath, path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // sweepStaleClubSidecars removes clubs/*.json files no current index entry
@@ -435,6 +530,7 @@ func LoadCareer(srcPath string) (*CareerSnapshot, error) {
 		if err := json.Unmarshal(data, &snap); err != nil {
 			return nil, fmt.Errorf("failed to parse career snapshot JSON: %w", err)
 		}
+		wireSnapshotFixtures(&snap)
 		return &snap, nil
 	}
 	return loadShardedCareer(srcPath, probe)
@@ -479,7 +575,40 @@ func loadShardedCareer(srcPath string, manifest map[string]json.RawMessage) (*Ca
 		return nil, fmt.Errorf("failed to parse career manifest: %w", err)
 	}
 	snap.Clubs = clubs
+	wireSnapshotFixtures(&snap)
 	return &snap, nil
+}
+
+func wireSnapshotFixtures(snap *CareerSnapshot) {
+	if snap == nil {
+		return
+	}
+	// Normalize legacy idle transfer window counters (pre-v5 saves used Week 1 as sentinel)
+	if snap.Transfers.WindowType == transfers.WindowClosed && !snap.Transfers.IsOffSeason {
+		snap.Transfers.CurrentWeek = 0
+		snap.Transfers.CurrentDay = 0
+		snap.Transfers.ProcessedWeeks = 0
+		snap.Transfers.WindowOpen = false
+	}
+	if len(snap.Clubs) == 0 {
+		return
+	}
+	wire := func(fixtures []tournament.Fixture) {
+		for i := range fixtures {
+			if fixtures[i].Home == nil && fixtures[i].HomeID != "" {
+				fixtures[i].Home = snap.Clubs[fixtures[i].HomeID]
+			}
+			if fixtures[i].Away == nil && fixtures[i].AwayID != "" {
+				fixtures[i].Away = snap.Clubs[fixtures[i].AwayID]
+			}
+		}
+	}
+	wire(snap.Fixtures)
+	wire(snap.UCLFixtures)
+	wire(snap.SuperCupFixtures)
+	if snap.World != nil {
+		wire(snap.World.Fixtures)
+	}
 }
 
 // RestoreCareer applies a deserialized snapshot onto an existing live world.
@@ -508,6 +637,7 @@ func RestoreCareer(
 		tm.SeasonPhase = snap.SeasonPhase
 	}
 	tm.ReputationAppliedSeason = snap.ReputationAppliedSeason
+	tm.ContractsResolvedSeason = snap.ContractsResolvedSeason
 	tm.RetiredPlayerIDs = make(map[string]bool)
 	for _, id := range snap.RetiredPlayerIDs {
 		tm.RetiredPlayerIDs[id] = true
@@ -713,23 +843,40 @@ func RestoreCareer(
 		}
 	}
 
-	// 4. Enforce strict squad deduplication across all clubs by PlayerID
-	// only: display names are not unique across a 2,401-player dataset, and
-	// both validators allow same-name/distinct-ID squads.
-	for _, club := range tm.ClubsList {
-		seen := make(map[string]bool)
-		cleanSquad := make([]*models.Player, 0, len(club.Squad))
-		for _, p := range club.Squad {
-			if p == nil || seen[p.PlayerID] {
+	// 4. Saved squad membership is authoritative. Overlaying academy rows
+	// onto a fresh dataset squad without dropping retired/departed players
+	// is what pushes clubs such as Inter past the 34-player ceiling.
+	for clubID, club := range tm.Clubs {
+		savedClub, ok := snap.Clubs[clubID]
+		if !ok || club == nil {
+			continue
+		}
+		rebuilt := make([]*models.Player, 0, len(savedClub.Squad))
+		seen := make(map[string]bool, len(savedClub.Squad))
+		for _, savedPlayer := range savedClub.Squad {
+			if savedPlayer == nil {
 				continue
 			}
-			seen[p.PlayerID] = true
-			cleanSquad = append(cleanSquad, p)
+			pid := savedPlayer.PlayerID
+			if canonical, mapped := ProdigyMap[pid]; mapped && savedPlayer.UniverseWonderkid {
+				pid = canonical
+			}
+			if pid == "" || seen[pid] || tm.IsPlayerRetired(pid) {
+				continue
+			}
+			live := existingPlayers[pid]
+			if live == nil {
+				continue
+			}
+			seen[pid] = true
+			live.ClubID = clubID
+			rebuilt = append(rebuilt, live)
 		}
-		club.Squad = cleanSquad
+		club.Squad = rebuilt
 		club.SquadSize = len(club.Squad)
 		club.RecalculateRatings()
 	}
+	tm.EnforceRosterCapsUnlocked()
 	tm.SyncCaptainFlagsUnlocked()
 
 	// 5. Restore calendars wholesale so a freshly generated Berger table
@@ -749,6 +896,40 @@ func RestoreCareer(
 	if snap.World != nil {
 		tm.World = snap.World
 		wireWorldFixtureClubs(tm)
+	}
+	// Tactical-slot fields are additive to the current save format. Finished
+	// reports from before the field existed are reconstructed in memory from
+	// the manager's deterministic formation and the saved natural positions.
+	// Older SaveVersion values are written back immediately after a successful
+	// restore via MaybeWriteMigratedCareer.
+	formationForClub := func(clubID string) string {
+		if manager := tm.Managers[clubID]; manager != nil {
+			return models.FormationForStyle(manager.Style)
+		}
+		return models.Formation433
+	}
+	backfillReports := func(fixtures []tournament.Fixture) {
+		for i := range fixtures {
+			fixture := &fixtures[i]
+			matchreport.BackfillTacticalSlots(fixture.Report, formationForClub(fixture.HomeID), formationForClub(fixture.AwayID))
+		}
+	}
+	backfillReports(tm.Fixtures)
+	backfillReports(tm.UCLFixtures)
+	backfillReports(tm.SuperCupFixtures)
+	if tm.World != nil {
+		backfillReports(tm.World.Fixtures)
+	}
+	tm.CompactAgedReports()
+	for _, club := range tm.ClubsList {
+		if club == nil {
+			continue
+		}
+		for _, p := range club.Squad {
+			if p != nil {
+				p.BackfillElapsedWonderkidContract()
+			}
+		}
 	}
 	if g := clubsFromIDs(tm, snap.UCLGroupA); len(g) > 0 {
 		tm.UCLGroupA = g
@@ -832,6 +1013,9 @@ func RestoreCareer(
 			}
 			ge.Timeline = remapped
 		}
+		// Version 8 raised all twelve canonical ceilings to 99. Preserve the
+		// saved OVR and development history while upgrading old careers.
+		ge.UpgradeCanonicalWonderkidPotentials()
 	}
 
 	// 7. Restore Transfer Engine
@@ -843,13 +1027,13 @@ func RestoreCareer(
 			te.Managers = tm.Managers
 		}
 		te.SyncAllManagerBudgets()
-		if snap.Transfers.CurrentDay > 0 {
+		if snap.Version >= 5 || snap.Transfers.CurrentDay > 0 {
 			te.CurrentDay = snap.Transfers.CurrentDay
 		}
 		if snap.Transfers.CurrentMatchweek > 0 {
 			te.CurrentMatchweek = snap.Transfers.CurrentMatchweek
 		}
-		if snap.Transfers.CurrentWeek > 0 {
+		if snap.Version >= 5 || snap.Transfers.CurrentWeek > 0 {
 			te.CurrentWeek = snap.Transfers.CurrentWeek
 		}
 		te.IsOffSeason = snap.Transfers.IsOffSeason
@@ -874,9 +1058,18 @@ func RestoreCareer(
 			} else {
 				te.WindowType = transfers.WindowClosed
 				te.WindowOpen = false
-				te.CurrentWeek = 1
+				te.CurrentWeek = 0
+				te.CurrentDay = 0
 				te.ProcessedWeeks = 0
 			}
+		}
+		// v4 and older used Week 1 as the idle in-season sentinel. Normalize it
+		// after decoding so Week 1 always means that a real window has begun.
+		if snap.Version < 5 && te.WindowType == transfers.WindowClosed && !te.IsOffSeason {
+			te.CurrentWeek = 0
+			te.CurrentDay = 0
+			te.ProcessedWeeks = 0
+			te.WindowOpen = false
 		}
 		if snap.Transfers.TransferredThisWindow != nil {
 			te.TransferredThisWindow = copyBoolMap(snap.Transfers.TransferredThisWindow)
@@ -926,12 +1119,89 @@ func RestoreCareer(
 		// Authoritative club finances win over any stale snapshot mirror:
 		// re-sync after applying so hand-edited saves cannot desync the AI.
 		te.SyncAllManagerBudgets()
+		te.ScriptedSwapDone = snap.Transfers.ScriptedSwapDone
+		restoreFreeAgents(tm, te, snap, existingPlayers)
 	}
 
 	// 8. Stretch short legacy calendars, then re-pair mentors on the restored squads.
+	// Older careers may have stored Hernando in the removed snake state.
+	for _, club := range tm.ClubsList {
+		for _, player := range club.Squad {
+			if player != nil && player.PlayerID == "WK_Earl_Josh_Hernando" && player.Personality == "snake" {
+				player.Personality = "dedicated_pro"
+				player.TransferRequested = false
+				if player.Loyalty < 60 {
+					player.Loyalty = 60
+				}
+			}
+		}
+	}
 	_ = tm.AdoptLongSeason()
 	tournament.PairSeniorMentors(tm.ClubsList, ge)
+	// Pre-Nations-Cup careers have no nested competition state. Build it from
+	// restored squads so continuing a save gains the new competition.
+	tm.EnsureNationalTeams()
 	return nil
+}
+
+// MaybeWriteMigratedCareer atomically replaces destPath with the current
+// in-memory career when the loaded snapshot was an older supported version.
+// Validation failures leave the original save untouched.
+func MaybeWriteMigratedCareer(
+	tm *tournament.TournamentManager,
+	ge *growth.GrowthEngine,
+	te *transfers.TransferEngine,
+	destPath string,
+	loadedVersion int,
+) (bool, error) {
+	if loadedVersion >= SaveVersion {
+		return false, nil
+	}
+	if tm != nil {
+		if err := tm.ValidateWorldState(); err != nil {
+			return false, fmt.Errorf("migrated career failed world validation: %w", err)
+		}
+	}
+	snap := BuildSnapshot(tm, ge, te)
+	if err := ValidateCareerSnapshot(snap); err != nil {
+		return false, fmt.Errorf("migrated career failed snapshot validation: %w", err)
+	}
+	if _, err := WriteSnapshot(snap, destPath); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func restoreFreeAgents(
+	tm *tournament.TournamentManager,
+	te *transfers.TransferEngine,
+	snap *CareerSnapshot,
+	existingPlayers map[string]*models.Player,
+) {
+	if te == nil {
+		return
+	}
+	te.FreeAgents = nil
+	for _, saved := range snap.Transfers.FreeAgents {
+		if saved == nil || saved.PlayerID == "" {
+			continue
+		}
+		live := existingPlayers[saved.PlayerID]
+		if live == nil {
+			live = saved
+			existingPlayers[saved.PlayerID] = live
+		} else {
+			updatePlayerFromSaved(live, saved)
+			if live.ClubID != "" {
+				removePlayerFromClub(tm.Clubs[live.ClubID], live)
+			}
+		}
+		live.MarkFreeAgent(saved.PreviousClubID)
+		if saved.PreviousClubID != "" {
+			live.PreviousClubID = saved.PreviousClubID
+		}
+		te.FreeAgents = append(te.FreeAgents, live)
+	}
 }
 
 // DeleteCareer deletes the snapshot manifest, its club sidecars, and the
@@ -1135,6 +1405,24 @@ func updatePlayerFromSaved(dest, src *models.Player) {
 	}
 	if src.Category != "" {
 		dest.Category = src.Category
+	}
+	if src.RegistrationStatus != "" {
+		dest.RegistrationStatus = src.RegistrationStatus
+	}
+	if src.PreviousClubID != "" {
+		dest.PreviousClubID = src.PreviousClubID
+	}
+	if src.SeasonHistory != nil {
+		dest.SeasonHistory = append([]models.PlayerSeasonRecord(nil), src.SeasonHistory...)
+	}
+	if src.TransferHistory != nil {
+		dest.TransferHistory = append([]models.PlayerMoveRecord(nil), src.TransferHistory...)
+	}
+	if src.ContractHistory != nil {
+		dest.ContractHistory = append([]models.PlayerContractEvent(nil), src.ContractHistory...)
+	}
+	if src.AwardsHistory != nil {
+		dest.AwardsHistory = append([]models.PlayerHonourRecord(nil), src.AwardsHistory...)
 	}
 }
 

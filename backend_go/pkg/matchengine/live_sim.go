@@ -321,12 +321,6 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 	if e.PossessionTeam != "home" {
 		defendingSide = "home"
 	}
-	if e.PossessionTeam == "home" {
-		e.HomeShots++
-	} else {
-		e.AwayShots++
-	}
-
 	if rng.Float64() < 0.06 {
 		e.ResolvePenalty(attackingClub, attackingStarters)
 		return
@@ -347,13 +341,7 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 	}
 	weights := make([]float64, len(cands))
 	for i, p := range cands {
-		w := math.Pow(float64(p.OVR)/75.0, 2)
-		if p.Category == "FWD" {
-			w *= 3.0
-		} else {
-			w *= 1.2
-		}
-		weights[i] = w
+		weights[i] = matchreport.ScorerSelectionWeight(p, e.HomeScore == e.AwayScore, bigGameContext(e.Competition, e.IsRecognizedDerby))
 	}
 	shooter := cands[matchreport.WeightedChoice(rng, weights)]
 
@@ -372,6 +360,13 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 		// A short or improvised XI may have no keeper; use an active outfield
 		// player as the safe fallback, never a dismissed keeper.
 		gk = defendingOnPitch[0]
+	}
+	// Count an open-play attempt only after it is actually resolved. Penalties
+	// increment their own shot counter in ResolvePenalty.
+	if e.PossessionTeam == "home" {
+		e.HomeShots++
+	} else {
+		e.AwayShots++
 	}
 
 	targetX := 0.98
@@ -457,7 +452,8 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 			}
 
 			var assister *models.Player
-			if ogScorer == nil && rng.Float64() < 0.72 && len(onPitch) > 1 {
+			const assistRate = 0.72
+			if ogScorer == nil && rng.Float64() < assistRate && len(onPitch) > 1 {
 				var aCands []*models.Player
 				for _, p := range onPitch {
 					if p != shooter {
@@ -470,7 +466,7 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 					if p.Category == "MID" {
 						mult = 2.5
 					}
-					aWeights[i] = float64(p.OVR) / 75.0 * mult
+					aWeights[i] = float64(p.EffectiveOVR()+p.FormModifier()) / 75.0 * mult
 				}
 				assister = aCands[matchreport.WeightedChoice(rng, aWeights)]
 			}
@@ -520,6 +516,7 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 					Type: "own_goal", Side: defSide, Beneficiary: e.PossessionTeam,
 					Scorer: &ogMini, HomeScore: e.HomeScore, AwayScore: e.AwayScore,
 					PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
+					Seq: len(e.Events) + 1,
 				})
 			} else {
 				var aMini *matchreport.MiniPlayer
@@ -528,12 +525,18 @@ func (e *LiveMatchEngine) ResolveShot(attackingClub, defendingClub *models.Club,
 					aMini = &m
 				}
 				playerID, playerName, clubID, clubName := e.eventAttribution(shooter, e.PossessionTeam)
+				assistID, assistName := "", ""
+				if assister != nil {
+					assistID, assistName = assister.PlayerID, assister.FullName
+				}
 				e.Events = append(e.Events, matchreport.MatchEventItem{
 					Minute: shotMinute, Display: fmt.Sprintf("%d'", shotMinute),
 					Type: "goal", Side: e.PossessionTeam,
 					Scorer: &shooterMini, Assister: aMini,
 					HomeScore: e.HomeScore, AwayScore: e.AwayScore,
 					PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
+					AssistPlayerID: assistID, AssistPlayerName: assistName,
+					Seq: len(e.Events) + 1,
 				})
 			}
 			if e.PossessionTeam == "home" {
@@ -682,29 +685,18 @@ func (e *LiveMatchEngine) MaybeBookPlayer(defendingStarters []*models.Player, de
 func (e *LiveMatchEngine) ResolvePenalty(attackingClub *models.Club, attackingStarters []*models.Player) {
 	rng := e.rng()
 	onPitch := e.OnPitch(attackingStarters)
-	cands := make([]*models.Player, 0, len(onPitch))
-	for _, p := range onPitch {
-		if p.Category == "FWD" || p.Category == "MID" {
-			cands = append(cands, p)
-		}
+	kickoff := e.HomeKickoffXI
+	if e.PossessionTeam != "home" {
+		kickoff = e.AwayKickoffXI
 	}
-	if len(cands) == 0 {
-		cands = onPitch
+	designatedID := ""
+	if d := matchreport.DesignatedPenaltyTaker(kickoff, nil); d != nil {
+		designatedID = d.PlayerID
 	}
-	if len(cands) == 0 {
+	taker := matchreport.PickPenaltyTaker(onPitch, nil, designatedID)
+	if taker == nil {
 		return
 	}
-	weights := make([]float64, len(cands))
-	for i, p := range cands {
-		w := math.Pow(float64(p.OVR)/75.0, 2)
-		if p.Category == "FWD" {
-			w *= 3.0
-		} else {
-			w *= 1.2
-		}
-		weights[i] = w
-	}
-	taker := cands[matchreport.WeightedChoice(rng, weights)]
 
 	if e.PossessionTeam == "home" {
 		e.HomeShots++
@@ -758,18 +750,20 @@ func (e *LiveMatchEngine) ResolvePenalty(attackingClub *models.Club, attackingSt
 			Type: "penalty", Side: e.PossessionTeam, Scorer: &tMini,
 			HomeScore: e.HomeScore, AwayScore: e.AwayScore,
 			PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
+			Seq: len(e.Events) + 1,
 		})
 	} else {
 		e.LiveShots = append(e.LiveShots, matchreport.ShotMapItem{
 			Minute: minute, Team: e.PossessionTeam, Shooter: miniShooter(taker),
-			X: shotX, Y: 0.50, XG: 0.76, Outcome: "save", IsWonderkid: taker.UniverseWonderkid,
+			X: shotX, Y: 0.50, XG: 0.76, Outcome: "miss", IsWonderkid: taker.UniverseWonderkid,
 		})
-		e.AddCommentary(minute, fmt.Sprintf("MISSED PENALTY! %s drags it wide!", taker.FullName), "SAVE", taker.UniverseWonderkid)
+		e.AddCommentary(minute, fmt.Sprintf("MISSED PENALTY! %s drags it wide!", taker.FullName), "NORMAL", taker.UniverseWonderkid)
 		e.Events = append(e.Events, matchreport.MatchEventItem{
 			Minute: minute, Display: fmt.Sprintf("%d'", minute),
 			Type: "penalty_miss", Side: e.PossessionTeam, Scorer: &tMini,
 			HomeScore: e.HomeScore, AwayScore: e.AwayScore,
 			PlayerID: playerID, PlayerName: playerName, ClubID: clubID, ClubName: clubName,
+			Seq: len(e.Events) + 1,
 		})
 	}
 	e.Turnover("penalty aftermath")
@@ -856,10 +850,14 @@ func (e *LiveMatchEngine) ExecuteSub(i int) {
 	}
 	outMini := liveMini(sub.Out)
 	inMini := liveMini(sub.In)
+	subPlayerID, subPlayerName, subClubID, subClubName := e.eventAttribution(sub.In, sub.Side)
 	e.Events = append(e.Events, matchreport.MatchEventItem{
 		Minute: minute, Display: fmt.Sprintf("%d'", minute),
 		Type: "sub", Side: sub.Side, PlayerOut: &outMini, PlayerIn: &inMini,
 		HomeScore: e.HomeScore, AwayScore: e.AwayScore,
+		PlayerID: subPlayerID, PlayerName: subPlayerName,
+		ClubID: subClubID, ClubName: subClubName,
+		Seq: len(e.Events) + 1,
 	})
 	short := ""
 	if club != nil {
@@ -1072,10 +1070,14 @@ func (e *LiveMatchEngine) ExecuteDirectSub(side string, outP, inP *models.Player
 	e.SubstitutionsMade[side]++
 	outMini := liveMini(outP)
 	inMini := liveMini(inP)
+	subPlayerID, subPlayerName, subClubID, subClubName := e.eventAttribution(inP, side)
 	e.Events = append(e.Events, matchreport.MatchEventItem{
 		Minute: minute, Display: fmt.Sprintf("%d'", minute),
 		Type: "sub", Side: side, PlayerOut: &outMini, PlayerIn: &inMini,
 		HomeScore: e.HomeScore, AwayScore: e.AwayScore, Reason: reason,
+		PlayerID: subPlayerID, PlayerName: subPlayerName,
+		ClubID: subClubID, ClubName: subClubName,
+		Seq: len(e.Events) + 1,
 	})
 	isWK := inP.UniverseWonderkid || outP.UniverseWonderkid
 	reasonTxt := ""
@@ -1177,7 +1179,7 @@ func (e *LiveMatchEngine) BuildLivePayload() matchreport.InstantPayload {
 			ev.Display = fmt.Sprintf("%d'", ev.Minute)
 		}
 		if ev.Seq == 0 {
-			ev.Seq = i
+			ev.Seq = i + 1
 		}
 		events = append(events, ev)
 	}
@@ -1214,12 +1216,16 @@ func (e *LiveMatchEngine) BuildLivePayload() matchreport.InstantPayload {
 	attendance := int(math.Max(12000, math.Min(float64(cap), float64(cap)*(0.76+rng.Float64()*0.21))))
 
 	homeXI := e.HomeKickoffXI
+	homeSlots := e.HomeKickoffSlots
 	if len(homeXI) == 0 {
 		homeXI = e.HomeStarters
+		homeSlots = e.HomeSlots
 	}
 	awayXI := e.AwayKickoffXI
+	awaySlots := e.AwayKickoffSlots
 	if len(awayXI) == 0 {
 		awayXI = e.AwayStarters
+		awaySlots = e.AwaySlots
 	}
 	shotMap := matchreport.GenerateShotMap(e.HomeClub, e.AwayClub, events,
 		e.HomeShots, e.AwayShots, e.HomeShotsOn, e.AwayShotsOn, rng, e.LiveShots)
@@ -1230,6 +1236,8 @@ func (e *LiveMatchEngine) BuildLivePayload() matchreport.InstantPayload {
 	return matchreport.InstantPayload{HomeGoals: e.HomeScore, AwayGoals: e.AwayScore,
 		Events: events,
 		HomeXI: homeXI, AwayXI: awayXI,
+		HomeSlots: homeSlots, AwaySlots: awaySlots,
+		HomeFormation: e.HomeFormation, AwayFormation: e.AwayFormation,
 		HomeBench: e.HomeBench, AwayBench: e.AwayBench,
 		Stats:  stats,
 		HTHome: htH, HTAway: htA,

@@ -1,6 +1,10 @@
 package tournament
 
-import "testing"
+import (
+	"testing"
+
+	"football_sim/pkg/transfers"
+)
 
 func TestFinalizeSeasonTransitionRejectsRepeatedFinalizationWithoutMutation(t *testing.T) {
 	tm, _ := loadTestUniverse(t)
@@ -62,6 +66,46 @@ func TestFinalizeSeasonTransitionLeavesIncompleteCupUntouched(t *testing.T) {
 	}
 	if home.Squad[0].Age != age || home.Identity.Reputation != reputation || len(tm.SeasonHistory) != history {
 		t.Fatalf("rejected transition changed campaign state: age=%d/%d reputation=%d/%d history=%d/%d", home.Squad[0].Age, age, home.Identity.Reputation, reputation, len(tm.SeasonHistory), history)
+	}
+}
+
+func TestFinalizeSeasonTransitionRequiresCompletedSummer(t *testing.T) {
+	for _, state := range []string{"never_opened", "winter_complete", "prematurely_closed", "summer_complete"} {
+		t.Run(state, func(t *testing.T) {
+			tm, _ := loadTestUniverse(t)
+			completeLeagueForReputationTest(tm)
+			te := transfers.NewTransferEngine(tm.ClubsList, tm.Managers, 42)
+			tm.TransferEngine = te
+			switch state {
+			case "winter_complete":
+				te.BeginWinterWindow()
+				for te.IsWindowOpen() {
+					te.AdvanceOpenWindow()
+				}
+			case "prematurely_closed":
+				te.BeginOffSeasonWindow()
+				te.WindowOpen = false
+			case "summer_complete":
+				te.BeginOffSeasonWindow()
+				for te.IsWindowOpen() {
+					te.AdvanceOpenWindow()
+				}
+			}
+			season, age, history := tm.SeasonName, tm.ClubsList[0].Squad[0].Age, len(tm.SeasonHistory)
+			result := tm.FinalizeSeasonTransition()
+			if state == "summer_complete" {
+				if result["status"] != "success" {
+					t.Fatalf("completed summer rejected: %v", result)
+				}
+				return
+			}
+			if result["status"] != "error" {
+				t.Fatalf("unfinished summer allowed a transition: %v", result)
+			}
+			if tm.SeasonName != season || tm.ClubsList[0].Squad[0].Age != age || len(tm.SeasonHistory) != history || tm.ReputationAppliedSeason != "" {
+				t.Fatal("rejected transition mutated the campaign")
+			}
+		})
 	}
 }
 

@@ -3,6 +3,7 @@ package tournament
 import (
 	"hash/fnv"
 	"math/rand"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -27,6 +28,19 @@ import (
 
 // slatePoolSize bounds concurrent instant-match computations.
 const slatePoolSize = 4
+
+// Leave one logical processor for the browser and OS on smaller laptops.
+// The simulation is deterministic because each fixture owns its RNG stream.
+func slateWorkerCount() int {
+	workers := runtime.GOMAXPROCS(0) - 1
+	if workers < 1 {
+		return 1
+	}
+	if workers > slatePoolSize {
+		return slatePoolSize
+	}
+	return workers
+}
 
 // slateComputed is the pure half of a fixture sim: report payload plus the
 // assembled report, ready for serial application.
@@ -164,29 +178,33 @@ func (tm *TournamentManager) computeSlateFixture(f *Fixture, rng *rand.Rand) (sl
 	}
 
 	payload := matchreport.InstantPayload{
-		HomeGoals:  report.HomeGoals,
-		AwayGoals:  report.AwayGoals,
-		Events:     report.Events,
-		HomeXI:     home.GetStartingElevenWithBias(homeStyle, homeFocus, models.FixtureContext(f.Competition, f.Matchweek)),
-		AwayXI:     away.GetStartingElevenWithBias(awayStyle, awayFocus, models.FixtureContext(f.Competition, f.Matchweek)),
-		HomeBench:  home.GetBench(nil, 7, models.FixtureContext(f.Competition, f.Matchweek)),
-		AwayBench:  away.GetBench(nil, 7, models.FixtureContext(f.Competition, f.Matchweek)),
-		Stats:      report.Stats,
-		HTHome:     report.HTHome,
-		HTAway:     report.HTAway,
-		Attendance: report.Attendance,
-		Referee:    report.Referee,
-		Weather:    report.Weather,
-		DecidedBy:  report.DecidedBy,
-		Penalties:  report.Penalties,
-		ShotMap:    report.ShotMap,
-		Heatmap:    report.Heatmap,
-		Press:      report.PressConference,
+		HomeGoals:     report.HomeGoals,
+		AwayGoals:     report.AwayGoals,
+		Events:        report.Events,
+		HomeXI:        home.GetStartingElevenWithBias(homeStyle, homeFocus, models.FixtureContext(f.Competition, f.Matchweek)),
+		AwayXI:        away.GetStartingElevenWithBias(awayStyle, awayFocus, models.FixtureContext(f.Competition, f.Matchweek)),
+		HomeFormation: report.HomeFormation,
+		AwayFormation: report.AwayFormation,
+		HomeBench:     home.GetBench(nil, 7, models.FixtureContext(f.Competition, f.Matchweek)),
+		AwayBench:     away.GetBench(nil, 7, models.FixtureContext(f.Competition, f.Matchweek)),
+		Stats:         report.Stats,
+		HTHome:        report.HTHome,
+		HTAway:        report.HTAway,
+		Attendance:    report.Attendance,
+		Referee:       report.Referee,
+		Weather:       report.Weather,
+		DecidedBy:     report.DecidedBy,
+		Penalties:     report.Penalties,
+		ShotMap:       report.ShotMap,
+		Heatmap:       report.Heatmap,
+		Press:         report.PressConference,
 	}
 	// Reconstruct XI from the report's kickoff lists when present.
 	if len(report.HomeXI) > 0 {
 		payload.HomeXI = playersFromRows(home, report.HomeXI)
 		payload.AwayXI = playersFromRows(away, report.AwayXI)
+		payload.HomeSlots = matchreport.LineupSlotsFromRows(payload.HomeXI, report.HomeXI, report.HomeFormation)
+		payload.AwaySlots = matchreport.LineupSlotsFromRows(payload.AwayXI, report.AwayXI, report.AwayFormation)
 		payload.HomeBench = playersFromRows(home, report.HomeBench)
 		payload.AwayBench = playersFromRows(away, report.AwayBench)
 	}
@@ -205,15 +223,22 @@ func (tm *TournamentManager) computeSlateFixture(f *Fixture, rng *rand.Rand) (sl
 func (tm *TournamentManager) computeSlateWaves(waves [][]string, base int64) map[string]slateComputed {
 	computed := make(map[string]slateComputed)
 	var computedMu sync.Mutex
+	workers := slateWorkerCount()
 	for _, wave := range waves {
-		sem := make(chan struct{}, slatePoolSize)
+		sem := make(chan struct{}, workers)
 		var wg sync.WaitGroup
 		for _, id := range wave {
 			f := tm.findFixtureUnlocked(id)
-			if f == nil || f.Status == "finished" {
+			if f == nil || f.Status != "scheduled" {
 				continue
 			}
 			rng := rand.New(rand.NewSource(slateSeed(base, id)))
+			if workers == 1 {
+				if res, errMsg := tm.computeSlateFixture(f, rng); errMsg == "" {
+					computed[f.FixtureID] = res
+				}
+				continue
+			}
 			wg.Add(1)
 			sem <- struct{}{}
 			go func(fx *Fixture, r *rand.Rand) {
@@ -265,15 +290,19 @@ func (tm *TournamentManager) applySlateFixtureWithRollover(f *Fixture, computed 
 		rolled = tm.maybeRolloverUnlocked()
 	}
 	champ, _ := rolled["champion"].(string)
+	if cupEvent != "" && f.Report != nil {
+		f.Report.CompetitionImpact = cupEvent
+	}
 	return map[string]interface{}{
-		"status":      "success",
-		"fixture_id":  f.FixtureID,
-		"home_goals":  assembled.HomeGoals,
-		"away_goals":  assembled.AwayGoals,
-		"ucl_event":   nilIfEmpty(cupEvent),
-		"rolled_over": rolled["rolled"],
-		"is_finished": rolled["is_finished"],
-		"champion":    champ,
+		"status":       "success",
+		"fixture_id":   f.FixtureID,
+		"home_goals":   assembled.HomeGoals,
+		"away_goals":   assembled.AwayGoals,
+		"ucl_event":    nilIfEmpty(cupEvent),
+		"rolled_over":  rolled["rolled"],
+		"is_finished":  rolled["is_finished"],
+		"champion":     champ,
+		"report_ready": true,
 	}
 }
 
@@ -287,6 +316,10 @@ func (tm *TournamentManager) simulateSlateWavesUnlocked(ids []string, base int64
 		for _, id := range wave {
 			fx := tm.findFixtureUnlocked(id)
 			if fx == nil || fx.Status == "finished" {
+				continue
+			}
+			if fx.Status != "scheduled" {
+				skipped++
 				continue
 			}
 			if fx.Matchweek > tm.CurrentMatchweek && tm.CurrentMatchweek > 0 {

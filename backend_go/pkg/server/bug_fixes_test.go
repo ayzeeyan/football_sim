@@ -171,15 +171,26 @@ func TestResetLiveMatchDefaultForcesFullSnapshotAfterNewCareer(t *testing.T) {
 	}
 	newHomeIDs := radarIDs(full, "home_coords")
 	newAwayIDs := radarIDs(full, "away_coords")
-	newHomeProdigy := datamanager.ProdigyStableID("Izyan Levin Bantol")
-	newAwayProdigy := datamanager.ProdigyStableID("Maverick Cantalejo")
-	if !newHomeIDs[newHomeProdigy] || oldHomeIDs[newHomeProdigy] {
-		srv.worldMu.Unlock()
-		t.Fatalf("new home identities did not replace the previous placement: old=%v new=%v", oldHomeIDs, newHomeIDs)
+	// A fresh neutral career may feature any scheduled fixture. Its radar must
+	// reference the newly-created engine clubs rather than a hard-coded pair.
+	currentHome, currentAway := map[string]bool{}, map[string]bool{}
+	for _, player := range srv.LiveMatchEngine.HomeClub.Squad {
+		currentHome[player.PlayerID] = true
 	}
-	if !newAwayIDs[newAwayProdigy] || oldAwayIDs[newAwayProdigy] {
-		srv.worldMu.Unlock()
-		t.Fatalf("new away identities did not replace the previous placement: old=%v new=%v", oldAwayIDs, newAwayIDs)
+	for _, player := range srv.LiveMatchEngine.AwayClub.Squad {
+		currentAway[player.PlayerID] = true
+	}
+	for id := range newHomeIDs {
+		if !currentHome[id] {
+			srv.worldMu.Unlock()
+			t.Fatalf("home radar retained stale player %q (old home=%v)", id, oldHomeIDs)
+		}
+	}
+	for id := range newAwayIDs {
+		if !currentAway[id] {
+			srv.worldMu.Unlock()
+			t.Fatalf("away radar retained stale player %q (old away=%v)", id, oldAwayIDs)
+		}
 	}
 	for _, key := range []string{"home_coords", "away_coords"} {
 		for _, raw := range full[key].([]map[string]interface{}) {

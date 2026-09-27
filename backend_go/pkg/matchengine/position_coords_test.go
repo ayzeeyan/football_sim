@@ -38,7 +38,7 @@ func TestPositionDrivenCoordinates(t *testing.T) {
 		HomeStadium: "Away Arena",
 		Squad:       squad,
 	}
-	mgr := &managers.ManagerProfile{Name: "Boss", Style: "possession"}
+	mgr := &managers.ManagerProfile{Name: "Boss", Style: "free_flowing"}
 
 	engine := NewLiveMatchEngine(homeClub, awayClub, mgr, mgr, 12345)
 

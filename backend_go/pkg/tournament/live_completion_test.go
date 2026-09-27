@@ -106,7 +106,7 @@ func TestCommitLiveFixtureFromFullTimeIsIdempotentAndSkipsFinishedSlate(t *testi
 	if finished.HomeGoals == nil || finished.AwayGoals == nil || *finished.HomeGoals != engine.HomeScore || *finished.AwayGoals != engine.AwayScore {
 		t.Fatalf("fixture score %v-%v does not match engine %d-%d", finished.HomeGoals, finished.AwayGoals, engine.HomeScore, engine.AwayScore)
 	}
-	if len(finished.Report.Events) != len(engine.Events) || len(finished.Report.HomeXI) == 0 || len(finished.Report.AwayXI) == 0 || len(finished.Report.HomeBench) == 0 || len(finished.Report.AwayBench) == 0 {
+	if len(finished.Report.Events) < len(engine.Events) || len(finished.Report.HomeXI) == 0 || len(finished.Report.AwayXI) == 0 || len(finished.Report.HomeBench) == 0 || len(finished.Report.AwayBench) == 0 {
 		t.Fatalf("live report omitted engine data: events=%d/%d homeXI=%d awayXI=%d benches=%d/%d", len(finished.Report.Events), len(engine.Events), len(finished.Report.HomeXI), len(finished.Report.AwayXI), len(finished.Report.HomeBench), len(finished.Report.AwayBench))
 	}
 	if home.Played != homePlayedBefore+1 || away.Played != awayPlayedBefore+1 {

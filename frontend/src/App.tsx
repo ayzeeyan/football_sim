@@ -1,41 +1,47 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { BatchSimResult, Club, Fixture, SeasonAwards } from './types';
-import { fetchCalendar, fetchFavourite, fetchInbox, fetchSeasonAwards, setFavourite, simulateContinue, simulateMonth, simulateRemaining, simulateSeason, simulateWeek, type CalendarState } from './services/api';
+import { fetchCalendar, fetchFixtureSummaries, fetchInbox, fetchSeasonAwards, invalidateApiCache, simulateContinue, simulateMonth, simulateSeason, simulateWeek, type CalendarState } from './services/api';
 import { slugFromTab, tabFromSlug, type TabId } from './lib/constants';
 import { stripEmojis } from './lib/format';
-import { useClubs, useMatchEngine } from './hooks/useMatch';
+import { useClubs } from './hooks/useClubs';
 import { useToast } from './hooks/useToast';
 import { TopBar } from './components/layout/TopBar';
 import { AwardsModal } from './components/layout/AwardsModal';
-import { AwardsCeremonyModal } from './components/AwardsCeremonyModal';
+import { AwardsCeremonyModal } from './components/career/AwardsCeremonyModal';
 import { ToastHost } from './components/layout/ToastHost';
-import { MatchdayTab } from './components/MatchdayTab';
-import { SquadTab } from './components/SquadTab';
-import { WonderkidLabTab } from './components/WonderkidLabTab';
-import { StandingsTab } from './components/StandingsTab';
-import { CompetitionHubTab } from './components/CompetitionHubTab';
-import { TransfersTab } from './components/TransfersTab';
-import { HistoryTab } from './components/HistoryTab';
-import { ClubPickerModal } from './components/ClubPickerModal';
-import { NewCareerModal } from './components/NewCareerModal';
-import { InboxTab } from './components/InboxTab';
-import { HomeDashboardTab } from './components/HomeDashboardTab';
-import { PlayerSheetProvider } from './components/PlayerSheet';
-import { MatchweekDigestModal } from './components/MatchweekDigestModal';
+import { NewCareerModal } from './components/career/NewCareerModal';
+import { PlayerSheetProvider } from './components/clubs/PlayerSheet';
+import { MatchweekDigestModal } from './components/postmatch/MatchweekDigestModal';
 import { soundManager } from './audio/webAudio';
-import { matchWs } from './services/matchSocket';
+
+const HomeDashboardTab = lazy(() => import('./components/competitions/HomeDashboardTab').then((m) => ({ default: m.HomeDashboardTab })));
+const SimulationCentreTab = lazy(() => import('./components/matches/SimulationCentreTab').then((m) => ({ default: m.SimulationCentreTab })));
+const WonderkidLabTab = lazy(() => import('./components/wonderkids/WonderkidLabTab').then((m) => ({ default: m.WonderkidLabTab })));
+const StandingsTab = lazy(() => import('./components/competitions/StandingsTab').then((m) => ({ default: m.StandingsTab })));
+const CompetitionHubTab = lazy(() => import('./components/competitions/CompetitionHubTab').then((m) => ({ default: m.CompetitionHubTab })));
+const InboxTab = lazy(() => import('./components/career/InboxTab').then((m) => ({ default: m.InboxTab })));
+const HistoryTab = lazy(() => import('./components/competitions/HistoryTab').then((m) => ({ default: m.HistoryTab })));
+const SquadTab = lazy(() => import('./components/clubs/SquadTab').then((m) => ({ default: m.SquadTab })));
+const TransfersTab = lazy(() => import('./components/transfers/TransfersTab').then((m) => ({ default: m.TransfersTab })));
+const PlayersTab = lazy(() => import('./components/clubs/PlayersTab').then((m) => ({ default: m.PlayersTab })));
+
+const ScreenLoading: React.FC = () => (
+  <div className="p-12 text-center" role="status" aria-live="polite">
+    <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-brass border-t-transparent" />
+    <p className="mt-3 text-[13px] font-mono text-sage">Loading screen…</p>
+  </div>
+);
 
 export const App: React.FC = () => {
   // Career home screen: the league table.
   const [activeTab, setActiveTab] = useState<TabId>(() =>
     typeof window === 'undefined' ? 8 : tabFromSlug(window.location.hash.replace(/^#/, '')),
   );
-  const { clubs, homeClub, awayClub, setHome, setAway, swap, applyClubs, reloadClubs } = useClubs();
-  const { matchData, status, kickoff, pause, setSpeed, reset, seek70, seekChance } = useMatchEngine();
+  const { clubs, reloadClubs } = useClubs();
+  const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
   const { toast, showToast } = useToast();
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTarget, setModalTarget] = useState<'home' | 'away'>('home');
+  const [selectedClubId, setSelectedClubId] = useState<string | undefined>();
   const [awardsOpen, setAwardsOpen] = useState(false);
   const [ceremonyOpen, setCeremonyOpen] = useState(false);
   const [awardsData, setAwardsData] = useState<SeasonAwards | null>(null);
@@ -48,14 +54,6 @@ export const App: React.FC = () => {
   const [digestOpen, setDigestOpen] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const simLockRef = useRef(false);
-
-  const handleSelectClub = useCallback(
-    (selected: Club) => {
-      if (modalTarget === 'home') setHome(selected);
-      else setAway(selected);
-    },
-    [modalTarget, setHome, setAway],
-  );
 
   const handleOpenAwards = useCallback(() => {
     soundManager.playClick();
@@ -79,17 +77,12 @@ export const App: React.FC = () => {
         return;
       }
       setCareerKey((k) => k + 1);
+      invalidateApiCache();
       await Promise.all([
         reloadClubs(),
         fetchCalendar().then(setCalendar),
         fetchInbox(1).then((feed) => setInboxUnread(feed.unread)),
       ]);
-      if (result.stop_reason === 'watched_club_match' && result.next_fixture?.home && result.next_fixture?.away) {
-        applyClubs(result.next_fixture.home, result.next_fixture.away, result.next_fixture.id);
-        setActiveTab(0);
-        showToast(result.continue_hint || result.message || 'Your club is ready to play.');
-        return;
-      }
       setDigestData(result);
       if ((mode === 'season' || result.stop_reason === 'season_event') && result.awards_ready) {
         setDigestOpen(false);
@@ -105,46 +98,35 @@ export const App: React.FC = () => {
       simLockRef.current = false;
       setSimulating(false);
     }
-  }, [reloadClubs, showToast, applyClubs]);
+  }, [reloadClubs, showToast]);
 
-  const watchClub = useCallback(
-    (c: Club) => {
-      setHome(c);
-      setActiveTab(0);
-      showToast(`Now showing ${c.club_name}.`);
-    },
-    [setHome, showToast],
-  );
-
-  const watchFixture = useCallback(
-    (f: Fixture) => {
-      applyClubs(f.home, f.away, f.id);
-      setActiveTab(0);
-      showToast(`Now showing ${f.home.short_name} against ${f.away.short_name}.`);
-    },
-    [applyClubs, showToast],
-  );
-
-  /** Full-time follow-on: the broadcast moves itself to a fresh random fixture and kicks off. */
-  const handleNextFixture = useCallback(() => {
-    if (clubs.length < 2) return;
-    const home = clubs[Math.floor(Math.random() * clubs.length)];
-    let away = clubs[Math.floor(Math.random() * clubs.length)];
-    if (away.club_id === home.club_id) {
-      away = clubs[(clubs.indexOf(home) + 1) % clubs.length];
+  const watchClub = useCallback(async (c: Club) => {
+    const schedule = await fetchFixtureSummaries();
+    const fixture = schedule.fixtures.find((row) => row.status === 'scheduled' && (row.home.club_id === c.club_id || row.away.club_id === c.club_id));
+    if (!fixture) {
+      showToast(`No scheduled fixture is currently available for ${c.short_name}.`);
+      return;
     }
-    setHome(home);
-    setAway(away);
-    showToast(`Next up: ${home.short_name} against ${away.short_name}.`);
-    matchWs.sendCommand('kickoff');
-  }, [clubs, setHome, setAway, showToast]);
+    setSelectedFixtureId(fixture.id);
+    setActiveTab(0);
+    showToast(`Opened ${fixture.home.short_name} against ${fixture.away.short_name} in the Match Centre.`);
+  }, [showToast]);
+
+  const openFixture = useCallback(
+    (f: Fixture) => {
+      setSelectedFixtureId(f.id);
+      setActiveTab(0);
+      showToast(`Opened ${f.home.short_name} against ${f.away.short_name} in the Match Centre.`);
+    },
+    [showToast],
+  );
 
   const viewSquadOf = useCallback(
     (c: Club) => {
-      setHome(c);
+      setSelectedClubId(c.club_id);
       setActiveTab(3);
     },
-    [setHome],
+    [],
   );
 
   const handleTab = useCallback((id: TabId) => {
@@ -172,22 +154,6 @@ export const App: React.FC = () => {
     fetchCalendar().then(setCalendar).catch(() => undefined);
   }, [careerKey]);
 
-  // Favourite watch club: first opened live match pins it when unset.
-  // Server also pins home on set_clubs; this mirrors to localStorage-backed API.
-  useEffect(() => {
-    if (!homeClub) return;
-    let cancelled = false;
-    fetchFavourite()
-      .then((f) => {
-        if (cancelled) return;
-        if (!f.favourite_club_id && homeClub) {
-          void setFavourite(homeClub.club_id).catch(() => undefined);
-        }
-      })
-      .catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [homeClub?.club_id]);
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -202,7 +168,6 @@ export const App: React.FC = () => {
       }
 
       if (e.key === 'Escape') {
-        setModalOpen(false);
         setAwardsOpen(false);
         setCeremonyOpen(false);
         setNewCareerOpen(false);
@@ -232,47 +197,11 @@ export const App: React.FC = () => {
         return;
       }
 
-      if (e.key === ' ' || e.code === 'Space') {
-        // Matchday owns playback shortcuts; never sim the slate from its dugout.
-        if (activeTab === 0 || matchData?.state === 'HALF_TIME') return;
-        e.preventDefault();
-        soundManager.playClick();
-        showToast('Simulating matchweek…');
-        simulateRemaining()
-          .then((res) => {
-            if (res.status === 'success') {
-              showToast(`Simulated ${res.played} fixtures.`);
-              setCareerKey((k) => k + 1);
-              void reloadClubs();
-            } else {
-              showToast(res.status || 'Simulation complete.');
-            }
-          })
-          .catch(() => {
-            showToast('Simulation failed.');
-          });
-        return;
-      }
-
-      if (activeTab === 0) return;
-      if (e.key === '1') {
-        setSpeed(1);
-        showToast('Speed: 1x');
-      } else if (e.key === '2') {
-        setSpeed(2);
-        showToast('Speed: 2x');
-      } else if (e.key === '3') {
-        setSpeed(5);
-        showToast('Speed: 5x');
-      } else if (e.key === '4') {
-        setSpeed(999);
-        showToast('Speed: Instant');
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showToast, reloadClubs, setSpeed, activeTab, matchData?.state, handleMacroSim, simulating]);
+  }, [showToast, reloadClubs, handleMacroSim, simulating]);
 
   return (
     <PlayerSheetProvider>
@@ -280,22 +209,9 @@ export const App: React.FC = () => {
       <a href="#main" className="skip-link">
         Skip to content
       </a>
-      {status !== 'CONNECTED' && (
-        <div
-          className="bg-ember/15 border-b border-ember/40 text-center py-2 px-4 text-[13px] font-semibold text-[#D89A84]"
-          role="status"
-          aria-live="polite"
-        >
-          {status === 'CONNECTING' || status === 'RECONNECTING'
-            ? 'Connecting to the match engine… live matches pause until the link returns.'
-            : 'Match engine offline. Tables still load; live kickoff needs the engine.'}
-        </div>
-      )}
-
       <TopBar
         activeTab={activeTab}
         onTab={handleTab}
-        wsStatus={status}
         muted={muted}
         onToggleMute={() => {
           const isMut = soundManager.toggleMute();
@@ -315,137 +231,105 @@ export const App: React.FC = () => {
         seasonName={calendar?.season_name}
         calendarLabel={calendar ? `MW ${Math.min(calendar.current_matchweek, calendar.max_matchweeks)}/${calendar.max_matchweeks} · ${calendar.month}${calendar.year ? ` ${calendar.year}` : ''}` : undefined}
         inboxUnread={inboxUnread}
-        world={!!calendar?.world}
+        onOpenClub={(clubId) => {
+          const club = clubs.find((c) => c.club_id === clubId);
+          if (club) viewSquadOf(club);
+        }}
+        onOpenCompetition={() => setActiveTab(7)}
       />
 
-      <main id="main" className="flex-1 page-shell py-5 sm:py-6 lg:py-8 scroll-mt-28">
-        {activeTab === 8 && (
-          <HomeDashboardTab
-            key={`home-${careerKey}`}
-            careerKey={careerKey}
-            onWatchFixture={(fixture) => {
-              const home = clubs.find((c) => c.club_id === fixture.home_id);
-              const away = clubs.find((c) => c.club_id === fixture.away_id);
-              if (!home || !away) return;
-              applyClubs(home, away, fixture.fixture_id || fixture.id);
-              setActiveTab(0);
-              showToast(`Now showing ${home.short_name} against ${away.short_name}.`);
-            }}
-            onViewSquad={(clubId) => {
-              const club = clubs.find((c) => c.club_id === clubId);
-              if (club) viewSquadOf(club);
-            }}
-            onOpenInbox={() => setActiveTab(6)}
-            onOpenTransfers={() => setActiveTab(4)}
-            onOpenLeague={() => setActiveTab(2)}
-            onOpenCompetitions={() => setActiveTab(7)}
-          />
-        )}
-        {activeTab === 0 && (
-          <MatchdayTab
-            homeClub={homeClub}
-            awayClub={awayClub}
-            matchData={matchData}
-            onOpenClubModal={(target) => {
-              setModalTarget(target);
-              setModalOpen(true);
-            }}
-            onSwapTeams={swap}
-            onKickoff={kickoff}
-            onPause={pause}
-            onSetSpeed={setSpeed}
-            onReset={reset}
-            onNextFixture={handleNextFixture}
-            onSeek70={seek70}
-            onSeekChance={seekChance}
-            onJumpToFixture={watchFixture}
-            onWeekAdvanced={() => {
-              setCareerKey((k) => k + 1);
-              fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
-            }}
-          />
-        )}
-        {activeTab === 1 && <WonderkidLabTab key={`lab-${careerKey}`} onShowToast={(m) => showToast(stripEmojis(m))} />}
-        {activeTab === 2 && (
-          <StandingsTab
-            key={`league-${careerKey}`}
-            onWatchFixture={watchFixture}
-            onViewSquad={viewSquadOf}
-            onShowToast={(m) => showToast(stripEmojis(m))}
-            onOpenCeremony={() => setCeremonyOpen(true)}
-            onSeasonTick={() => {
-              fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
-            }}
-          />
-        )}
-        {activeTab === 7 && (
-          <CompetitionHubTab
-            key={`competitions-${careerKey}`}
-            currentMatchweek={calendar?.current_matchweek}
-            onWatchFixture={(fixture) => {
-              const home = clubs.find((c) => c.club_id === fixture.home_id);
-              const away = clubs.find((c) => c.club_id === fixture.away_id);
-              if (!home || !away) return;
-              applyClubs(home, away, fixture.fixture_id);
-              setActiveTab(0);
-              showToast(`Now showing ${home.short_name} against ${away.short_name}.`);
-            }}
-            onViewSquad={(clubId) => {
-              const club = clubs.find((c) => c.club_id === clubId);
-              if (club) viewSquadOf(club);
-            }}
-          />
-        )}
-        {activeTab === 6 && (
-          <InboxTab key={`inbox-${careerKey}`} careerKey={careerKey} onUnread={setInboxUnread} />
-        )}
-        {activeTab === 5 && <HistoryTab key={`history-${careerKey}`} />}
-        {activeTab === 3 && <SquadTab key={`squads-${careerKey}`} clubs={clubs} onWatchClub={watchClub} />}
-        {activeTab === 4 && <TransfersTab key={`transfers-${careerKey}`} onShowToast={(m) => showToast(stripEmojis(m))} />}
+      <main id="main" className="flex-1 min-w-0 page-shell py-4 sm:py-5 lg:ml-[216px] lg:w-[calc(100%-216px)] lg:py-6 scroll-mt-28">
+        <Suspense fallback={<ScreenLoading />}>
+          {activeTab === 8 && (
+            <HomeDashboardTab
+              key={`home-${careerKey}`}
+              careerKey={careerKey}
+              onOpenFixture={(fixture) => openFixture({ ...fixture, home: fixture.home as unknown as Club, away: fixture.away as unknown as Club } as Fixture)}
+              onViewSquad={(clubId) => {
+                const club = clubs.find((c) => c.club_id === clubId);
+                if (club) viewSquadOf(club);
+              }}
+              onOpenInbox={() => setActiveTab(6)}
+              onOpenTransfers={() => setActiveTab(4)}
+              onOpenLeague={() => setActiveTab(2)}
+              onOpenCompetitions={() => setActiveTab(7)}
+            />
+          )}
+          {activeTab === 0 && (
+            <SimulationCentreTab
+              careerKey={careerKey}
+              selectedFixtureId={selectedFixtureId}
+              onSelectFixture={setSelectedFixtureId}
+              onShowToast={showToast}
+              onWeekAdvanced={() => {
+                setCareerKey((k) => k + 1);
+                void reloadClubs();
+                fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
+              }}
+              onViewCompetition={() => setActiveTab(7)}
+              onViewClub={(club) => viewSquadOf(club)}
+            />
+          )}
+          {activeTab === 1 && <WonderkidLabTab key={`lab-${careerKey}`} onShowToast={(m) => showToast(stripEmojis(m))} />}
+          {activeTab === 2 && (
+            <StandingsTab
+              key={`league-${careerKey}`}
+              onWatchFixture={openFixture}
+              onViewSquad={viewSquadOf}
+              onShowToast={(m) => showToast(stripEmojis(m))}
+              onOpenCeremony={() => setCeremonyOpen(true)}
+              onSeasonTick={() => {
+                fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
+              }}
+            />
+          )}
+          {activeTab === 7 && (
+            <CompetitionHubTab
+              key={`competitions-${careerKey}`}
+              currentMatchweek={calendar?.current_matchweek}
+              onWatchFixture={(fixture) => openFixture({ ...fixture, home: fixture.home as unknown as Club, away: fixture.away as unknown as Club } as Fixture)}
+              onViewSquad={(clubId) => {
+                const club = clubs.find((c) => c.club_id === clubId);
+                if (club) viewSquadOf(club);
+              }}
+            />
+          )}
+          {activeTab === 6 && (
+            <InboxTab key={`inbox-${careerKey}`} careerKey={careerKey} onUnread={setInboxUnread} />
+          )}
+          {activeTab === 5 && <HistoryTab key={`history-${careerKey}`} />}
+          {activeTab === 9 && (
+            <PlayersTab
+              key={`players-${careerKey}`}
+              onViewClub={(clubId) => {
+                const club = clubs.find((c) => c.club_id === clubId);
+                if (club) viewSquadOf(club);
+              }}
+            />
+          )}
+          {activeTab === 3 && (
+            <SquadTab
+              key={`squads-${careerKey}`}
+              clubs={clubs}
+              initialClubId={selectedClubId}
+              onWatchClub={watchClub}
+              onWatchFixture={openFixture}
+            />
+          )}
+          {activeTab === 4 && <TransfersTab key={`transfers-${careerKey}`} onShowToast={(m) => showToast(stripEmojis(m))} />}
+        </Suspense>
       </main>
 
-      <footer className="border-t border-line mt-auto">
-        <div className="page-shell py-4 flex flex-wrap items-center justify-between gap-3 text-[13px] text-sage">
+      <footer className="border-t border-line mt-auto min-w-0 lg:ml-[216px] lg:w-[calc(100%-216px)]">
+        <div className="page-shell py-2.5 flex flex-wrap items-center justify-between gap-3 text-[11px] text-sage/70">
           <div className="flex items-center gap-3">
-            <p>{calendar?.world ? 'Top Five Europe' : 'European Super League'}, {calendar?.season_name?.replace('-', '–') || '2026–27'}</p>
+            <p>{calendar?.world ? 'Top Five Europe' : 'Legacy twelve-club save'}, {calendar?.season_name?.replace('-', '–') || '2026–27'}</p>
             <span className="text-line">•</span>
-            <p>{calendar?.world ? '96 clubs · 38-week shared calendar' : '12 clubs · 44-week Super League'}</p>
+            <p>{calendar?.world ? '96 clubs · 38-week shared calendar' : 'Legacy calendar'}</p>
           </div>
-
-          <div
-            className="flex items-center gap-2 text-[11px] font-mono text-sage bg-cardLight/70 border border-line px-3 py-1.5 rounded-full shadow-sm select-none"
-            title="Global Spectator Shortcuts"
-          >
-            <span className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">C</kbd> Continue
-            </span>
-            <span className="text-line">•</span>
-            <span className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">W</kbd> Week
-            </span>
-            <span className="text-line">•</span>
-            <span className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">M</kbd> Month
-            </span>
-            <span className="text-line">•</span>
-            <span className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">⇧S</kbd> Season
-            </span>
-            <span className="text-line">•</span>
-            <span className="flex items-center gap-1.5">
-              <kbd className="px-1.5 py-0.5 rounded bg-ink/70 border border-line text-bone font-semibold text-[10px]">Esc</kbd> Close
-            </span>
-          </div>
+          <p className="hidden sm:block">C Continue · W Week · M Month · Shift+S Season</p>
         </div>
       </footer>
-
-      <ClubPickerModal
-        isOpen={modalOpen}
-        target={modalTarget}
-        clubs={clubs}
-        onSelectClub={handleSelectClub}
-        onClose={() => setModalOpen(false)}
-      />
 
       <AwardsModal
         open={awardsOpen}
@@ -465,7 +349,7 @@ export const App: React.FC = () => {
           showToast(stripEmojis(msg));
           setCareerKey((n) => n + 1);
           void reloadClubs();
-          setActiveTab(2);
+          setActiveTab(8);
         }}
       />
       <ToastHost message={toast} />

@@ -5,6 +5,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	"football_sim/pkg/models"
 )
 
 // GrowthEngine coordinates biometric progression, attribute training,
@@ -75,6 +77,11 @@ func (ge *GrowthEngine) RegisterProdigy(
 ) (*BiometricProfile, *TechnicalAttributes) {
 	ge.mu.Lock()
 	defer ge.mu.Unlock()
+	// Canonical wonderkids share an exact 99 potential ceiling. Enforce it
+	// here so every downstream growth path starts from the same value.
+	if models.IsCanonicalWonderkidID(id) {
+		potential = 99
+	}
 
 	adultAgeResolved := AdultHeightAgeFor(name, adultAge)
 	yearsLeft := adultAgeResolved - age
@@ -127,13 +134,30 @@ func (ge *GrowthEngine) RegisterProdigy(
 	}
 
 	attrs := ge.seedAttributes(baseOvr, posCat, height)
-
 	ge.Biometrics[id] = bio
 	ge.Attributes[id] = attrs
 
 	ge.internalNudgeToOVR(id, posCat, baseOvr)
 
 	return bio, attrs
+}
+
+// UpgradeCanonicalWonderkidPotentials migrates restored biometrics in place.
+// It preserves a player's accumulated XP, attributes, and current OVR.
+func (ge *GrowthEngine) UpgradeCanonicalWonderkidPotentials() bool {
+	if ge == nil {
+		return false
+	}
+	ge.mu.Lock()
+	defer ge.mu.Unlock()
+	changed := false
+	for id := range models.CanonicalWonderkidIDs {
+		if bio := ge.Biometrics[id]; bio != nil && bio.Potential != 99 {
+			bio.Potential = 99
+			changed = true
+		}
+	}
+	return changed
 }
 
 func (ge *GrowthEngine) seedAttributes(baselineOvr int, posCat string, heightCM float64) *TechnicalAttributes {

@@ -82,6 +82,43 @@ func TestWorldDashboardRanksTransfersInjuriesAndUpcomingDeterministically(t *tes
 	}
 }
 
+func TestWorldDashboardStorylinesIgnoreFavouriteClub(t *testing.T) {
+	tm, _, _ := loadEuropeanWorldForTest(t)
+	before := tm.WorldDashboard()
+	storiesBefore, _ := before["storylines"].([]string)
+	featuredBefore, _ := before["next_fixture"].(map[string]interface{})
+	if featuredBefore == nil {
+		t.Fatal("expected featured fixture")
+	}
+	if !tm.SetFavouriteClubID("LAL-RMA") {
+		t.Fatal("could not select Madrid")
+	}
+	afterMadrid := tm.WorldDashboard()
+	if !tm.SetFavouriteClubID("EPL-ARS") {
+		t.Fatal("could not select Arsenal")
+	}
+	afterArsenal := tm.WorldDashboard()
+	if !tm.SetFavouriteClubID("BUN-BAY") {
+		t.Fatal("could not select Bayern")
+	}
+	afterBayern := tm.WorldDashboard()
+	for _, dash := range []map[string]interface{}{afterMadrid, afterArsenal, afterBayern} {
+		featured, _ := dash["next_fixture"].(map[string]interface{})
+		if featured["id"] != featuredBefore["id"] {
+			t.Fatalf("featured fixture followed club selection: want %v got %v", featuredBefore["id"], featured["id"])
+		}
+		stories, _ := dash["storylines"].([]string)
+		if len(stories) != len(storiesBefore) {
+			t.Fatalf("storyline count followed club selection: %d vs %d", len(stories), len(storiesBefore))
+		}
+		for i := range stories {
+			if stories[i] != storiesBefore[i] {
+				t.Fatalf("storyline %d followed club selection: %q vs %q", i, stories[i], storiesBefore[i])
+			}
+		}
+	}
+}
+
 func TestCompetitionLeadersUseCompetitionStatsNotGlobalTotals(t *testing.T) {
 	tm, _, _ := loadEuropeanWorldForTest(t)
 	club := tm.ClubsList[0]

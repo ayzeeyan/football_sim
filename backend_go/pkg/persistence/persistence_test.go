@@ -7,6 +7,7 @@ import (
 
 	"football_sim/pkg/datamanager"
 	"football_sim/pkg/growth"
+	"football_sim/pkg/matchreport"
 	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 	"football_sim/pkg/transfers"
@@ -30,7 +31,6 @@ func setupTestWorld(t *testing.T) (*datamanager.DataManager, *growth.GrowthEngin
 	te := transfers.NewTransferEngine(eliteClubs, tm.Managers, 42)
 	return dm, ge, tm, te
 }
-
 func TestSaveAndLoadCareer(t *testing.T) {
 	_, ge, tm, te := setupTestWorld(t)
 
@@ -84,6 +84,47 @@ func TestSaveAndLoadCareer(t *testing.T) {
 	}
 }
 
+func TestRestoreCareerUpgradesCanonicalPotentialAndRetiresHernandoTrait(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+	snap.Version = 7
+	for id, bio := range snap.Growth.Biometrics {
+		if models.IsCanonicalWonderkidID(id) {
+			bio.Potential = 95
+		}
+	}
+	for _, club := range snap.Clubs {
+		for _, player := range club.Squad {
+			if player.PlayerID == "WK_Earl_Josh_Hernando" {
+				player.Personality = "snake"
+				player.TransferRequested = true
+				player.Loyalty = 8
+			}
+		}
+	}
+	if err := ValidateCareerSnapshot(snap); err != nil {
+		t.Fatalf("legacy career should validate before migration: %v", err)
+	}
+	_, restoredGE, restoredTM, restoredTE := setupTestWorld(t)
+	if err := RestoreCareer(restoredTM, restoredGE, restoredTE, snap); err != nil {
+		t.Fatalf("RestoreCareer: %v", err)
+	}
+	for id, bio := range restoredGE.Biometrics {
+		if models.IsCanonicalWonderkidID(id) && bio.Potential != 99 {
+			t.Errorf("restored wonderkid %s potential=%d, want 99", id, bio.Potential)
+		}
+	}
+	for _, club := range restoredTM.ClubsList {
+		for _, player := range club.Squad {
+			if player.PlayerID == "WK_Earl_Josh_Hernando" &&
+				(player.Personality == "snake" || player.TransferRequested || player.Loyalty < 60) {
+				t.Fatalf("retired trait survived restore: personality=%q request=%v loyalty=%d",
+					player.Personality, player.TransferRequested, player.Loyalty)
+			}
+		}
+	}
+}
+
 func TestWriteSnapshotRoundTrip(t *testing.T) {
 	_, ge, tm, te := setupTestWorld(t)
 	built := BuildSnapshot(tm, ge, te)
@@ -101,6 +142,41 @@ func TestWriteSnapshotRoundTrip(t *testing.T) {
 	}
 	if _, err := WriteSnapshot(nil, savePath); err == nil {
 		t.Fatal("WriteSnapshot(nil) succeeded")
+	}
+}
+
+func TestMatchTacticalSlotSurvivesShardedSaveReload(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snapshot := BuildSnapshot(tm, ge, te)
+	if len(snapshot.Fixtures) == 0 {
+		t.Fatal("test world has no fixtures")
+	}
+	snapshot.Fixtures[0].Report = &matchreport.MatchReport{
+		Method:        "instant",
+		HomeFormation: models.Formation4231,
+		AwayFormation: models.Formation433,
+		HomeXI: []matchreport.MatchPlayerRow{{
+			PlayerID: "WK_Maverick_Cantalejo", FullName: "Maverick Cantalejo",
+			Position: "CAM", NaturalPosition: "CAM", TacticalSlot: "CAM",
+			PositionFit: string(models.PositionFitNatural), Starter: true, Played: true,
+		}},
+	}
+
+	path := filepath.Join(t.TempDir(), "tactical_slots.json")
+	if _, err := WriteSnapshot(snapshot, path); err != nil {
+		t.Fatalf("write snapshot: %v", err)
+	}
+	loaded, err := LoadCareer(path)
+	if err != nil {
+		t.Fatalf("load snapshot: %v", err)
+	}
+	row := loaded.Fixtures[0].Report.HomeXI[0]
+	if row.PlayerID != "WK_Maverick_Cantalejo" || row.Position != "CAM" || row.NaturalPosition != "CAM" ||
+		row.TacticalSlot != "CAM" || row.PositionFit != string(models.PositionFitNatural) {
+		t.Fatalf("tactical assignment changed across save/reload: %+v", row)
+	}
+	if loaded.Fixtures[0].Report.HomeFormation != models.Formation4231 {
+		t.Fatalf("formation changed across save/reload: %q", loaded.Fixtures[0].Report.HomeFormation)
 	}
 }
 
@@ -163,8 +239,8 @@ func TestRestoreCareer(t *testing.T) {
 			t.Errorf("missing biometric for wonderkid %s", id)
 			continue
 		}
-		if bio.Potential < 93 || bio.Potential > 96 {
-			t.Errorf("wonderkid %s has invalid potential %d (expected 93-96)", id, bio.Potential)
+		if bio.Potential != 99 {
+			t.Errorf("wonderkid %s has invalid potential %d (expected 99)", id, bio.Potential)
 		}
 	}
 
@@ -474,5 +550,36 @@ func TestRestoreCareerOriginalClubIDMetadata(t *testing.T) {
 	restored := freshTM.Clubs[origClubID].Squad[0]
 	if restored.OriginalClubID != origClubID {
 		t.Errorf("restored player missing original_club_id: got %q, want %q", restored.OriginalClubID, origClubID)
+	}
+}
+
+func TestLoadCareerNormalizesLegacyIdleTransferCounters(t *testing.T) {
+	_, ge, tm, te := setupTestWorld(t)
+	snap := BuildSnapshot(tm, ge, te)
+	snap.Version = SaveVersion
+	// Simulate legacy sentinel values where closed market had week=1, day=1
+	snap.Transfers.WindowType = transfers.WindowClosed
+	snap.Transfers.WindowOpen = false
+	snap.Transfers.IsOffSeason = false
+	snap.Transfers.CurrentWeek = 1
+	snap.Transfers.CurrentDay = 1
+	snap.Transfers.ProcessedWeeks = 0
+
+	tempDir := t.TempDir()
+	savePath := filepath.Join(tempDir, "legacy_transfer_career.json")
+	if _, err := WriteSnapshot(snap, savePath); err != nil {
+		t.Fatalf("WriteSnapshot failed: %v", err)
+	}
+
+	loaded, err := LoadCareer(savePath)
+	if err != nil {
+		t.Fatalf("LoadCareer failed: %v", err)
+	}
+	if loaded.Transfers.CurrentWeek != 0 || loaded.Transfers.CurrentDay != 0 || loaded.Transfers.ProcessedWeeks != 0 {
+		t.Fatalf("expected normalized counters 0, got week=%d day=%d processed=%d",
+			loaded.Transfers.CurrentWeek, loaded.Transfers.CurrentDay, loaded.Transfers.ProcessedWeeks)
+	}
+	if err := ValidateCareerSnapshot(loaded); err != nil {
+		t.Fatalf("ValidateCareerSnapshot failed on loaded snapshot: %v", err)
 	}
 }

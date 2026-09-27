@@ -528,11 +528,8 @@ func (tm *TournamentManager) pushSeasonPreviewUnlocked() {
 	for i := len(ranked) - 1; i >= 0 && len(scrap) < 3; i-- {
 		scrap = append(scrap, ranked[i].ShortName)
 	}
-	body := fmt.Sprintf("%s open as the sides to beat. %s start closer to the trapdoor. Board briefs already sit on every desk.",
+	body := fmt.Sprintf("%s open as the sides to beat. %s start closer to the trapdoor. Club boards have set their internal expectations.",
 		strings.Join(favs, ", "), strings.Join(scrap, ", "))
-	if fav := tm.Clubs[tm.FavouriteClubID]; fav != nil {
-		body += fmt.Sprintf(" %s are briefed for %s (target #%d).", fav.ClubName, fav.BoardObjective, fav.ExpectedFinish)
-	}
 	tm.PushInbox("race", tm.SeasonName+" season preview", body, 1, nil, "", "")
 }
 

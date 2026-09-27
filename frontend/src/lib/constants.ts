@@ -24,15 +24,25 @@ export type TrainingFocus = (typeof TRAINING_FOCUSES)[number]['value'];
 
 export const TABS = [
   { id: 8, slug: 'home', label: 'Home' },
-  { id: 0, slug: 'match', label: 'Match' },
-  { id: 2, slug: 'league', label: 'League' },
+  { id: 0, slug: 'match', label: 'Match Centre' },
+  { id: 6, slug: 'inbox', label: 'News' },
+  { id: 2, slug: 'league', label: 'Tables' },
   { id: 7, slug: 'competitions', label: 'Competitions' },
-  { id: 3, slug: 'squads', label: 'Squads' },
-  { id: 4, slug: 'transfers', label: 'Transfers' },
-  { id: 6, slug: 'inbox', label: 'Inbox' },
   { id: 5, slug: 'history', label: 'History' },
+  { id: 3, slug: 'squads', label: 'Clubs' },
+  { id: 9, slug: 'players', label: 'Players' },
+  { id: 4, slug: 'transfers', label: 'Transfers' },
   { id: 1, slug: 'lab', label: 'Wonderkids' },
 ] as const;
+
+/** Sidebar sections: the season you are watching, the competitions it
+ *  produces, the world you browse, and the future you develop. */
+export const NAV_GROUPS: Array<{ label: string; slugs: Array<(typeof TABS)[number]['slug']> }> = [
+  { label: 'Season', slugs: ['home', 'match', 'inbox'] },
+  { label: 'Competitions', slugs: ['league', 'competitions', 'history'] },
+  { label: 'Clubs & Market', slugs: ['squads', 'players', 'transfers'] },
+  { label: 'The Future', slugs: ['lab'] },
+];
 
 export type TabId = (typeof TABS)[number]['id'];
 export type TabSlug = (typeof TABS)[number]['slug'];

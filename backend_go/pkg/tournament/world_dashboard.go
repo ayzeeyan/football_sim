@@ -14,13 +14,13 @@ func (tm *TournamentManager) WorldDashboard() map[string]interface{} {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
+	// FavouriteClubID is a persisted observational filter only. Featured
+	// fixtures and storylines are world-level and must not follow it.
 	favID := tm.FavouriteClubID
+	upcoming := tm.dashboardUpcomingUnlocked(8)
 	var nextFixture map[string]interface{}
-	if favID != "" {
-		_, fav, _, _ := tm.weekWatchUnlocked()
-		if fav != nil && fav.Status != "finished" {
-			nextFixture = tm.compactCompetitionFixtureUnlocked(fav)
-		}
+	if len(upcoming) > 0 {
+		nextFixture = upcoming[0]
 	}
 
 	return map[string]interface{}{
@@ -32,6 +32,8 @@ func (tm *TournamentManager) WorldDashboard() map[string]interface{} {
 		"favourite_club_id": favID,
 		"favourite_club":    compactClub(tm.Clubs[favID]),
 		"next_fixture":      nextFixture,
+		"club_pulse":        tm.GenerateClubPulse(favID),
+		"storylines":        tm.GenerateWorldStorylines(),
 		"league_leaders":    tm.dashboardLeagueLeadersUnlocked(),
 		"europe":            tm.dashboardEuropeUnlocked(),
 		"top_scorer":        tm.dashboardTopScorerUnlocked(),
@@ -39,7 +41,7 @@ func (tm *TournamentManager) WorldDashboard() map[string]interface{} {
 		"injuries":          tm.dashboardInjuriesUnlocked(8),
 		"sackings":          tm.dashboardSackingsUnlocked(5),
 		"wonderkids":        tm.dashboardWonderkidsUnlocked(6),
-		"upcoming_fixtures": tm.dashboardUpcomingUnlocked(8),
+		"upcoming_fixtures": upcoming,
 		"headlines":         tm.dashboardHeadlinesUnlocked(8),
 		"transfer_window":   tm.dashboardWindowUnlocked(),
 		"unread_inbox":      tm.dashboardUnreadUnlocked(),
@@ -365,7 +367,8 @@ func (tm *TournamentManager) dashboardUpcomingUnlocked(n int) []map[string]inter
 		if away != nil {
 			aOVR = away.OverallTeamRating
 		}
-		score := hOVR + aOVR
+		imp := tm.EvaluateMatchImportance(f)
+		score := imp.Rank()*100 + hOVR + aOVR
 		if f.DerbyName != "" || f.IsHighHeatDerby {
 			score += 12
 		}
@@ -385,7 +388,9 @@ func (tm *TournamentManager) dashboardUpcomingUnlocked(n int) []map[string]inter
 	}
 	out := make([]map[string]interface{}, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, tm.compactCompetitionFixtureUnlocked(r.f))
+		item := tm.compactCompetitionFixtureUnlocked(r.f)
+		item["importance"] = string(tm.EvaluateMatchImportance(r.f))
+		out = append(out, item)
 	}
 	return out
 }

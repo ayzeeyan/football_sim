@@ -520,6 +520,16 @@ func TestChunk1CovPlayerUnmarshalBranches(t *testing.T) {
 	if p.WageEUR <= 0 || p.ContractYears != 3 || p.Loyalty != 65 {
 		t.Errorf("defaults wrong: wage=%d contract=%d loyalty=%d", p.WageEUR, p.ContractYears, p.Loyalty)
 	}
+	var expired Player
+	if err := json.Unmarshal([]byte(`{"player_id":"E1","full_name":"Expired","position":"ST","ovr":70,"contract_years":0,"loyalty":40}`), &expired); err != nil {
+		t.Fatalf("expired unmarshal: %v", err)
+	}
+	if expired.ContractYears != 0 {
+		t.Errorf("expired contract must stay 0, got %d", expired.ContractYears)
+	}
+	if expired.Loyalty != 40 {
+		t.Errorf("explicit loyalty must stay 40, got %d", expired.Loyalty)
+	}
 	if p.Education != "none" || p.SchoolWant != "open" || p.Personality != "dedicated_pro" {
 		t.Errorf("non-WK defaults wrong: %+v", p)
 	}
@@ -534,8 +544,15 @@ func TestChunk1CovPlayerUnmarshalBranches(t *testing.T) {
 	if err := json.Unmarshal([]byte(rawWK), &wk); err != nil {
 		t.Fatalf("WK unmarshal failed: %v", err)
 	}
-	if wk.Loyalty != 70 {
-		t.Errorf("WK loyalty bump = %d; want 70", wk.Loyalty)
+	if wk.Loyalty != 60 {
+		t.Errorf("WK explicit loyalty must persist, got %d", wk.Loyalty)
+	}
+	var wkMissing Player
+	if err := json.Unmarshal([]byte(`{"player_id":"WK_Y","full_name":"Izyan Levin Bantol","position":"CAM","ovr":76,"age":14,"universe_wonderkid":true}`), &wkMissing); err != nil {
+		t.Fatalf("WK default unmarshal: %v", err)
+	}
+	if wkMissing.Loyalty != 70 {
+		t.Errorf("WK missing loyalty default = %d; want 70", wkMissing.Loyalty)
 	}
 	if wk.Education != "middle_school" {
 		t.Errorf("WK education = %q", wk.Education)

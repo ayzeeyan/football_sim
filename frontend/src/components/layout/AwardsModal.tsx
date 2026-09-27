@@ -37,31 +37,67 @@ export const AwardsModal: React.FC<AwardsModalProps> = ({ open, data, onClose, o
           <span>Season honours, {data?.season_name || '2026–27'}</span>
         </span>
       }
-      subtitle="Decided across the Super League season and the UCL campaign."
+      subtitle={data?.world || (data?.league_champions && data.league_champions.length > 0)
+        ? 'Decided across the five domestic leagues and the UEFA competitions.'
+        : 'Decided across the Super League season and the UCL campaign.'}
       onClose={onClose}
     />
-    <div className="p-6 space-y-3 font-mono text-xs">
-      <div className="p-4 bg-cardLight border border-brass/40 rounded-xl flex justify-between items-center gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <HonourCrest shortName={data?.super_league_champion?.short_name} name={data?.super_league_champion?.club_name ?? 'champions'} />
-          <div className="min-w-0">
-            <div className="text-brass font-semibold text-[11px] uppercase tracking-[0.14em]">Super League champions</div>
-            <div className="font-display text-lg font-semibold text-bone mt-1">{data?.super_league_champion?.club_name || 'Season in progress'}</div>
-          </div>
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 space-y-3 font-mono text-xs">
+      {(data?.league_champions && data.league_champions.length > 0) ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {data.league_champions.map((champ) => (
+            <div key={champ.competition_id || champ.league || champ.short_name} className="p-4 bg-cardLight border border-brass/40 rounded-xl flex justify-between items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <HonourCrest shortName={champ.short_name} name={champ.club_name} size={40} />
+                <div className="min-w-0">
+                  <div className="text-brass font-semibold text-[11px] uppercase tracking-[0.14em]">{champ.league || 'League'} champions</div>
+                  <div className="font-display text-[16px] font-semibold text-bone mt-1 truncate">{champ.club_name}</div>
+                </div>
+              </div>
+              <div className="font-display text-xl font-semibold text-brass shrink-0">{champ.pts || 0}</div>
+            </div>
+          ))}
         </div>
-        <div className="font-display text-2xl font-semibold text-brass shrink-0">{data?.super_league_champion?.pts || 0} pts</div>
-      </div>
+      ) : (
+        <div className="p-4 bg-cardLight border border-brass/40 rounded-xl flex justify-between items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <HonourCrest shortName={data?.super_league_champion?.short_name} name={data?.super_league_champion?.club_name ?? 'champions'} />
+            <div className="min-w-0">
+              <div className="text-brass font-semibold text-[11px] uppercase tracking-[0.14em]">Super League champions</div>
+              <div className="font-display text-lg font-semibold text-bone mt-1">{data?.super_league_champion?.club_name || 'Season in progress'}</div>
+            </div>
+          </div>
+          <div className="font-display text-2xl font-semibold text-brass shrink-0">{data?.super_league_champion?.pts || 0} pts</div>
+        </div>
+      )}
 
       <div className="p-4 bg-cardLight border border-line rounded-xl flex justify-between items-center gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <HonourCrest shortName={data?.ucl_champion?.short_name} name={data?.ucl_champion?.club_name ?? 'winners'} size={44} />
           <div className="min-w-0">
-            <div className="text-sage font-semibold text-[11px] uppercase tracking-[0.14em]">UCL winners</div>
+            <div className="text-sage font-semibold text-[11px] uppercase tracking-[0.14em]">{data?.world ? 'Champions League winners' : 'UCL winners'}</div>
             <div className="font-display text-lg font-semibold text-bone mt-1">{data?.ucl_champion?.club_name || 'Knockouts in progress'}</div>
           </div>
         </div>
         <div className="text-bone/70 font-semibold text-[13px] shrink-0">Champions</div>
       </div>
+
+      {(data?.europa_champion || data?.conference_champion) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {data.europa_champion && (
+            <div className="p-4 bg-cardLight border border-line rounded-xl">
+              <div className="text-sage font-semibold text-[11px] uppercase tracking-[0.14em]">Europa League</div>
+              <div className="font-display text-[16px] font-semibold text-bone mt-1">{data.europa_champion.club_name}</div>
+            </div>
+          )}
+          {data.conference_champion && (
+            <div className="p-4 bg-cardLight border border-line rounded-xl">
+              <div className="text-sage font-semibold text-[11px] uppercase tracking-[0.14em]">Conference League</div>
+              <div className="font-display text-[16px] font-semibold text-bone mt-1">{data.conference_champion.club_name}</div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="p-4 bg-cardLight border border-brass/40 rounded-xl flex justify-between items-center gap-3">
         <div className="flex items-center gap-3 min-w-0">

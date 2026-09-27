@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strings"
 
 	"football_sim/pkg/growth"
 	"football_sim/pkg/models"
@@ -214,10 +215,68 @@ func RefCardMult(personality string) float64 {
 // Pick helpers (scorer, assister, set pieces, bookings, subs)
 // --------------------------------------------------------------------------
 
-// PickScorer weights FWD/MID candidates by squared OVR with wonderkid,
-// mentor, personality, composure, and contextual big-game boosts. The
-// optional bigGame argument keeps existing callers source-compatible while
-// making the default context neutral.
+// ScorerSelectionWeight rates a player for receiving a goal attribution.
+// Rating and recent form set quality; natural attacking position and squad
+// role determine how often the player is the finish target. No player ID or
+// display name changes the result.
+func ScorerSelectionWeight(p *models.Player, isClutch, inBigGame bool) float64 {
+	if p == nil {
+		return 0
+	}
+	rating := p.EffectiveOVR() + p.FormModifier()
+	if rating < 40 {
+		rating = 40
+	} else if rating > 99 {
+		rating = 99
+	}
+	weight := math.Pow(float64(rating)/75.0, 2.6)
+	switch strings.ToUpper(strings.TrimSpace(p.Position)) {
+	case "ST", "CF", "LST", "RST", "LS", "RS":
+		weight *= 4.0
+	case "SS":
+		weight *= 3.2
+	case "LW", "RW", "LF", "RF":
+		weight *= 1.9
+	case "CAM":
+		weight *= 1.5
+	case "LM", "RM":
+		weight *= 1.35
+	default:
+		switch p.Category {
+		case "FWD":
+			weight *= 1.5
+		case "MID":
+			weight *= 1.1
+		case "DEF":
+			weight *= 0.18
+		default:
+			weight *= 0.1
+		}
+	}
+	switch p.SquadRole {
+	case models.RoleCrucial:
+		weight *= 1.08
+	case models.RoleImportant:
+		weight *= 1.04
+	}
+	if p.Composure > 70 && isClutch {
+		weight *= 1 + math.Min(0.16, float64(p.Composure-70)*0.005)
+	}
+	if p.UniverseWonderkid {
+		if p.MentorName != "" {
+			weight *= 1.04
+		}
+		if p.Personality == "big_game_performer" && inBigGame {
+			weight *= 1.12
+		} else if p.Personality == "flamboyant_star" {
+			weight *= 1.06
+		}
+	}
+	return weight
+}
+
+// PickScorer weights attackers by rating, recent form, and finishing role.
+// The optional bigGame argument keeps existing callers source-compatible.
 func PickScorer(xi []*models.Player, minute int, isClutch bool, rng *rand.Rand, bigGame ...bool) *models.Player {
 	rng = ensureRNG(rng)
 	inBigGame := len(bigGame) > 0 && bigGame[0]
@@ -226,7 +285,7 @@ func PickScorer(xi []*models.Player, minute int, isClutch bool, rng *rand.Rand, 
 	}
 	cands := make([]*models.Player, 0, len(xi))
 	for _, p := range xi {
-		if p.Category == "FWD" || p.Category == "MID" {
+		if p != nil && (p.Category == "FWD" || p.Category == "MID") {
 			cands = append(cands, p)
 		}
 	}
@@ -235,36 +294,18 @@ func PickScorer(xi []*models.Player, minute int, isClutch bool, rng *rand.Rand, 
 	}
 	weights := make([]float64, len(cands))
 	for i, p := range cands {
-		base := math.Pow(float64(p.OVR)/75.0, 2)
-		if p.Category == "FWD" {
-			base *= 3.0
-		} else {
-			base *= 1.2
-		}
-		if p.UniverseWonderkid {
-			mult := 1.0
-			if p.MentorName != "" {
-				mult += 0.08
-			}
-			if p.Personality == "big_game_performer" && inBigGame {
-				mult += 0.18
-			} else if p.Personality == "flamboyant_star" {
-				mult += 0.12
-			}
-			if p.Composure > 75 {
-				mult += math.Min(0.12, float64(p.Composure-75)*0.004)
-			}
-			base *= mult
-		}
-		weights[i] = base
+		weights[i] = ScorerSelectionWeight(p, isClutch, inBigGame)
 	}
 	return cands[weightedIndex(rng, weights)]
 }
 
-// PickAssister returns a weighted teammate (72% of goals assisted, GK eligible).
+// PickAssister returns a weighted teammate when a goal receives assist credit.
 func PickAssister(xi []*models.Player, scorer *models.Player, rng *rand.Rand) *models.Player {
 	rng = ensureRNG(rng)
-	if rng.Float64() >= 0.72 || len(xi) < 2 {
+	if len(xi) < 2 {
+		return nil
+	}
+	if rng.Float64() >= 0.72 {
 		return nil
 	}
 	cands := make([]*models.Player, 0, len(xi))
@@ -280,7 +321,7 @@ func PickAssister(xi []*models.Player, scorer *models.Player, rng *rand.Rand) *m
 		if p.Category == "MID" {
 			mult = 2.5
 		}
-		weights[i] = float64(p.OVR) / 75.0 * mult
+		weights[i] = float64(p.EffectiveOVR()+p.FormModifier()) / 75.0 * mult
 	}
 	return cands[weightedIndex(rng, weights)]
 }
@@ -345,7 +386,7 @@ func PickCornerTaker(xi []*models.Player, target *models.Player, rng *rand.Rand)
 		if p.Category == "MID" {
 			mult = 2.0
 		}
-		weights[i] = float64(p.EffectiveOVR()) / 75.0 * mult
+		weights[i] = float64(p.EffectiveOVR()+p.FormModifier()) / 75.0 * mult
 	}
 	return cands[weightedIndex(rng, weights)]
 }
@@ -673,24 +714,28 @@ func maxInt(a, b int) int {
 
 // InstantPayload mirrors the Python generate_instant_match payload dict.
 type InstantPayload struct {
-	HomeGoals  int
-	AwayGoals  int
-	Events     []MatchEventItem
-	HomeXI     []*models.Player
-	AwayXI     []*models.Player
-	HomeBench  []*models.Player
-	AwayBench  []*models.Player
-	Stats      MatchStats
-	HTHome     int
-	HTAway     int
-	Attendance int
-	Referee    string
-	Weather    string
-	DecidedBy  *string
-	Penalties  interface{}
-	ShotMap    ShotMapData
-	Heatmap    TouchHeatmapData
-	Press      PressConferenceData
+	HomeGoals     int
+	AwayGoals     int
+	Events        []MatchEventItem
+	HomeXI        []*models.Player
+	AwayXI        []*models.Player
+	HomeSlots     []models.StartingSlot
+	AwaySlots     []models.StartingSlot
+	HomeFormation string
+	AwayFormation string
+	HomeBench     []*models.Player
+	AwayBench     []*models.Player
+	Stats         MatchStats
+	HTHome        int
+	HTAway        int
+	Attendance    int
+	Referee       string
+	Weather       string
+	DecidedBy     *string
+	Penalties     interface{}
+	ShotMap       ShotMapData
+	Heatmap       TouchHeatmapData
+	Press         PressConferenceData
 }
 
 // AssembleReport merges a payload into a frontend-ready report with rated
@@ -704,13 +749,29 @@ func AssembleReport(payload InstantPayload, method string, rng *rand.Rand) Match
 		}
 		return events[i].Minute < events[j].Minute
 	})
+	NormalizeEventFacts(events)
+
+	homeFormation := models.NormalizeFormation(payload.HomeFormation)
+	awayFormation := models.NormalizeFormation(payload.AwayFormation)
+	homeSlots := NormalizeLineupSlots(payload.HomeXI, payload.HomeSlots, homeFormation)
+	awaySlots := NormalizeLineupSlots(payload.AwayXI, payload.AwaySlots, awayFormation)
+	homeXI := models.PlayersFromStartingSlots(homeSlots)
+	awayXI := models.PlayersFromStartingSlots(awaySlots)
+	if len(homeXI) == 0 {
+		homeXI = payload.HomeXI
+	}
+	if len(awayXI) == 0 {
+		awayXI = payload.AwayXI
+	}
 
 	homeWon := payload.HomeGoals > payload.AwayGoals
 	awayWon := payload.AwayGoals > payload.HomeGoals
-	homeRows := RateXI(payload.HomeXI, events, "home", payload.AwayGoals, homeWon, true, rng)
-	awayRows := RateXI(payload.AwayXI, events, "away", payload.HomeGoals, awayWon, true, rng)
+	homeRows := RateXI(homeXI, events, "home", payload.AwayGoals, homeWon, true, rng)
+	awayRows := RateXI(awayXI, events, "away", payload.HomeGoals, awayWon, true, rng)
 	homeBenchRows := RateXI(payload.HomeBench, events, "home", payload.AwayGoals, homeWon, false, rng)
 	awayBenchRows := RateXI(payload.AwayBench, events, "away", payload.HomeGoals, awayWon, false, rng)
+	ApplyTacticalAssignments(homeRows, homeBenchRows, homeSlots, payload.HomeBench, events, "home")
+	ApplyTacticalAssignments(awayRows, awayBenchRows, awaySlots, payload.AwayBench, events, "away")
 
 	var motmRow *MatchPlayerRow
 	motmSide := "home"
@@ -724,26 +785,26 @@ func AssembleReport(payload InstantPayload, method string, rng *rand.Rand) Match
 			if row.Rating != nil {
 				rating = *row.Rating
 			}
-		bestRating := -1.0
-		bestGoals := -1
-		bestOVR := -1
-		bestID := ""
-		if motmRow != nil {
-			if motmRow.Rating != nil {
-				bestRating = *motmRow.Rating
+			bestRating := -1.0
+			bestGoals := -1
+			bestOVR := -1
+			bestID := ""
+			if motmRow != nil {
+				if motmRow.Rating != nil {
+					bestRating = *motmRow.Rating
+				}
+				bestGoals = motmRow.MatchGoals
+				bestOVR = motmRow.OVR
+				bestID = motmRow.PlayerID
 			}
-			bestGoals = motmRow.MatchGoals
-			bestOVR = motmRow.OVR
-			bestID = motmRow.PlayerID
-		}
-		if motmRow == nil ||
-			rating > bestRating ||
-			(rating == bestRating && row.MatchGoals > bestGoals) ||
-			(rating == bestRating && row.MatchGoals == bestGoals && row.OVR > bestOVR) ||
-			(rating == bestRating && row.MatchGoals == bestGoals && row.OVR == bestOVR && row.PlayerID < bestID) {
-			motmRow = row
-			motmSide = side
-		}
+			if motmRow == nil ||
+				rating > bestRating ||
+				(rating == bestRating && row.MatchGoals > bestGoals) ||
+				(rating == bestRating && row.MatchGoals == bestGoals && row.OVR > bestOVR) ||
+				(rating == bestRating && row.MatchGoals == bestGoals && row.OVR == bestOVR && row.PlayerID < bestID) {
+				motmRow = row
+				motmSide = side
+			}
 		}
 	}
 	consider("home", homeRows)
@@ -758,8 +819,10 @@ func AssembleReport(payload InstantPayload, method string, rng *rand.Rand) Match
 		motm = &cpy
 	}
 
-	return MatchReport{
+	report := MatchReport{
 		Method:          method,
+		HomeFormation:   homeFormation,
+		AwayFormation:   awayFormation,
 		HomeGoals:       payload.HomeGoals,
 		AwayGoals:       payload.AwayGoals,
 		Events:          events,
@@ -779,5 +842,30 @@ func AssembleReport(payload InstantPayload, method string, rng *rand.Rand) Match
 		Weather:         payload.Weather,
 		DecidedBy:       payload.DecidedBy,
 		Penalties:       payload.Penalties,
+		StoryFacts:      DetectStoryFacts(events, payload.HomeGoals, payload.AwayGoals, payload.DecidedBy),
+	}
+	FillBigChances(&report)
+	return report
+}
+
+const bigChanceXG = 0.3
+
+// FillBigChances counts shots with xG at or above 0.3. Stored as a number so
+// archive compaction can drop shot coordinates without losing the stat.
+func FillBigChances(r *MatchReport) {
+	if r == nil {
+		return
+	}
+	r.Stats.Home.BigChances = 0
+	r.Stats.Away.BigChances = 0
+	for _, shot := range r.ShotMap.Shots {
+		if shot.XG < bigChanceXG {
+			continue
+		}
+		if shot.Team == "away" {
+			r.Stats.Away.BigChances++
+		} else {
+			r.Stats.Home.BigChances++
+		}
 	}
 }

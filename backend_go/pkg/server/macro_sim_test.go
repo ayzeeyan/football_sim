@@ -113,8 +113,10 @@ func TestMacroOffSeasonWeekRollsIntoNewSeason(t *testing.T) {
 	defer srv.Stop()
 	defer ts.Close()
 	prepareCompletedSeasonForMacro(srv.TournamentManager)
-	srv.TransferEngine.IsOffSeason = true
-	srv.TransferEngine.CurrentWeek = transfers.TransferWindowWeeks
+	srv.TransferEngine.BeginOffSeasonWindow()
+	for i := 0; i < transfers.TransferWindowWeeks; i++ {
+		srv.TransferEngine.AdvanceOpenWindow()
+	}
 	oldSeason := srv.TournamentManager.SeasonName
 	out := postMacro(t, ts.URL, "/api/sim/week")
 	if !out.NewSeasonStarted {
@@ -123,9 +125,9 @@ func TestMacroOffSeasonWeekRollsIntoNewSeason(t *testing.T) {
 	if out.SeasonName == oldSeason || out.SeasonPhase != "season" || out.CurrentMatchweek != 1 {
 		t.Fatalf("bad rollover: old=%s out=%+v", oldSeason, out)
 	}
-	// The completed window remains represented as week 13 while the market is
-	// closed. Its transfer locks reset only when the next offseason begins.
-	if srv.TransferEngine.CurrentWeek != 1 || srv.TransferEngine.IsOffSeason {
+	// No inactive market pretends to be Week 1; that state is reserved for the
+	// next genuinely opened window.
+	if srv.TransferEngine.CurrentWeek != 0 || srv.TransferEngine.IsOffSeason {
 		t.Fatalf("completed transfer window state wrong: week=%d offseason=%v", srv.TransferEngine.CurrentWeek, srv.TransferEngine.IsOffSeason)
 	}
 }

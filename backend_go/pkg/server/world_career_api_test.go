@@ -41,7 +41,7 @@ func TestFreshCareerExposesWorldCompetitionHub(t *testing.T) {
 		} `json:"competitions"`
 	}
 	decodeJSONBody(t, resp, &list)
-	if resp.StatusCode != http.StatusOK || !list.World || len(list.Competitions) != 14 {
+	if resp.StatusCode != http.StatusOK || !list.World || len(list.Competitions) != 15 {
 		t.Fatalf("competitions hub world=%v n=%d status=%d", list.World, len(list.Competitions), resp.StatusCode)
 	}
 	byID := map[string]int{}
@@ -52,6 +52,7 @@ func TestFreshCareerExposesWorldCompetitionHub(t *testing.T) {
 		"premier-league": 20, "la-liga": 20, "serie-a": 20, "bundesliga": 18, "ligue-1": 18,
 		"fa-cup": 20, "efl-cup": 20, "copa-del-rey": 20, "dfb-pokal": 18, "coppa-italia": 20, "coupe-de-france": 18,
 		"champions-league": 36, "europa-league": 20, "conference-league": 20,
+		"nations-cup": 5,
 	}
 	for id, n := range wants {
 		if byID[id] != n {
@@ -101,6 +102,18 @@ func TestFreshCareerExposesWorldCompetitionHub(t *testing.T) {
 	rounds, _ := cup["rounds"].([]interface{})
 	if resp.StatusCode != http.StatusOK || cup["kind"] != "DOMESTIC_CUP" || len(rounds) == 0 {
 		t.Fatalf("fa-cup status=%d kind=%v rounds=%d", resp.StatusCode, cup["kind"], len(rounds))
+	}
+
+	resp, err = http.Get(ts.URL + "/api/competitions/nations-cup")
+	if err != nil {
+		t.Fatalf("GET nations-cup: %v", err)
+	}
+	var nations map[string]interface{}
+	decodeJSONBody(t, resp, &nations)
+	nationTeams, _ := nations["participants"].([]interface{})
+	nationFixtures, _ := nations["fixtures"].([]interface{})
+	if resp.StatusCode != http.StatusOK || nations["kind"] != "INTERNATIONAL" || len(nationTeams) != 5 || len(nationFixtures) != 10 {
+		t.Fatalf("nations-cup status=%d payload=%v", resp.StatusCode, nations)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/super-league")
@@ -212,5 +225,53 @@ func TestWorldDashboardAndContinueAPI(t *testing.T) {
 	reason, _ := cont["stop_reason"].(string)
 	if reason == "" {
 		t.Fatalf("continue missing stop_reason: %v", cont)
+	}
+	if reason == "watched_club_match" {
+		t.Fatalf("continue still stopped for a club-specific fixture: %v", cont)
+	}
+	domestic := map[string]bool{"premier-league": true, "la-liga": true, "bundesliga": true, "serie-a": true, "ligue-1": true}
+	srv.worldMu.RLock()
+	for _, fixture := range srv.TournamentManager.World.Fixtures {
+		if fixture.Matchweek == 1 && domestic[fixture.Competition] && fixture.Status != "finished" {
+			srv.worldMu.RUnlock()
+			t.Fatalf("continue left MW1 domestic fixture %s in state %s", fixture.FixtureID, fixture.Status)
+		}
+	}
+	srv.worldMu.RUnlock()
+}
+
+func TestWorldSearchAPI(t *testing.T) {
+	srv, ts := setupTestServer(t)
+	defer ts.Close()
+	defer srv.Stop()
+
+	payload := postNewCareer(t, ts.URL, false, nil)
+	if payload["status"] != "success" {
+		t.Fatalf("new career: %v", payload)
+	}
+
+	resp, err := http.Get(ts.URL + "/api/search?q=madrid")
+	if err != nil {
+		t.Fatalf("GET search: %v", err)
+	}
+	var body map[string]interface{}
+	decodeJSONBody(t, resp, &body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("search status=%d payload=%v", resp.StatusCode, body)
+	}
+	clubs, _ := body["clubs"].([]interface{})
+	if len(clubs) == 0 {
+		t.Fatalf("madrid search returned no clubs: %v", body)
+	}
+
+	resp, err = http.Get(ts.URL + "/api/search?limit=12")
+	if err != nil {
+		t.Fatalf("GET directory: %v", err)
+	}
+	var dir map[string]interface{}
+	decodeJSONBody(t, resp, &dir)
+	players, _ := dir["players"].([]interface{})
+	if resp.StatusCode != http.StatusOK || len(players) == 0 {
+		t.Fatalf("directory status=%d players=%d", resp.StatusCode, len(players))
 	}
 }

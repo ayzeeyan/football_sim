@@ -79,8 +79,8 @@ func TestRestartCurrentSeasonResetsTransferStateAndPreservesCareerData(t *testin
 	if tm.ReputationAppliedSeason != "" {
 		t.Fatalf("restart retained completed-season reputation marker %q", tm.ReputationAppliedSeason)
 	}
-	if te.CurrentDay != 1 || te.CurrentMatchweek != 1 {
-		t.Fatalf("transfer calendar after restart = day %d, week %d", te.CurrentDay, te.CurrentMatchweek)
+	if te.CurrentDay != 0 || te.CurrentWeek != 0 || te.CurrentMatchweek != 1 {
+		t.Fatalf("transfer calendar after restart = day %d, window week %d, matchweek %d", te.CurrentDay, te.CurrentWeek, te.CurrentMatchweek)
 	}
 	if len(te.ActiveNegotiations) != 0 || len(te.CompletedTransfers) != 0 {
 		t.Fatalf("season transfer state was not cleared: active=%d completed=%d", len(te.ActiveNegotiations), len(te.CompletedTransfers))

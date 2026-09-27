@@ -48,6 +48,18 @@ func TestPersonalityFallback(t *testing.T) {
 	}
 }
 
+func TestHernandoHasNoSnakeTrait(t *testing.T) {
+	if got := PersonalityFor("Earl Josh Hernando"); got != "dedicated_pro" {
+		t.Fatalf("Hernando personality = %q; want dedicated_pro", got)
+	}
+	if _, exists := PersonalityArchetypes["snake"]; exists {
+		t.Fatal("snake archetype should be removed")
+	}
+	if got := ArchetypeForKey("snake").Key; got != "dedicated_pro" {
+		t.Fatalf("unknown snake key resolved to %q; want the normal fallback", got)
+	}
+}
+
 func TestArchetypeForKey(t *testing.T) {
 	arch := ArchetypeForKey("flamboyant_star")
 	if arch.Badge != "Flamboyant Star" || arch.Icon != "sparkle" {

@@ -19,9 +19,12 @@ import type {
   TrophyCabinetClub,
   AllTimeRecordsData,
   NXGNPlayer,
+  NationsCupResponse,
   ProdigyTimelineResponse,
   HeadToHeadData,
   ClubHistoryResponse,
+  ClubProfile,
+  ClubTransferActivity,
   TransferRecordsData,
   BatchSimResult,
   ProdigyWatchRow,
@@ -29,29 +32,83 @@ import type {
 } from '../types';
 
 const API_BASE = '/api';
+/** Short-lived GET cache: enough to dedupe remounts/tab switches without going stale after a sim. */
+const API_CACHE_TTL_MS = 12_000;
+
+type ApiCacheEntry = { value: unknown; expires: number };
+const apiGetCache = new Map<string, ApiCacheEntry>();
+const apiInflightGet = new Map<string, Promise<unknown>>();
+let apiCacheGeneration = 0;
+
+/** Drop cached GET responses (all, or those whose path starts with the prefix). */
+export function invalidateApiCache(pathPrefix?: string): void {
+  // Requests already in flight may finish after invalidation. Mark that
+  // generation stale so those responses cannot repopulate the cache.
+  apiCacheGeneration += 1;
+  if (!pathPrefix) {
+    apiGetCache.clear();
+    apiInflightGet.clear();
+    return;
+  }
+  for (const key of [...apiGetCache.keys()]) {
+    if (key.startsWith(pathPrefix)) apiGetCache.delete(key);
+  }
+  for (const key of [...apiInflightGet.keys()]) {
+    if (key.startsWith(pathPrefix)) apiInflightGet.delete(key);
+  }
+}
 
 async function apiFetch<T>(path: string, init?: RequestInit, fallback?: T): Promise<T> {
-  try {
-    const res = await fetch(`${API_BASE}${path}`, init);
-    if (!res.ok) {
-      let errMsg = `HTTP ${res.status} for ${path}`;
-      try {
-        const body = await res.json();
-        if (body.detail) errMsg = body.detail;
-        else if (body.message) errMsg = body.message;
-      } catch {
-        // ignore json parse error
-      }
-      throw new Error(errMsg);
-    }
-    return (await res.json()) as T;
-  } catch (err) {
-    console.warn(`[API] ${path} failed`, err);
-    if (fallback !== undefined && (!(err instanceof Error) || !err.message || err.message.startsWith('HTTP'))) {
-      return fallback;
-    }
-    throw err;
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const cacheable = method === 'GET' && init?.body == null;
+
+  if (cacheable) {
+    const cached = apiGetCache.get(path);
+    if (cached && cached.expires > Date.now()) return cached.value as T;
+    const pending = apiInflightGet.get(path);
+    if (pending) return pending as Promise<T>;
   }
+
+  const requestGeneration = apiCacheGeneration;
+  const run = async (): Promise<T> => {
+    try {
+      const res = await fetch(`${API_BASE}${path}`, init);
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status} for ${path}`;
+        try {
+          const body = await res.json();
+          if (body.detail) errMsg = body.detail;
+          else if (body.message) errMsg = body.message;
+        } catch {
+          // ignore json parse error
+        }
+        throw new Error(errMsg);
+      }
+      const data = (await res.json()) as T;
+      if (cacheable && requestGeneration === apiCacheGeneration) {
+        apiGetCache.set(path, { value: data, expires: Date.now() + API_CACHE_TTL_MS });
+      } else if (method !== 'GET') {
+        // Mutations change world state; never serve stale GETs afterward.
+        invalidateApiCache();
+      }
+      return data;
+    } catch (err) {
+      console.warn(`[API] ${path} failed`, err);
+      if (fallback !== undefined && (!(err instanceof Error) || !err.message || err.message.startsWith('HTTP'))) {
+        return fallback;
+      }
+      throw err;
+    }
+  };
+
+  if (!cacheable) return run();
+
+  let pending: Promise<T>;
+  pending = run().finally(() => {
+    if (apiInflightGet.get(path) === pending) apiInflightGet.delete(path);
+  });
+  apiInflightGet.set(path, pending);
+  return pending;
 }
 
 // --- Clubs & squads ---------------------------------------------------------
@@ -76,6 +133,28 @@ export function fetchClubHistory(clubId: string): Promise<ClubHistoryResponse> {
     primary_color: [200, 200, 200],
     history: [],
     trophies_summary: { super_league: 0, ucl: 0, super_cup: 0 },
+  });
+}
+
+export function fetchClubProfile(clubId: string): Promise<ClubProfile | null> {
+  return apiFetch<ClubProfile | null>(`/clubs/${encodeURIComponent(clubId)}/profile`, undefined, null);
+}
+
+export function fetchClubFixtures(clubId: string): Promise<Fixture[]> {
+  return apiFetch<{ fixtures?: Fixture[] }>(`/clubs/${encodeURIComponent(clubId)}/fixtures`, undefined, { fixtures: [] }).then(
+    (data) => data.fixtures ?? [],
+  );
+}
+
+export function fetchClubTransfers(clubId: string): Promise<ClubTransferActivity> {
+  return apiFetch<ClubTransferActivity>(`/clubs/${encodeURIComponent(clubId)}/transfers`, undefined, {
+    arrivals: [],
+    departures: [],
+    loans_in: [],
+    loans_out: [],
+    spent: 0,
+    received: 0,
+    net_spend: 0,
   });
 }
 
@@ -177,6 +256,7 @@ export async function setProdigyPositionPath(playerId: string, position: string)
     });
     const data = await res.json();
     if (!res.ok) return { status: 'error', message: data.detail || 'Could not set position path.' };
+    invalidateApiCache();
     return data;
   } catch {
     return { status: 'error', message: 'Network error setting position path.' };
@@ -192,6 +272,7 @@ export async function setProdigySchoolTrack(playerId: string, track: string): Pr
     });
     const data = await res.json();
     if (!res.ok) return { status: 'error', message: data.detail || data.message || 'Could not set school track.' };
+    invalidateApiCache();
     return { status: 'success' };
   } catch {
     return { status: 'error', message: 'Network error setting school track.' };
@@ -224,6 +305,28 @@ export function fetchCompetitions(): Promise<CompetitionsResponse> {
   return apiFetch<CompetitionsResponse>('/competitions', undefined, { world: false, competitions: [] });
 }
 
+/** National-team competition data is separate from club fixtures and standings. */
+export function fetchNationsCup(): Promise<NationsCupResponse> {
+  return apiFetch<NationsCupResponse>('/competitions/nations-cup');
+}
+
+export function fetchNationsFixture(fixtureId: string): Promise<Fixture | null> {
+  return apiFetch<Fixture | null>(`/competitions/nations-cup/fixtures/${encodeURIComponent(fixtureId)}`, undefined, null);
+}
+
+/** Plays one scheduled international fixture on demand and returns the full payload. */
+export async function simulateNationsFixture(fixtureId: string): Promise<Fixture | null> {
+  try {
+    const res = await fetch(`${API_BASE}/competitions/nations-cup/fixtures/${encodeURIComponent(fixtureId)}/simulate`, { method: 'POST' });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Fixture;
+    invalidateApiCache();
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export function fetchCompetition(id: string): Promise<CompetitionDetail | null> {
   return apiFetch<CompetitionDetail>(`/competitions/${encodeURIComponent(id)}`);
 }
@@ -250,6 +353,7 @@ export interface SimulateFixtureResponse {
   is_finished?: boolean;
   champion?: string | null;
   message?: string;
+  report_ready?: boolean;
 }
 
 export function fetchFixtures(matchweek?: number): Promise<FixturesResponse> {
@@ -265,11 +369,27 @@ export function fetchFixtures(matchweek?: number): Promise<FixturesResponse> {
   });
 }
 
+/** Loads card-ready fixture rows without full previews or match reports. */
+export function fetchFixtureSummaries(matchweek?: number): Promise<FixturesResponse> {
+  const params = new URLSearchParams({ summary: '1' });
+  if (matchweek != null) params.set('matchweek', String(matchweek));
+  return apiFetch<FixturesResponse>(`/fixtures?${params.toString()}`, undefined, {
+    current_matchweek: 1,
+    max_matchweeks: 44,
+    season_phase: 'season',
+    season_name: '2026-27',
+    matchweek: matchweek ?? 1,
+    fixtures: [],
+    ucl_pending_ids: [],
+  });
+}
+
 export async function simulateFixture(fixtureId: string): Promise<SimulateFixtureResponse> {
   try {
     const res = await fetch(`${API_BASE}/fixtures/${encodeURIComponent(fixtureId)}/simulate`, { method: 'POST' });
     const data = (await res.json()) as SimulateFixtureResponse;
     if (!res.ok) return { status: 'error', message: (data as { detail?: string }).detail || 'Could not simulate.' };
+    invalidateApiCache();
     return data;
   } catch {
     return { status: 'error', message: 'Network error simulating the fixture.' };
@@ -339,6 +459,59 @@ export async function simulateContinue(): Promise<BatchSimResult> {
   }
 }
 
+export interface WorldSearchClub {
+  club_id: string;
+  club_name: string;
+  short_name: string;
+  league: string;
+  ovr: number;
+  pts: number;
+  primary_color?: [number, number, number];
+}
+
+export interface WorldSearchPlayer {
+  player_id: string;
+  full_name: string;
+  position: string;
+  ovr: number;
+  age: number;
+  category?: string;
+  club_id: string;
+  club_name?: string;
+  club_short?: string;
+  goals: number;
+  assists: number;
+  is_wonderkid?: boolean;
+}
+
+export interface WorldSearchCompetition {
+  id: string;
+  name: string;
+  kind: string;
+  country: string;
+  stage: string;
+  participants?: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  clubs: WorldSearchClub[];
+  players: WorldSearchPlayer[];
+  competitions: WorldSearchCompetition[];
+}
+
+export function fetchSearch(query = '', limit = 8): Promise<SearchResponse> {
+  const params = new URLSearchParams();
+  if (query) params.set('q', query);
+  params.set('limit', String(limit));
+  return apiFetch<SearchResponse>(`/search?${params.toString()}`, undefined, {
+    query,
+    clubs: [],
+    players: [],
+    competitions: [],
+  });
+}
+
 export function fetchWorldDashboard(): Promise<WorldDashboard> {
   return apiFetch<WorldDashboard>('/world/dashboard', undefined, {
     world: false,
@@ -381,6 +554,8 @@ export async function setFavourite(clubId: string): Promise<{ favourite_club_id:
       body: JSON.stringify({ club_id: clubId }),
     });
     const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || data.message || 'Could not save favourite club.');
+    invalidateApiCache();
     return { favourite_club_id: data.favourite_club_id ?? clubId };
   } catch {
     return { favourite_club_id: clubId };
@@ -448,6 +623,7 @@ export async function startNewCareer(shuffle: boolean, homes?: Record<string, st
     });
     const data = await res.json();
     if (!res.ok) return { status: 'error', message: data.detail || 'Could not start a new career.' };
+    invalidateApiCache();
     return data;
   } catch {
     return { status: 'error', message: 'Network error starting a new career.' };
@@ -488,6 +664,7 @@ export async function replyInbox(itemId: string, choiceId: string): Promise<{ st
     });
     const data = await res.json();
     if (!res.ok) return { status: 'error', message: data.detail || data.message || 'Could not reply.' };
+    invalidateApiCache();
     return { status: data.status ?? 'success', message: data.message };
   } catch {
     return { status: 'error', message: 'Network error sending the reply.' };
@@ -503,6 +680,8 @@ export async function markInboxRead(itemId?: string, all = false): Promise<{ unr
     body: JSON.stringify({ item_id: itemId ?? null, all }),
   });
   const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || data.message || 'Could not mark inbox messages as read.');
+  invalidateApiCache();
   return { unread: data.unread ?? 0, marked: data.marked ?? 0 };
 }
 
@@ -546,6 +725,7 @@ export interface WarchestRow {
 export interface TransfersResponse {
   window_name: string;
   is_window_open: boolean;
+  window_type: 'CLOSED' | 'SUMMER' | 'WINTER';
   season_phase: 'season' | 'transfer_window';
   window_day: number;
   window_week?: number;
@@ -559,11 +739,12 @@ export interface TransfersResponse {
 }
 
 const EMPTY_TRANSFERS: TransfersResponse = {
-  window_name: 'Summer Window',
+  window_name: 'Window Closed (Opens at season end)',
   is_window_open: false,
+  window_type: 'CLOSED',
   season_phase: 'season',
-  window_day: 1,
-  window_week: 1,
+  window_day: 0,
+  window_week: 0,
   max_window_weeks: 12,
   active_negotiations: [],
   transfer_feed: [],
@@ -589,14 +770,11 @@ export function submitTransferBid(buyerId: string, sellerId: string, playerId: s
 }
 
 export async function advanceMarket(): Promise<TransfersResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/transfers/advance`, { method: 'POST' });
-    const data = (await res.json()) as TransfersResponse & { detail?: string };
-    if (!res.ok) return { ...EMPTY_TRANSFERS, window_name: data.detail || 'The window opens when the season ends.' };
-    return data;
-  } catch {
-    return EMPTY_TRANSFERS;
-  }
+  const res = await fetch(`${API_BASE}/transfers/advance`, { method: 'POST' });
+  const data = (await res.json()) as TransfersResponse & { detail?: string; message?: string };
+  if (!res.ok) throw new Error(data.message || data.detail || 'The window cannot advance right now.');
+  invalidateApiCache();
+  return data;
 }
 
 export function fetchTransferRecords(): Promise<TransferRecordsData> {
@@ -644,8 +822,12 @@ export interface PlayerOfTheWeek {
 
 export interface SeasonHistoryRow {
   season_name: string;
+  world?: boolean;
   champion: { club_name: string; short_name: string; pts: number } | null;
   runner_up?: { club_name: string; short_name: string; pts: number } | null;
+  league_champions?: Array<{ club_name: string; short_name: string; pts?: number; league?: string; competition_id?: string }>;
+  europa_champion?: { club_name: string; short_name: string } | null;
+  conference_champion?: { club_name: string; short_name: string } | null;
   ucl_champion: { club_name: string; short_name: string } | null;
   top_scorer: { full_name: string; goals: number; club_id?: string } | null;
   top_assister?: { full_name: string; assists: number; club_id?: string } | null;
@@ -676,6 +858,22 @@ export interface CareerHistory {
   past: SeasonHistoryRow[];
   trophy_cabinet?: TrophyCabinetClub[];
   all_time_records?: AllTimeRecordsData;
+  recent_results?: HistoryResultRow[];
+}
+
+export interface HistoryResultRow {
+  id: string;
+  fixture_id?: string;
+  matchweek: number;
+  competition: string;
+  stage?: string;
+  status: string;
+  home_id: string;
+  away_id: string;
+  home: { club_id: string; club_name: string; short_name: string };
+  away: { club_id: string; club_name: string; short_name: string };
+  home_goals: number;
+  away_goals: number;
 }
 
 export function fetchCareerHistory(): Promise<CareerHistory> {

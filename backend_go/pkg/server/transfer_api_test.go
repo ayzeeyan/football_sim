@@ -83,8 +83,10 @@ func TestTransferBidAndAdvanceDuringCareerWindow(t *testing.T) {
 	srv, ts := setupTestServer(t)
 	defer ts.Close()
 	defer srv.Stop()
-	playerID := datamanager.ProdigyStableID("Venjamin Valerio")
-	sellerID := "LAL-BAR"
+	// Any canonical wonderkid can enter an ordinary negotiation once the
+	// summer window opens; there are no scripted transfers or reserved IDs.
+	playerID := datamanager.ProdigyStableID("Maverick Cantalejo")
+	sellerID := "LAL-RMA"
 	buyerID := "FL1-PSG"
 
 	srv.worldMu.Lock()
@@ -92,6 +94,12 @@ func TestTransferBidAndAdvanceDuringCareerWindow(t *testing.T) {
 	// SeasonPhase alone must not implicitly open/reset the market. The actual
 	// state-machine boundary initializes budgets and Week 1 exactly once.
 	srv.TransferEngine.BeginOffSeasonWindow()
+	if len(srv.TransferEngine.CompletedTransfers) != 0 ||
+		srv.TransferEngine.TransferredThisWindow["WK_Reid_Randell_Libatan"] ||
+		srv.TransferEngine.TransferredThisWindow["WK_Cliergy_Jave_Lanticse"] {
+		srv.worldMu.Unlock()
+		t.Fatal("opening the window forced a named-player transfer")
+	}
 	dayBefore := srv.TransferEngine.CurrentDay
 	srv.worldMu.Unlock()
 
@@ -111,7 +119,7 @@ func TestTransferBidAndAdvanceDuringCareerWindow(t *testing.T) {
 	player, _ := bid["player"].(map[string]interface{})
 	buyer, _ := bid["buyer"].(map[string]interface{})
 	seller, _ := bid["seller"].(map[string]interface{})
-	if player["full_name"] != "Venjamin Valerio" || buyer["club_id"] != buyerID || seller["club_id"] != sellerID {
+	if player["full_name"] != "Maverick Cantalejo" || buyer["club_id"] != buyerID || seller["club_id"] != sellerID {
 		t.Fatalf("bid clubs/player: %v", bid)
 	}
 

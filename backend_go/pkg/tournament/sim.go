@@ -42,6 +42,77 @@ func (tm *TournamentManager) FindFixture(id string) *Fixture {
 	return tm.findFixtureUnlocked(id)
 }
 
+// RecentFinishedSummaries returns compact completed fixtures for History.
+func (tm *TournamentManager) RecentFinishedSummaries(limit int) []map[string]interface{} {
+	if tm == nil {
+		return nil
+	}
+	tm.mu.RLock()
+	defer tm.mu.RUnlock()
+	return tm.recentFinishedSummariesUnlocked(limit)
+}
+
+func (tm *TournamentManager) recentFinishedSummariesUnlocked(limit int) []map[string]interface{} {
+	if limit <= 0 {
+		limit = 16
+	}
+	var rows []Fixture
+	add := func(list []Fixture) {
+		for i := range list {
+			if list[i].Status == "finished" {
+				rows = append(rows, list[i])
+			}
+		}
+	}
+	add(tm.Fixtures)
+	add(tm.UCLFixtures)
+	add(tm.SuperCupFixtures)
+	if tm.World != nil {
+		add(tm.World.Fixtures)
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Matchweek != rows[j].Matchweek {
+			return rows[i].Matchweek > rows[j].Matchweek
+		}
+		return rows[i].FixtureID < rows[j].FixtureID
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	out := make([]map[string]interface{}, 0, len(rows))
+	club := func(id string) map[string]interface{} {
+		c := tm.Clubs[id]
+		if c == nil {
+			return map[string]interface{}{"club_id": id, "club_name": id, "short_name": id}
+		}
+		return map[string]interface{}{"club_id": c.ClubID, "club_name": c.ClubName, "short_name": c.ShortName}
+	}
+	for _, f := range rows {
+		hg, ag := 0, 0
+		if f.HomeGoals != nil {
+			hg = *f.HomeGoals
+		}
+		if f.AwayGoals != nil {
+			ag = *f.AwayGoals
+		}
+		out = append(out, map[string]interface{}{
+			"id":          f.FixtureID,
+			"fixture_id":  f.FixtureID,
+			"matchweek":   f.Matchweek,
+			"competition": f.Competition,
+			"stage":       f.Stage,
+			"status":      f.Status,
+			"home_id":     f.HomeID,
+			"away_id":     f.AwayID,
+			"home":        club(f.HomeID),
+			"away":        club(f.AwayID),
+			"home_goals":  hg,
+			"away_goals":  ag,
+		})
+	}
+	return out
+}
+
 func (tm *TournamentManager) leagueFixturesUnlocked(mw int) []Fixture {
 	var out []Fixture
 	for _, f := range tm.Fixtures {
@@ -345,15 +416,19 @@ func (tm *TournamentManager) commitLiveFixtureOnFixtureUnlocked(fixture *Fixture
 
 	rolled := tm.maybeRolloverUnlocked()
 	champ, _ := rolled["champion"].(string)
+	if cupEvent != "" && fixture.Report != nil {
+		fixture.Report.CompetitionImpact = cupEvent
+	}
 	return map[string]interface{}{
-		"status":      "success",
-		"recorded":    true,
-		"fixture_id":  fixture.FixtureID,
-		"ucl_event":   nilIfEmpty(cupEvent),
-		"rolled_over": rolled["rolled"],
-		"is_finished": rolled["is_finished"],
-		"champion":    champ,
-		"terminal":    true,
+		"status":       "success",
+		"recorded":     true,
+		"fixture_id":   fixture.FixtureID,
+		"ucl_event":    nilIfEmpty(cupEvent),
+		"rolled_over":  rolled["rolled"],
+		"is_finished":  rolled["is_finished"],
+		"champion":     champ,
+		"terminal":     true,
+		"report_ready": true,
 	}
 }
 
@@ -370,7 +445,19 @@ func (tm *TournamentManager) simulateFixtureWithRNGUnlocked(fixtureID string, rn
 		return map[string]interface{}{"status": "error", "message": "Fixture not found."}
 	}
 	if f.Status == "finished" {
-		return map[string]interface{}{"status": "error", "message": "That result already stands and cannot be replayed."}
+		return map[string]interface{}{
+			"status":       "error",
+			"message":      "That result already stands and cannot be replayed.",
+			"fixture_id":   f.FixtureID,
+			"report_ready": f.Report != nil,
+		}
+	}
+	if f.Status != "scheduled" {
+		return map[string]interface{}{
+			"status":     "error",
+			"message":    "That fixture is not scheduled for simulation.",
+			"fixture_id": f.FixtureID,
+		}
 	}
 	if f.Matchweek > tm.CurrentMatchweek && tm.CurrentMatchweek > 0 {
 		return map[string]interface{}{"status": "error", "message": "That matchweek has not opened yet."}
@@ -427,14 +514,38 @@ func (tm *TournamentManager) applyFinishedFixture(f *Fixture, home, away *models
 	if pens, ok := report.Penalties.([]int); ok {
 		f.Penalties = pens
 	}
+	if report != nil {
+		matchreport.NormalizeEventFacts(report.Events)
+		homeID, homeName, awayID, awayName := "", "", "", ""
+		if home != nil {
+			homeID, homeName = home.ClubID, home.ClubName
+		}
+		if away != nil {
+			awayID, awayName = away.ClubID, away.ClubName
+		}
+		matchreport.AssignEventClubs(report.Events, homeID, homeName, awayID, awayName)
+		if len(report.StoryFacts) == 0 {
+			report.StoryFacts = matchreport.DetectStoryFacts(report.Events, hg, ag, report.DecidedBy)
+		}
+	}
 
 	comp := f.Competition
 	if comp == "" {
 		comp = "super-league"
 	}
+	leagueTable := tm.standingsForCompetitionUnlocked(comp)
+	var tableImpact *matchreport.TableImpact
+	if len(leagueTable) > 0 && (comp == "super-league" || tm.isWorldDomesticLeague(comp)) {
+		tableImpact = tm.snapshotTableImpact(leagueTable, home, away)
+	}
 	if comp == "super-league" || tm.isWorldDomesticLeague(comp) {
 		home.UpdateResult(hg, ag)
 		away.UpdateResult(ag, hg)
+		if tableImpact != nil {
+			after := tm.standingsForCompetitionUnlocked(comp)
+			tm.finishTableImpact(tableImpact, after, home, away)
+			report.TableImpact = tableImpact
+		}
 	} else {
 		if comp == "ucl" && strings.HasPrefix(f.Stage, "Group") {
 			if rec := tm.UCLRecords[home.ClubID]; rec != nil {
@@ -605,14 +716,16 @@ func (tm *TournamentManager) refreshRecentResultsUnlocked() {
 
 func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	if tm.CurrentMatchweek > tm.MaxMatchweeks {
+		tm.completeNationalTeamsUnlocked()
 		tm.SeasonPhase = "transfer_window"
+		tm.finalizeWorldLeagueChampionsUnlocked()
 		tm.applyCompletedSeasonReputationUnlocked()
 		tm.openSummerWindowOnceUnlocked()
 		return map[string]interface{}{"rolled": false, "is_finished": true, "champion": tm.championNameUnlocked()}
 	}
 	pending := false
 	for _, f := range tm.leagueFixturesUnlocked(tm.CurrentMatchweek) {
-		if f.Status == "scheduled" {
+		if f.Status != "finished" {
 			pending = true
 			break
 		}
@@ -622,13 +735,17 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	}
 
 	completed := tm.CurrentMatchweek
+	tm.advanceNationalTeamsMatchweekUnlocked(completed)
 	tm.runWeeklyTicks(completed)
 	tm.CurrentMatchweek++
+	tm.compactAgedReportsUnlocked()
 	tm.refreshRecentResultsUnlocked()
 
 	isFinished := tm.CurrentMatchweek > tm.MaxMatchweeks
 	if isFinished {
+		tm.completeNationalTeamsUnlocked()
 		tm.SeasonPhase = "transfer_window"
+		tm.finalizeWorldLeagueChampionsUnlocked()
 		// A same-week cup fixture can still be applied after the final league
 		// fixture. The helper is guarded and will wait for those results before
 		// marking this season's reputation update complete.
@@ -636,15 +753,193 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 		tm.openSummerWindowOnceUnlocked()
 	}
 	champ := tm.championNameUnlocked()
-	if isFinished && champ != "" {
-		standings := tm.standingsUnlocked()
-		c := standings[0]
-		tm.PushInbox("honour",
-			fmt.Sprintf("%s are Super League champions", c.ClubName),
-			fmt.Sprintf("%d points · %d wins · %+d goal difference. The window opens.", c.Points, c.Won, c.GoalDifference),
-			completed, []string{c.ClubID}, "", "")
+	if isFinished {
+		tm.pushSeasonChampionInboxUnlocked(completed)
 	}
 	return map[string]interface{}{"rolled": true, "is_finished": isFinished, "champion": champIf(isFinished, champ)}
+}
+
+func (tm *TournamentManager) finalizeWorldLeagueChampionsUnlocked() {
+	if tm == nil || tm.World == nil {
+		return
+	}
+	for _, def := range domesticLeagueDefinitions {
+		comp := tm.World.Competitions[def.ID]
+		if comp == nil || comp.Kind != CompetitionLeague {
+			continue
+		}
+		table := tm.worldLeagueStandingsUnlocked(def.ID)
+		if len(table) == 0 || table[0] == nil {
+			continue
+		}
+		comp.ChampionID = table[0].ClubID
+		comp.Stage = "Complete"
+	}
+}
+
+func (tm *TournamentManager) standingsForCompetitionUnlocked(compID string) []*models.Club {
+	if tm == nil {
+		return nil
+	}
+	if tm.isWorldDomesticLeague(compID) {
+		return tm.worldLeagueStandingsUnlocked(compID)
+	}
+	if compID == "super-league" || compID == "" {
+		return tm.standingsUnlocked()
+	}
+	return nil
+}
+
+func clubPos(table []*models.Club, clubID string) int {
+	for i, c := range table {
+		if c != nil && c.ClubID == clubID {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+func (tm *TournamentManager) snapshotTableImpact(table []*models.Club, home, away *models.Club) *matchreport.TableImpact {
+	if home == nil || away == nil {
+		return nil
+	}
+	return &matchreport.TableImpact{
+		Applicable: true,
+		Home: matchreport.TableDelta{
+			ClubID:    home.ClubID,
+			ShortName: home.ShortName,
+			BeforePos: clubPos(table, home.ClubID),
+			BeforePts: home.Points,
+			BeforeGD:  home.GoalDifference,
+		},
+		Away: matchreport.TableDelta{
+			ClubID:    away.ClubID,
+			ShortName: away.ShortName,
+			BeforePos: clubPos(table, away.ClubID),
+			BeforePts: away.Points,
+			BeforeGD:  away.GoalDifference,
+		},
+	}
+}
+
+func (tm *TournamentManager) finishTableImpact(impact *matchreport.TableImpact, after []*models.Club, home, away *models.Club) {
+	if impact == nil || home == nil || away == nil {
+		return
+	}
+	impact.Home.AfterPos = clubPos(after, home.ClubID)
+	impact.Home.AfterPts = home.Points
+	impact.Home.AfterGD = home.GoalDifference
+	impact.Away.AfterPos = clubPos(after, away.ClubID)
+	impact.Away.AfterPts = away.Points
+	impact.Away.AfterGD = away.GoalDifference
+	lo := impact.Home.AfterPos
+	if impact.Away.AfterPos > 0 && (lo == 0 || impact.Away.AfterPos < lo) {
+		lo = impact.Away.AfterPos
+	}
+	hi := impact.Home.AfterPos
+	if impact.Away.AfterPos > hi {
+		hi = impact.Away.AfterPos
+	}
+	if lo <= 0 {
+		return
+	}
+	start := lo - 2
+	if start < 1 {
+		start = 1
+	}
+	end := hi + 2
+	if end > len(after) {
+		end = len(after)
+	}
+	for i := start; i <= end; i++ {
+		c := after[i-1]
+		if c == nil {
+			continue
+		}
+		impact.Nearby = append(impact.Nearby, matchreport.NearbyStanding{
+			Pos: i, ClubID: c.ClubID, ShortName: c.ShortName, Pts: c.Points, GD: c.GoalDifference,
+		})
+	}
+}
+
+const reportArchiveKeepWeeks = 3
+
+// CompactAgedReports drops heatmap points and xG-flow from finished matches
+// older than the last three matchweeks. Recent reports stay detailed for
+// post-match review; older ones keep score, events, XI ratings, and stats.
+func (tm *TournamentManager) CompactAgedReports() {
+	if tm == nil {
+		return
+	}
+	tm.compactAgedReportsUnlocked()
+}
+
+func (tm *TournamentManager) compactAgedReportsUnlocked() {
+	if tm == nil {
+		return
+	}
+	keepFrom := tm.CurrentMatchweek - reportArchiveKeepWeeks
+	if keepFrom < 1 {
+		return
+	}
+	compactList := func(list []Fixture) {
+		for i := range list {
+			f := &list[i]
+			if f.Report == nil || f.Status != "finished" || f.Matchweek >= keepFrom {
+				continue
+			}
+			matchreport.CompactForArchive(f.Report)
+		}
+	}
+	compactList(tm.Fixtures)
+	compactList(tm.UCLFixtures)
+	compactList(tm.SuperCupFixtures)
+	if tm.World != nil {
+		compactList(tm.World.Fixtures)
+	}
+}
+
+func (tm *TournamentManager) pushSeasonChampionInboxUnlocked(completed int) {
+	if tm == nil {
+		return
+	}
+	if tm.World != nil {
+		for _, def := range domesticLeagueDefinitions {
+			table := tm.worldLeagueStandingsUnlocked(def.ID)
+			if len(table) == 0 || table[0] == nil {
+				continue
+			}
+			c := table[0]
+			tm.PushInbox("honour",
+				fmt.Sprintf("%s are %s champions", c.ClubName, def.Name),
+				fmt.Sprintf("%d points · %d wins · %+d goal difference. The window opens.", c.Points, c.Won, c.GoalDifference),
+				completed, []string{c.ClubID}, "", "")
+		}
+		for _, def := range europeanDefinitions {
+			comp := tm.worldCompetitionUnlocked(def.ID)
+			if comp == nil || comp.ChampionID == "" {
+				continue
+			}
+			club := tm.Clubs[comp.ChampionID]
+			if club == nil {
+				continue
+			}
+			tm.PushInbox("honour",
+				fmt.Sprintf("%s win the %s", club.ClubName, def.Name),
+				fmt.Sprintf("%s lift the trophy.", club.ClubName),
+				completed, []string{club.ClubID}, "", "")
+		}
+		return
+	}
+	standings := tm.standingsUnlocked()
+	if len(standings) == 0 || standings[0] == nil {
+		return
+	}
+	c := standings[0]
+	tm.PushInbox("honour",
+		fmt.Sprintf("%s are Super League champions", c.ClubName),
+		fmt.Sprintf("%d points · %d wins · %+d goal difference. The window opens.", c.Points, c.Won, c.GoalDifference),
+		completed, []string{c.ClubID}, "", "")
 }
 
 func champIf(ok bool, name string) interface{} {
@@ -661,23 +956,19 @@ func (tm *TournamentManager) openSummerWindowOnceUnlocked() {
 	if tm.TransferEngine.IsOffSeason && tm.TransferEngine.WindowType == transfers.WindowSummer {
 		return
 	}
+	tm.resolveSeasonContractsOnceUnlocked()
 	tm.TransferEngine.BeginOffSeasonWindow()
 }
 
 func (tm *TournamentManager) championNameUnlocked() string {
 	if tm.World != nil {
-		leagueID := "premier-league"
-		if favourite := tm.Clubs[tm.FavouriteClubID]; favourite != nil {
-			for _, def := range domesticLeagueDefinitions {
-				if def.League == favourite.League {
-					leagueID = def.ID
-					break
-				}
+		champions := make([]string, 0, len(domesticLeagueDefinitions))
+		for _, def := range domesticLeagueDefinitions {
+			if table := tm.worldLeagueStandingsUnlocked(def.ID); len(table) > 0 {
+				champions = append(champions, table[0].ClubName)
 			}
 		}
-		if table := tm.worldLeagueStandingsUnlocked(leagueID); len(table) > 0 {
-			return table[0].ClubName
-		}
+		return strings.Join(champions, ", ")
 	}
 	s := tm.standingsUnlocked()
 	if len(s) == 0 {
@@ -688,16 +979,9 @@ func (tm *TournamentManager) championNameUnlocked() string {
 
 func (tm *TournamentManager) standingsUnlocked() []*models.Club {
 	if tm.World != nil {
-		leagueID := "premier-league"
-		if favourite := tm.Clubs[tm.FavouriteClubID]; favourite != nil {
-			for _, def := range domesticLeagueDefinitions {
-				if def.League == favourite.League {
-					leagueID = def.ID
-					break
-				}
-			}
-		}
-		return tm.worldLeagueStandingsUnlocked(leagueID)
+		// Compatibility digest view: deterministic and independent of the
+		// observational selected-club preference.
+		return tm.worldLeagueStandingsUnlocked(domesticLeagueDefinitions[0].ID)
 	}
 	clubsCopy := make([]*models.Club, len(tm.ClubsList))
 	copy(clubsCopy, tm.ClubsList)
@@ -722,7 +1006,7 @@ func (tm *TournamentManager) simulateRemainingUnlocked() map[string]interface{} 
 	}
 	// Resolve climate serially in slate order (mutates the climate table).
 	for _, id := range ids {
-		if fx := tm.findFixtureUnlocked(id); fx != nil && fx.Status != "finished" {
+		if fx := tm.findFixtureUnlocked(id); fx != nil && fx.Status == "scheduled" {
 			tm.EnsureFixtureWeather(fx)
 		}
 	}

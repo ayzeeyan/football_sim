@@ -92,11 +92,12 @@ type Competition struct {
 // league fixtures remain on TournamentManager.Fixtures for compatibility
 // with the existing match center; all shared-calendar cup fixtures live here.
 type EuropeanWorld struct {
-	Version          int                     `json:"version"`
-	Seed             int64                   `json:"seed"`
-	Competitions     map[string]*Competition `json:"competitions"`
-	CompetitionOrder []string                `json:"competition_order"`
-	Fixtures         []Fixture               `json:"fixtures"`
+	Version          int                       `json:"version"`
+	Seed             int64                     `json:"seed"`
+	Competitions     map[string]*Competition   `json:"competitions"`
+	CompetitionOrder []string                  `json:"competition_order"`
+	Fixtures         []Fixture                 `json:"fixtures"`
+	NationalTeams    *NationalTeamsCompetition `json:"national_teams,omitempty"`
 }
 
 func isTopFiveLeague(name string) bool {
