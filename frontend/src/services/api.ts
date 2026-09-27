@@ -236,6 +236,8 @@ export interface TrainProdigyResponse {
   max_energy?: number;
 }
 
+// Consumed by the prodigy training planner (Phase 3 F1); focus values come
+// from TRAINING_FOCUSES in lib/constants.ts.
 export function trainProdigy(playerId: string, focus: string): Promise<TrainProdigyResponse> {
   return apiFetch<TrainProdigyResponse>(
     `/prodigies/${playerId}/train`,
@@ -283,6 +285,7 @@ export function fetchGrowthMilestones(): Promise<GrowthMilestoneItem[]> {
   return apiFetch<GrowthMilestoneItem[]>('/growth/milestones', undefined, []);
 }
 
+// Consumed by the prodigy training planner (Phase 3 F1) to show energy spend.
 export function fetchTrainingStatus(): Promise<{ training_energy: number; max_training_energy: number }> {
   return apiFetch('/training/status', undefined, { training_energy: 3, max_training_energy: 3 });
 }
@@ -546,6 +549,8 @@ export function fetchFavourite(): Promise<{ favourite_club_id: string }> {
   return apiFetch<{ favourite_club_id: string }>('/favourite', undefined, { favourite_club_id: '' });
 }
 
+// Observational viewing preference only (neutral-viewer framing); consumed
+// by the watchlist panel (Phase 3 F2).
 export async function setFavourite(clubId: string): Promise<{ favourite_club_id: string }> {
   try {
     const res = await fetch(`${API_BASE}/favourite`, {
@@ -757,6 +762,9 @@ export function fetchTransfers(): Promise<TransfersResponse> {
   return apiFetch<TransfersResponse>('/transfers', undefined, EMPTY_TRANSFERS);
 }
 
+// Tier B only (B3 transfer bid UX): hands a human control of an AI transfer
+// negotiation, which the neutral-viewer contract in AGENTS.md forbids today.
+// Do not wire without amending that invariant first.
 export function submitTransferBid(buyerId: string, sellerId: string, playerId: string): Promise<TransferNegotiation | null> {
   return apiFetch<TransferNegotiation | null>(
     '/transfers/bid',

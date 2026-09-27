@@ -7,13 +7,8 @@ export const LEAGUES_5 = ['Premier League', 'La Liga', 'Bundesliga', 'Serie A', 
 
 export const LEAGUE_FILTER_ALL = ['All', ...LEAGUES_5] as const;
 
-export const MATCH_SPEEDS = [
-  { value: 1, label: '1x' },
-  { value: 2, label: '2x' },
-  { value: 5, label: '5x' },
-  { value: 999, label: 'Instant' },
-] as const;
-
+// Training regimens mirror backend growth.RunTrainingCycle focus values.
+// Consumed by the prodigy training planner (components/wonderkids/).
 export const TRAINING_FOCUSES = [
   { value: 'hypertrophy', label: 'Hypertrophy' },
   { value: 'technical', label: 'Technical' },
