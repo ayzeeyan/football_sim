@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Activity, BarChart3, CalendarDays, CircleDot, History, Home, Inbox, Medal, Plus,
-  Sparkles, Trophy, Users, UserRound, Volume2, VolumeX, WalletCards, Globe2,
+  Settings2, Sparkles, Trophy, Users, UserRound, Volume2, VolumeX, WalletCards, Globe2,
 } from 'lucide-react';
 import { NAV_GROUPS, TABS, type TabId } from '../../lib/constants';
 import { soundManager } from '../../audio/webAudio';
@@ -14,6 +14,7 @@ interface TopBarProps {
   onTab: (t: TabId) => void;
   muted: boolean;
   onToggleMute: () => void;
+  onOpenSettings: () => void;
   onOpenAwards: () => void;
   onNewCareer: () => void;
   onSimWeek: () => void;
@@ -35,7 +36,7 @@ const TAB_ICONS: Record<TabId, React.ElementType> = {
 };
 
 export const TopBar = React.memo<TopBarProps>(function TopBar({
-  activeTab, onTab, muted, onToggleMute, onOpenAwards, onNewCareer,
+  activeTab, onTab, muted, onToggleMute, onOpenSettings, onOpenAwards, onNewCareer,
   onSimWeek, onSimMonth, onSimSeason, onContinue, simulating = false,
   seasonName = '2026-27', calendarLabel, inboxUnread = 0,
   onOpenClub, onOpenPlayer, onOpenCompetition,
@@ -119,6 +120,9 @@ export const TopBar = React.memo<TopBarProps>(function TopBar({
             </div>
             <button type="button" onClick={onToggleMute} aria-pressed={muted} aria-label={muted ? 'Unmute sound' : 'Mute sound'} className="icon-button hidden sm:grid shrink-0">
               {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
+            </button>
+            <button type="button" onClick={onOpenSettings} aria-label="Viewer settings" className="icon-button hidden sm:grid shrink-0">
+              <Settings2 size={17} />
             </button>
             {onContinue && (
               <button disabled={simulating} onClick={onContinue} className="continue-button shrink-0">

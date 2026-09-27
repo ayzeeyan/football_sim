@@ -2,7 +2,8 @@ import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 
 import type { BatchSimResult, Club, Fixture, SeasonAwards } from './types';
 import { fetchCalendar, fetchFixtureSummaries, fetchInbox, fetchSeasonAwards, invalidateApiCache, simulateContinue, simulateMonth, simulateSeason, simulateWeek, type CalendarState } from './services/api';
 import { slugFromTab, tabFromSlug, type TabId } from './lib/constants';
-import { stripEmojis } from './lib/format';
+import { stripEmojis, setNumberFormat } from './lib/format';
+import { filterUnreadCount, loadSettings, saveSettings, settingsRootClasses, type ViewerSettings } from './lib/settings';
 import { useClubs } from './hooks/useClubs';
 import { useToast } from './hooks/useToast';
 import { TopBar } from './components/layout/TopBar';
@@ -13,6 +14,7 @@ import { NewCareerModal } from './components/career/NewCareerModal';
 import { PlayerSheetProvider } from './components/clubs/PlayerSheet';
 import { MatchweekDigestModal } from './components/postmatch/MatchweekDigestModal';
 import { soundManager } from './audio/webAudio';
+import { SettingsPanel } from './components/layout/SettingsPanel';
 
 const HomeDashboardTab = lazy(() => import('./components/competitions/HomeDashboardTab').then((m) => ({ default: m.HomeDashboardTab })));
 const SimulationCentreTab = lazy(() => import('./components/matches/SimulationCentreTab').then((m) => ({ default: m.SimulationCentreTab })));
@@ -35,18 +37,30 @@ const ScreenLoading: React.FC = () => (
 
 export const App: React.FC = () => {
   // Career home screen: the league table.
-  const [activeTab, setActiveTab] = useState<TabId>(() =>
-    typeof window === 'undefined' ? 8 : tabFromSlug(window.location.hash.replace(/^#/, '')),
-  );
+  const [settings, setSettings] = useState<ViewerSettings>(loadSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (typeof window === 'undefined') return 8;
+    const slug = window.location.hash.replace(/^#/, '');
+    return tabFromSlug(slug || loadSettings().defaultTab);
+  });
   const { clubs, reloadClubs } = useClubs();
   const [selectedFixtureId, setSelectedFixtureId] = useState<string | null>(null);
   const { toast, showToast } = useToast();
+
+  // Persist viewer settings and apply their side effects. localStorage keeps
+  // these out of the save format: they belong to the viewer, not the world.
+  useEffect(() => {
+    saveSettings(settings);
+    setNumberFormat(settings.numberFormat);
+    soundManager.muted = settings.soundMuted;
+  }, [settings]);
 
   const [selectedClubId, setSelectedClubId] = useState<string | undefined>();
   const [awardsOpen, setAwardsOpen] = useState(false);
   const [ceremonyOpen, setCeremonyOpen] = useState(false);
   const [awardsData, setAwardsData] = useState<SeasonAwards | null>(null);
-  const [muted, setMuted] = useState(false);
+  const muted = settings.soundMuted;
   const [newCareerOpen, setNewCareerOpen] = useState(false);
   const [careerKey, setCareerKey] = useState(0);
   const [inboxUnread, setInboxUnread] = useState(0);
@@ -82,7 +96,7 @@ export const App: React.FC = () => {
       await Promise.all([
         reloadClubs(),
         fetchCalendar().then(setCalendar),
-        fetchInbox(1).then((feed) => setInboxUnread(feed.unread)),
+        fetchInbox(1).then((feed) => setInboxUnread(filterUnreadCount(feed, settings))),
       ]);
       setDigestData(result);
       if ((mode === 'season' || result.stop_reason === 'season_event') && result.awards_ready) {
@@ -141,6 +155,33 @@ export const App: React.FC = () => {
     }
   }, [activeTab]);
 
+
+  // Auto-advance: when enabled, the world moves one matchweek every N
+  // seconds unless a simulation is running or a modal is open.
+  const autoAdvanceRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    autoAdvanceRef.current = () => void handleMacroSim('week');
+  });
+  useEffect(() => {
+    if (settings.autoAdvanceSeconds <= 0) return;
+    const id = window.setInterval(() => {
+      if (
+        simLockRef.current ||
+        simulating ||
+        awardsOpen ||
+        ceremonyOpen ||
+        digestOpen ||
+        newCareerOpen ||
+        settingsOpen ||
+        selectedFixtureId
+      ) {
+        return;
+      }
+      autoAdvanceRef.current();
+    }, settings.autoAdvanceSeconds * 1000);
+    return () => window.clearInterval(id);
+  }, [settings.autoAdvanceSeconds, settingsOpen, simulating, awardsOpen, ceremonyOpen, digestOpen, newCareerOpen, selectedFixtureId]);
+
   useEffect(() => {
     const onHash = () => setActiveTab(tabFromSlug(window.location.hash.replace(/^#/, '')));
     window.addEventListener('hashchange', onHash);
@@ -148,8 +189,8 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
-  }, [careerKey]);
+    fetchInbox(1).then((feed) => setInboxUnread(filterUnreadCount(feed, settings))).catch(() => undefined);
+  }, [careerKey, settings]);
 
   useEffect(() => {
     fetchCalendar().then(setCalendar).catch(() => undefined);
@@ -206,7 +247,7 @@ export const App: React.FC = () => {
 
   return (
     <PlayerSheetProvider>
-    <div className="min-h-screen bg-ink text-bone flex flex-col font-sans">
+    <div className={`min-h-screen bg-ink text-bone flex flex-col font-sans ${settingsRootClasses(settings)}`}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>
@@ -215,9 +256,13 @@ export const App: React.FC = () => {
         onTab={handleTab}
         muted={muted}
         onToggleMute={() => {
-          const isMut = soundManager.toggleMute();
-          setMuted(isMut);
+          const isMut = !settings.soundMuted;
+          setSettings((s) => ({ ...s, soundMuted: isMut }));
           showToast(isMut ? 'Sound off.' : 'Sound on.');
+        }}
+        onOpenSettings={() => {
+          soundManager.playClick();
+          setSettingsOpen(true);
         }}
         onOpenAwards={handleOpenAwards}
         onNewCareer={() => {
@@ -265,7 +310,7 @@ export const App: React.FC = () => {
               onWeekAdvanced={() => {
                 setCareerKey((k) => k + 1);
                 void reloadClubs();
-                fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
+                fetchInbox(1).then((feed) => setInboxUnread(filterUnreadCount(feed, settings))).catch(() => undefined);
               }}
               onViewCompetition={() => setActiveTab(7)}
               onViewClub={(club) => viewSquadOf(club)}
@@ -280,7 +325,7 @@ export const App: React.FC = () => {
               onShowToast={(m) => showToast(stripEmojis(m))}
               onOpenCeremony={() => setCeremonyOpen(true)}
               onSeasonTick={() => {
-                fetchInbox(1).then((feed) => setInboxUnread(feed.unread)).catch(() => undefined);
+                fetchInbox(1).then((feed) => setInboxUnread(filterUnreadCount(feed, settings))).catch(() => undefined);
               }}
             />
           )}
@@ -354,6 +399,7 @@ export const App: React.FC = () => {
           setActiveTab(8);
         }}
       />
+      <SettingsPanel open={settingsOpen} settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />
       <ToastHost message={toast} />
     </div>
     </PlayerSheetProvider>

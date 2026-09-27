@@ -1522,7 +1522,7 @@ export interface InboxItem {
   timestamp: string;
   matchweek: number;
   season_name: string;
-  category: 'match' | 'transfer' | 'wonderkid' | 'honour' | 'race' | 'cup' | 'system' | 'injury' | 'dugout' | 'youth' | 'nxgn';
+  category: 'match' | 'transfer' | 'wonderkid' | 'honour' | 'race' | 'cup' | 'system' | 'injury' | 'dugout' | 'youth' | 'nxgn' | 'milestone' | 'manager' | 'watch' | 'club';
   headline: string;
   body: string;
   club_ids: string[];

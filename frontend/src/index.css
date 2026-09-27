@@ -461,3 +461,26 @@
     padding-bottom: 0.35rem !important;
   }
 }
+
+/* Viewer settings (F8): manual reduced-motion override. */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Viewer settings (F8): compact density tightens cards and tables. */
+.density-compact .console-card {
+  padding: 0.65rem !important;
+}
+.density-compact table td,
+.density-compact table th {
+  padding-top: 0.3rem !important;
+  padding-bottom: 0.3rem !important;
+}
+.density-compact .match-section-title {
+  margin-bottom: 0.35rem !important;
+}

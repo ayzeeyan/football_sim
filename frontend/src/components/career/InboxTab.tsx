@@ -42,6 +42,10 @@ const TONE: Record<InboxItem['category'], string> = {
   dugout: 'text-[#B9B3E6]',
   youth: 'text-[#A9CDBB]',
   nxgn: 'text-brass',
+  milestone: 'text-brass',
+  manager: 'text-[#B9B3E6]',
+  watch: 'text-[#A9CBDD]',
+  club: 'text-bone',
 };
 
 function categoryLabel(c: InboxItem['category']): string {

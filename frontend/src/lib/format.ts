@@ -1,5 +1,15 @@
 /** Shared string / class / number helpers. */
 
+import type { NumberFormatMode } from './settings';
+
+// Currency notation preference (viewer settings, F8). Compact by default.
+let numberFormatMode: NumberFormatMode = 'compact';
+
+/** Sets the currency notation preference used by formatEUR. */
+export function setNumberFormat(mode: NumberFormatMode): void {
+  numberFormatMode = mode;
+}
+
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
 }
@@ -28,7 +38,12 @@ export function formatMillions(valueEur: number): string {
 /** Compact euro currency label; "—" for missing values. */
 export function formatEUR(value: number | null | undefined): string {
   if (typeof value !== 'number') return '—';
-  return new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 1 }).format(value);
+  return new Intl.NumberFormat('en', {
+    style: 'currency',
+    currency: 'EUR',
+    notation: numberFormatMode === 'full' ? 'standard' : 'compact',
+    maximumFractionDigits: numberFormatMode === 'full' ? 0 : 1,
+  }).format(value);
 }
 
 export function formatGd(gd: number): string {
