@@ -28,13 +28,14 @@ export const TABS = [
   { id: 9, slug: 'players', label: 'Players' },
   { id: 4, slug: 'transfers', label: 'Transfers' },
   { id: 1, slug: 'lab', label: 'Wonderkids' },
+  { id: 10, slug: 'stats', label: 'Statistics' },
 ] as const;
 
 /** Sidebar sections: the season you are watching, the competitions it
  *  produces, the world you browse, and the future you develop. */
 export const NAV_GROUPS: Array<{ label: string; slugs: Array<(typeof TABS)[number]['slug']> }> = [
   { label: 'Season', slugs: ['home', 'match', 'inbox'] },
-  { label: 'Competitions', slugs: ['league', 'competitions', 'history'] },
+  { label: 'Competitions', slugs: ['league', 'competitions', 'history', 'stats'] },
   { label: 'Clubs & Market', slugs: ['squads', 'players', 'transfers'] },
   { label: 'The Future', slugs: ['lab'] },
 ];

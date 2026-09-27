@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Activity, CalendarDays, CircleDot, History, Home, Inbox, Medal, Plus,
+  Activity, BarChart3, CalendarDays, CircleDot, History, Home, Inbox, Medal, Plus,
   Sparkles, Trophy, Users, UserRound, Volume2, VolumeX, WalletCards, Globe2,
 } from 'lucide-react';
 import { NAV_GROUPS, TABS, type TabId } from '../../lib/constants';
@@ -31,7 +31,7 @@ interface TopBarProps {
 
 const TAB_ICONS: Record<TabId, React.ElementType> = {
   8: Home, 0: CircleDot, 7: Trophy, 2: Medal, 3: Users, 9: UserRound,
-  4: WalletCards, 6: Inbox, 5: History, 1: Sparkles,
+  4: WalletCards, 6: Inbox, 5: History, 1: Sparkles, 10: BarChart3,
 };
 
 export const TopBar = React.memo<TopBarProps>(function TopBar({

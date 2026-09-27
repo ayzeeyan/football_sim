@@ -405,7 +405,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `POST /api/fixtures/{fixture_id}/simulate`, `POST /api/fixtures/simulate-remaining`
 - `POST /api/sim/continue`, `POST /api/sim/week`, `POST /api/sim/month`, `POST /api/sim/season`
 - `GET /api/world/dashboard`, `/api/scoring-race`, `/api/trophies`, `/api/records`
-- `GET /api/season/awards`, `/api/season/awards/ceremony`, `/api/season/history`, `/api/season/stats`
+- `GET /api/season/awards`, `/api/season/awards/ceremony`, `/api/season/history`, `/api/season/stats`, `/api/season/stats/advanced`
 - `POST /api/season/reset`, `POST /api/season/restart`
 - `GET /api/career/default-homes`, `/api/career/preview-shuffle`, `POST /api/career/new` — `{ "shuffle", "homes" }`
 - `GET /api/favourite`, `POST /api/favourite` (observational viewing preference), `GET /api/week/watch`

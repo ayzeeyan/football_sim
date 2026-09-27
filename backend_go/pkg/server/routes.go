@@ -78,6 +78,7 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/season/awards/ceremony", Handler: s.handleGetAwardsCeremony, Summary: "Awards ceremony"},
 		{Method: "GET", Path: "/api/season/history", Handler: s.handleGetSeasonHistory, Summary: "Season history"},
 		{Method: "GET", Path: "/api/season/stats", Handler: s.handleGetSeasonStats, Summary: "Season statistics"},
+		{Method: "GET", Path: "/api/season/stats/advanced", Handler: s.handleGetAdvancedSeasonStats, Summary: "Advanced statistics centre: player percentiles, shot zones, club trends"},
 		{Method: "POST", Path: "/api/season/reset", Handler: s.handleResetSeason, Summary: "Archive and start the next season"},
 		{Method: "POST", Path: "/api/season/restart", Handler: s.handleRestartSeason, Summary: "Restart the current season from matchweek 1"},
 

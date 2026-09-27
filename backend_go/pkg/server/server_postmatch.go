@@ -214,3 +214,11 @@ func (s *Server) handleGetSeasonStats(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.RUnlock()
 	writeJSON(w, stats)
 }
+
+// handleGetAdvancedSeasonStats serves the statistics centre aggregation.
+func (s *Server) handleGetAdvancedSeasonStats(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	payload := s.TournamentManager.GetAdvancedSeasonStats()
+	s.worldMu.RUnlock()
+	writeJSON(w, payload)
+}

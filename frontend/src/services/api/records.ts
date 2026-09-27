@@ -244,3 +244,58 @@ export function fetchSuperCup(): Promise<SuperCupState> {
     champion: null,
   });
 }
+
+export interface AdvancedPlayerStatRow {
+  player_id: string;
+  full_name: string;
+  position: string;
+  category: string;
+  club_id: string;
+  club_short: string;
+  ovr: number;
+  age: number;
+  appearances: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  avg_rating: number;
+  shots: number;
+  xg: number;
+  shots_box: number;
+  shots_outside: number;
+  xg_box: number;
+  xg_outside: number;
+  percentile: number;
+}
+
+export interface AdvancedClubStatRow {
+  club_id: string;
+  club_name: string;
+  short_name: string;
+  matches: number;
+  avg_possession: number;
+  avg_pass_accuracy: number;
+  avg_shots: number;
+  avg_xg: number;
+  avg_xg_against: number;
+  territory_defensive: number;
+  territory_midfield: number;
+  territory_attacking: number;
+}
+
+export interface AdvancedSeasonStats {
+  season_name: string;
+  players: AdvancedPlayerStatRow[];
+  clubs: AdvancedClubStatRow[];
+  shot_detail_note: string;
+}
+
+/** Statistics centre aggregation (Phase 3 F3). */
+export function fetchAdvancedSeasonStats(): Promise<AdvancedSeasonStats> {
+  return apiFetch<AdvancedSeasonStats>('/season/stats/advanced', undefined, {
+    season_name: '',
+    players: [],
+    clubs: [],
+    shot_detail_note: '',
+  });
+}

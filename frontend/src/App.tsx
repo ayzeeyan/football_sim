@@ -24,6 +24,7 @@ const HistoryTab = lazy(() => import('./components/competitions/HistoryTab').the
 const SquadTab = lazy(() => import('./components/clubs/SquadTab').then((m) => ({ default: m.SquadTab })));
 const TransfersTab = lazy(() => import('./components/transfers/TransfersTab').then((m) => ({ default: m.TransfersTab })));
 const PlayersTab = lazy(() => import('./components/clubs/PlayersTab').then((m) => ({ default: m.PlayersTab })));
+const StatsCentreTab = lazy(() => import('./components/stats').then((m) => ({ default: m.StatsCentreTab })));
 
 const ScreenLoading: React.FC = () => (
   <div className="p-12 text-center" role="status" aria-live="polite">
@@ -298,6 +299,7 @@ export const App: React.FC = () => {
             <InboxTab key={`inbox-${careerKey}`} careerKey={careerKey} onUnread={setInboxUnread} />
           )}
           {activeTab === 5 && <HistoryTab key={`history-${careerKey}`} />}
+          {activeTab === 10 && <StatsCentreTab key={`stats-${careerKey}`} careerKey={careerKey} />}
           {activeTab === 9 && (
             <PlayersTab
               key={`players-${careerKey}`}

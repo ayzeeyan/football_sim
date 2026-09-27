@@ -27,7 +27,7 @@ describe('career home dashboard', () => {
 
   test('uses world-hub navigation labels without club-manager framing', () => {
     expect(TABS.map((t) => t.label)).toEqual([
-      'Home', 'Match Centre', 'News', 'Tables', 'Competitions', 'History', 'Clubs', 'Players', 'Transfers', 'Wonderkids',
+      'Home', 'Match Centre', 'News', 'Tables', 'Competitions', 'History', 'Clubs', 'Players', 'Transfers', 'Wonderkids', 'Statistics',
     ]);
     expect(appSource).toContain('PlayersTab');
     expect(appSource).not.toContain('MANAGER COMMAND CENTER');
