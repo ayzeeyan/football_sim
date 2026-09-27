@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Club, Fixture } from '../../types';
-import { fetchSuperLeague, fetchFixtureSummaries, fetchFixture, simulateFixture, simulateRemaining, resetSeason, fetchScoringRace, fetchSeasonStats, fetchCalendar, fetchSuperCup, fetchWeekWatch, type WeekWatch } from '../../services/api';
+import { fetchSuperLeague, fetchFixtureSummaries, fetchFixture, simulateFixture, simulateRemaining, resetSeason, restartSeason, fetchScoringRace, fetchSeasonStats, fetchCalendar, fetchSuperCup, fetchWeekWatch, type WeekWatch } from '../../services/api';
 import type { ScoringRaceRow, SeasonStats, CalendarState, SuperCupState } from '../../services/api';
 import type { SuperLeagueState, FixturesResponse } from '../../types';
 import { Trophy, RotateCcw, Users, Zap, CalendarDays } from 'lucide-react';
@@ -109,6 +109,8 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
   const [simulatingAll, setSimulatingAll] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
   const [previewFixture, setPreviewFixture] = useState<Fixture | null>(null);
   const [watch, setWatch] = useState<WeekWatch | null>(null);
@@ -218,6 +220,21 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
     }
   };
 
+  const handleRestart = async () => {
+    soundManager.playWhistle();
+    setRestarting(true);
+    try {
+      const res = await restartSeason();
+      onShowToast(stripEmojis(res.message));
+      setViewMw(1);
+      await loadAll(1);
+    } catch {
+      onShowToast('Could not restart the season. Try again.');
+    } finally {
+      setRestarting(false);
+    }
+  };
+
   if (loading || !league) return <Card><LoadingState message="Loading the table…" /></Card>;
 
   const isFinished = league.current_matchweek > league.max_matchweeks;
@@ -267,6 +284,21 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
         />
       )}
 
+
+      {confirmRestart && (
+        <ConfirmBar
+          message="Restart this season from matchweek 1? This season's results, table and records are wiped; all-time history is kept."
+          confirmLabel="Restart Season"
+          busyLabel="Restarting…"
+          busy={restarting}
+          onConfirm={() => {
+            setConfirmRestart(false);
+            void handleRestart();
+          }}
+          onCancel={() => setConfirmRestart(false)}
+        />
+      )}
+
       <Card>
         {league.world && (
           <div className="flex flex-wrap items-center gap-1.5 px-4 pt-4 sm:px-5" role="group" aria-label="Domestic league selector">
@@ -298,12 +330,17 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
           }
           right={
             !isFinished ? (
-              <PrimaryButton
-                tone="brass"
-                onClick={() => fixturesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              >
-                <CalendarDays size={15} aria-hidden="true" /> This Week’s Fixtures
-              </PrimaryButton>
+              <div className="flex flex-wrap items-center gap-2">
+                <PrimaryButton
+                  tone="brass"
+                  onClick={() => fixturesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                >
+                  <CalendarDays size={15} aria-hidden="true" /> This Week’s Fixtures
+                </PrimaryButton>
+                <PrimaryButton tone="blue" onClick={() => setConfirmRestart(true)} disabled={restarting}>
+                  <RotateCcw size={15} aria-hidden="true" /> Restart Season
+                </PrimaryButton>
+              </div>
             ) : (
               <PrimaryButton tone="brass" onClick={() => setConfirmReset(true)} disabled={resetting}>
                 <RotateCcw size={15} aria-hidden="true" /> Start New Season

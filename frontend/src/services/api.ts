@@ -646,6 +646,15 @@ export function resetSeason(): Promise<{ status: string; message: string; curren
   );
 }
 
+/** Restart the current season from matchweek 1 (all-time records kept). */
+export function restartSeason(): Promise<{ status: string; message: string; current_matchweek: number; max_matchweeks: number }> {
+  return apiFetch(
+    '/season/restart',
+    { method: 'POST' },
+    { status: 'error', message: 'Failed to restart season.', current_matchweek: 1, max_matchweeks: 38 },
+  );
+}
+
 export function fetchAwardsCeremony(): Promise<AwardsCeremony | null> {
   return apiFetch<AwardsCeremony | null>('/season/awards/ceremony', undefined, null);
 }
