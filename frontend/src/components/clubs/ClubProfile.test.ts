@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
-const squadSource = readFileSync(new URL('./SquadTab.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const squadSource = readFileSync(new URL('./SquadTab/SquadTab.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const playerSource = readFileSync(new URL('./PlayerSheet.tsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const apiSource = readFileSync(new URL('../../services/api/clubs.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
