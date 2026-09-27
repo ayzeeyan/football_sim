@@ -1195,3 +1195,19 @@ func (te *TransferEngine) TriggerSpecificBid(buyerID, sellerID, playerID string)
 	te.prependFeed(TransferFeedItem{Headline: fmt.Sprintf("EXCLUSIVE: %s submit official offer to %s for %s worth %s!", buyer.ClubName, seller.ClubName, player.FullName, models.FormatCurrency(initialBid)), Category: "EXCLUSIVE", IsWonderkid: neg.IsWonderkid, Matchweek: te.CurrentMatchweek, Timestamp: fmt.Sprintf("Week %d", te.CurrentWeek)})
 	return neg
 }
+
+// AllTransfers returns a copy of the full completed-transfer ledger,
+// ordered deterministically (fee desc, then player id). Used by the
+// user-initiated CSV export.
+func (te *TransferEngine) AllTransfers() []CompletedTransfer {
+	te.mu.RLock()
+	defer te.mu.RUnlock()
+	all := append([]CompletedTransfer(nil), te.AllTimeTransfers...)
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].FeeEUR != all[j].FeeEUR {
+			return all[i].FeeEUR > all[j].FeeEUR
+		}
+		return all[i].PlayerID < all[j].PlayerID
+	})
+	return all
+}

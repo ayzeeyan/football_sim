@@ -4,6 +4,7 @@ import { fetchCareerHistory, fetchNXGN50, type CareerHistory, type HistoryResult
 import type { Fixture, NXGNPlayer } from '../../types';
 import { Card, ClubCrest, EmptyState, LoadingState, PanelHeader } from '../ui/ui';
 import { cx } from '../../lib/format';
+import { downloadJSON } from '../../lib/export';
 import { PlayerNameButton } from '../clubs/PlayerSheet';
 import { PostMatchModal } from '../postmatch/PostMatchBroadcast';
 import { soundManager } from '../../audio/webAudio';
@@ -147,7 +148,8 @@ export const HistoryTab: React.FC = () => {
           title="History & Records"
           subtitle="All-time honours, global Trophy Cabinet, record book milestones, and annual NXGN 50 wonderkid rankings."
           right={
-            <div className="section-tabs border rounded-sm" role="tablist">
+            <div className="flex items-center gap-2">
+              <div className="section-tabs border rounded-sm" role="tablist">
               {(['seasons', 'cabinet', 'records', 'nxgn'] as const).map((t) => (
                 <button
                   key={t}
@@ -163,6 +165,14 @@ export const HistoryTab: React.FC = () => {
                   {t === 'seasons' ? 'Campaigns' : t === 'cabinet' ? 'Trophy Cabinet' : t === 'records' ? 'Record Book' : 'NXGN 50'}
                 </button>
               ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => downloadJSON('records', { seasons: data?.past ?? [], trophies: data?.trophy_cabinet ?? [], records: data?.all_time_records ?? [] })}
+                className="min-h-9 border border-line bg-cardLight px-3 text-[12px] font-semibold text-sage hover:border-brass/30 hover:text-bone"
+              >
+                Export JSON
+              </button>
             </div>
           }
         />

@@ -7,6 +7,7 @@ import { prettyCompetitionName } from '../PlayerSheet';
 import { FIXTURE_COMP_FILTERS, formatWageBill, matchesFixtureFilter, type SquadTabProps } from './status';
 import { ClubIdentityPanel } from '../ClubIdentityPanel';
 import { WatchToggle } from '../../layout/WatchlistPanel';
+import { downloadCSV } from '../../../lib/export';
 
 export const ClubOverviewPanel: React.FC<{
   club: Club;
@@ -21,6 +22,13 @@ export const ClubOverviewPanel: React.FC<{
     <div className="space-y-4">
       <div className="flex justify-end">
         <WatchToggle entity="club" id={club.club_id} onShowToast={() => undefined} />
+        <button
+          type="button"
+          onClick={() => downloadCSV(`squad-${club.club_id.toLowerCase()}`, squad.map((p) => ({ player: p.full_name, position: p.position, age: p.age, ovr: p.ovr, apps: p.appearances, goals: p.goals, assists: p.assists, value_eur: p.market_value_eur })))}
+          className="min-h-9 border border-line bg-cardLight px-3 text-[12px] font-semibold text-sage hover:border-brass/30 hover:text-bone"
+        >
+          Export CSV
+        </button>
       </div>
       {(profile?.storylines?.length ?? 0) > 0 && (
         <Card>

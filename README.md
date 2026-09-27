@@ -416,5 +416,6 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/watchlist`, `POST /api/watchlist` — multi-entity watchlist (clubs, players, competitions; observational only, feeds weekly watch digests)
 - `GET /api/transfers`, `/api/transfers/records`, `POST /api/transfers/bid`, `POST /api/transfers/advance`
 - `GET /api/inbox`, `POST /api/inbox/read`, `POST /api/inbox/reply`
+- `GET /api/export/standings?league=`, `/api/export/squad?club_id=`, `/api/export/fixtures`, `/api/export/transfers` — user-initiated CSV downloads of resolved state
 
 The retired `/ws/match` endpoint returns HTTP 410 in normal server runs.
