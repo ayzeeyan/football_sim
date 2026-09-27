@@ -382,6 +382,7 @@ frontend/            React 18 + TypeScript + Vite + Tailwind CSS + Bun
 dataset.json         96 clubs, 2,395 squad players; 12 canonical U-17 wonderkids
 saves/career.json    Runtime career manifest (generated, not committed)
 scripts/run.ps1      One-command play / -Dev launcher
+.skills/             Agent skill packs (frontend-design); licensed under the root MIT LICENSE
 ```
 
 ## API
