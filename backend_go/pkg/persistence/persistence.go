@@ -27,7 +27,8 @@ const (
 	// SaveVersion 11 adds the achievement ledger (Achievements,
 	// AchievementsFired, ClubUnbeatenRuns, YoungestScorer).
 	// SaveVersion 12 adds per-player injury history (Player.InjuryHistory).
-	SaveVersion     = 12
+	// SaveVersion 13 adds the viewer lineup override (Club.LineupOverride).
+	SaveVersion     = 13
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -809,6 +810,9 @@ func RestoreCareer(
 		}
 		club.CaptainID = savedClub.CaptainID
 		club.ViceCaptainID = savedClub.ViceCaptainID
+		// Viewer lineup override (SaveVersion 13): saved state wins, nil
+		// restores AI control.
+		club.LineupOverride = savedClub.LineupOverride
 		club.FanExpectation = savedClub.FanExpectation
 		club.MediaPressure = savedClub.MediaPressure
 		club.Chemistry = savedClub.Chemistry

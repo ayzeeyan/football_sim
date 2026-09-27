@@ -370,6 +370,7 @@ export const App: React.FC = () => {
               initialClubId={selectedClubId}
               onWatchClub={watchClub}
               onWatchFixture={openFixture}
+              onShowToast={(m) => showToast(stripEmojis(m))}
             />
           )}
           {activeTab === 4 && <TransfersTab key={`transfers-${careerKey}`} onShowToast={(m) => showToast(stripEmojis(m))} />}

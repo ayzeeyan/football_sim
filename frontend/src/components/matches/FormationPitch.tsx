@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import type { Player } from '../../types';
 import { cx } from '../../lib/format';
-import { FORMATION_PITCH_COORDS, FORMATION_SLOTS, isOutOfPosition, normalizeFormation, resolveTacticalAssignments } from '../../lib/tactics';
+import { FORMATION_PITCH_COORDS, FORMATION_SLOTS, isOutOfPosition, normalizeFormation, positionFit, resolveTacticalAssignments } from '../../lib/tactics';
 import { AlertTriangle } from 'lucide-react';
 import { PlayerPortrait } from '../ui/ui';
 
@@ -10,6 +10,9 @@ interface FormationPitchProps {
   formation?: string;
   onPlayerClick?: (player: Player) => void;
   compact?: boolean;
+  /** Explicit slot assignments (Tier B lineup editor). When provided they
+   * render as-is instead of the automatic tactical resolution. */
+  assignments?: Array<{ slot: string; player: Player }>;
 }
 
 interface PitchSlot {
@@ -45,8 +48,23 @@ function assignFormationSlots(players: Player[], formation?: string): PitchSlot[
   return placed;
 }
 
-export const FormationPitch: React.FC<FormationPitchProps> = ({ players, formation, onPlayerClick, compact = false }) => {
-  const slots = useMemo(() => assignFormationSlots(players, formation), [players, formation]);
+export const FormationPitch: React.FC<FormationPitchProps> = ({ players, formation, onPlayerClick, compact = false, assignments }) => {
+  const slots = useMemo(() => {
+    if (assignments && assignments.length > 0) {
+      return assignments.map(({ slot, player }) => {
+        const coords = FORMATION_PITCH_COORDS[slot] ?? [50, 50];
+        return {
+          player,
+          x: coords[0],
+          y: coords[1],
+          slot,
+          naturalPosition: player.position,
+          positionFit: positionFit(player, slot),
+        };
+      });
+    }
+    return assignFormationSlots(players, formation);
+  }, [players, formation, assignments]);
 
   return (
     <div

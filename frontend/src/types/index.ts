@@ -1913,3 +1913,9 @@ export interface ClubMedicalResponse {
   };
 }
 
+
+export interface LineupOverride {
+  formation: string;
+  players: Record<string, string>;
+}
+

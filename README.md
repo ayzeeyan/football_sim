@@ -16,7 +16,7 @@ Go is the server. React is the match centre. There is no Python runtime.
 - **Matchday** — simulation-only fixtures with bookings, reds, rain, derbies, European nights, and detailed post-match reports.
 - **Window** — SUMMER / WINTER / CLOSED transfer FSM with squad-need AI, contract-sensitive offers, wage and budget checks, and sporting destination logic.
 
-The UI is a neutral football-world viewer: every club is AI-controlled, while selected clubs and fixtures only change inspection context. The primary navigation tabs are Home, Match Centre, Competitions, Tables, Clubs, Players, Transfers, News, History, and Wonderkids.
+The UI is a football-world viewer with directed control: every club is AI-controlled by default and selected clubs and fixtures change inspection context, while the viewer can explicitly set one club's starting lineup and formation (per-club opt-in, rigid tactical slots, AI fallback when the lineup cannot be fielded). The primary navigation tabs are Home, Match Centre, Competitions, Tables, Clubs, Players, Transfers, News, History, and Wonderkids.
 
 Legacy note: old 12-club 44-week Super League / Champions Cup / Super Cup saves are ignored for fresh careers (never silently converted) and remain only for isolated unit/match tests via `NewTournamentManager`. The retired live WebSocket match (`/ws/match`) returns HTTP 410 in normal server runs; the legacy live engine remains compiled in only for opt-in contract tests.
 
@@ -400,6 +400,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/clubs/{club_id}/scouting?limit=` — deterministic AI recruitment shortlist (consistency, ceiling, form, value trend, risk); observational only
 - `GET /api/clubs/{club_id}/set-pieces` — set-piece briefing for the probable XI: penalty, free-kick, corner, and aerial picks with reasons; inspection only
 - `GET /api/clubs/{club_id}/medical` — club medical view: current injuries with rehab roadmaps, squad risk assessments, season injury history
+- `POST /api/clubs/{club_id}/lineup`, `DELETE /api/clubs/{club_id}/lineup` — viewer lineup override: set or clear a club's formation and starting XI (rigid tactical slots; AI fallback when unfieldable)
 - `GET /api/h2h/{club_a}/{club_b}`, `/api/players/{player_id}`, `/api/search?q=...`
 - `GET /api/prodigies`, `/api/prodigies/watch`, `/api/wonderkids` (legacy alias)
 - `GET /api/prodigies/{player_id}/timeline`, `/api/growth/milestones`, `/api/training/status`, `/api/training/projection/{player_id}`, `/api/nxgn50`

@@ -90,6 +90,11 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 			return fmt.Errorf("career snapshot contains duplicate club id %q", club.ClubID)
 		}
 		clubIDs[club.ClubID] = struct{}{}
+		// Viewer lineup override (SaveVersion 13): must satisfy the
+		// rigid-slot contract against the persisted squad.
+		if err := models.ValidateLineupOverride(club.Squad, club.LineupOverride); club.LineupOverride != nil && err != nil {
+			return fmt.Errorf("career snapshot club %q has an invalid lineup override: %w", club.ClubID, err)
+		}
 		if club.Played < 0 || club.Won < 0 || club.Drawn < 0 || club.Lost < 0 || club.GoalsFor < 0 || club.GoalsAgainst < 0 || club.Points < 0 {
 			return fmt.Errorf("career snapshot club %q has negative standings values", club.ClubID)
 		}

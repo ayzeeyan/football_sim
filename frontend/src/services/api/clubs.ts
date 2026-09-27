@@ -1,5 +1,5 @@
-import { apiFetch } from './core';
-import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity, ClubScoutingResponse, ClubSetPiecesResponse, ClubMedicalResponse } from '../../types';
+import { apiFetch, invalidateApiCache } from './core';
+import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity, ClubScoutingResponse, ClubSetPiecesResponse, ClubMedicalResponse, LineupOverride } from '../../types';
 
 
 // --- Clubs & squads ---------------------------------------------------------
@@ -90,5 +90,36 @@ export function fetchClubMedical(clubId: string): Promise<ClubMedicalResponse | 
     undefined,
     null,
   );
+}
+
+
+export async function setClubLineup(
+  clubId: string,
+  formation: string,
+  players: Record<string, string>,
+): Promise<{ status: string; message?: string; override?: LineupOverride }> {
+  try {
+    const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/lineup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ formation, players }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { status: 'error', message: data.detail || 'The lineup was rejected.' };
+    invalidateApiCache();
+    return data;
+  } catch {
+    return { status: 'error', message: 'Network error saving the lineup.' };
+  }
+}
+
+export async function clearClubLineup(clubId: string): Promise<{ status: string }> {
+  try {
+    const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/lineup`, { method: 'DELETE' });
+    invalidateApiCache();
+    return { status: res.ok ? 'success' : 'error' };
+  } catch {
+    return { status: 'error' };
+  }
 }
 
