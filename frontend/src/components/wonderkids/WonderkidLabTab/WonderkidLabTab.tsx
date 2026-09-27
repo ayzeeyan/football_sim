@@ -1,24 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { GrowthMilestoneItem, ProdigyData, ProdigyTimelineResponse, ProdigyWatchRow } from '../../types';
-import { fetchProdigies, fetchGrowthMilestones, setProdigyPositionPath, setProdigySchoolTrack, fetchProdigyTimeline, fetchProdigyWatch } from '../../services/api';
+import type { GrowthMilestoneItem, ProdigyData, ProdigyTimelineResponse, ProdigyWatchRow } from '../../../types';
+import { fetchProdigies, fetchGrowthMilestones, setProdigyPositionPath, setProdigySchoolTrack, fetchProdigyTimeline, fetchProdigyWatch } from '../../../services/api';
 import { Dna, Zap, TrendingUp, ClipboardCheck, Award, LayoutGrid, Eye, Sparkle, Microscope, CheckCircle2, Lock, Ruler, Scale, Calendar, Trophy, ChevronRight } from 'lucide-react';
-import { soundManager } from '../../audio/webAudio';
-import { cx, stripEmojis, formatHeight } from '../../lib/format';
-import { Badge, Card, ClubCrest, EmptyState, LoadingState, PanelHeader, ProgressBar } from '../ui/ui';
-import { ProdigyRadar } from './ProdigyRadar';
-import { ProdigyWatch } from './ProdigyWatch';
-import { usePlayerSheet } from '../clubs/PlayerSheet';
+import { soundManager } from '../../../audio/webAudio';
+import { cx, stripEmojis, formatHeight } from '../../../lib/format';
+import { Badge, Card, ClubCrest, EmptyState, LoadingState, PanelHeader, ProgressBar } from '../../ui/ui';
+import { ProdigyRadar } from '../ProdigyRadar';
+import { ProdigyWatch } from '../ProdigyWatch';
+import { usePlayerSheet } from '../../clubs/PlayerSheet';
 
-interface WonderkidLabTabProps {
-  onShowToast: (msg: string) => void;
-}
-
-function milestoneTone(badge: string): string {
-  if (badge === 'gold') return 'border-brass/45 bg-brass/[0.07] text-bone';
-  if (badge === 'cyan') return 'border-[#8AB4C8]/35 bg-[#8AB4C8]/[0.07] text-bone';
-  if (badge === 'green') return 'border-pitchtone/35 bg-pitchtone/[0.08] text-bone';
-  return 'border-[#8E86C8]/35 bg-[#8E86C8]/[0.08] text-bone';
-}
+import { milestoneTone, type WonderkidLabTabProps } from './helpers';
 
 export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast }) => {
   const { openPlayer } = usePlayerSheet();
