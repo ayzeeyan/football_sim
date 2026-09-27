@@ -53,6 +53,7 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/prodigies/{player_id}/timeline", Handler: s.handleGetProdigyTimeline, Summary: "Prodigy development timeline"},
 		{Method: "GET", Path: "/api/training/status", Handler: s.handleGetTrainingStatus, Summary: "Weekly training energy"},
 		{Method: "GET", Path: "/api/training/projection/{player_id}", Handler: s.handleGetTrainingProjection, Summary: "Read-only staff training projection for any player"},
+		{Method: "POST", Path: "/api/players/{player_id}/train", Handler: s.handleTrainPlayer, Summary: "Train any squad player (Tier B; registers a growth profile on demand)"},
 		{Method: "GET", Path: "/api/nxgn50", Handler: s.handleGetNXGN50, Summary: "NXGN 50 wonderkid rankings"},
 
 		// Competitions & Calendar

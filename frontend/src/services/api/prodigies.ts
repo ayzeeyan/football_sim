@@ -55,6 +55,7 @@ export function fetchWonderkids(): Promise<WonderkidsResponse> {
 export interface TrainProdigyResponse {
   status: string;
   message: string;
+  ovr?: number;
   gains?: Record<string, unknown>;
   current_height?: number;
   current_weight?: number;
@@ -133,3 +134,19 @@ export interface TrainingProjection {
 export function fetchTrainingProjection(playerId: string): Promise<TrainingProjection | null> {
   return apiFetch<TrainingProjection | null>(`/training/projection/${encodeURIComponent(playerId)}`, undefined, null);
 }
+
+
+// Tier B (B2): train any squad player, not just the twelve prodigies. The
+// backend registers a growth profile on demand for untracked players.
+export function trainPlayer(playerId: string, focus: string): Promise<TrainProdigyResponse> {
+  return apiFetch<TrainProdigyResponse>(
+    `/players/${encodeURIComponent(playerId)}/train`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ focus }),
+    },
+    { status: 'error', message: 'Network error running the training session.' },
+  );
+}
+

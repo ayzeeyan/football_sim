@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import type { PlayerProfile } from '../../../types';
-import { ovrTone, positionTone } from '../../../lib/constants';
+import { ovrTone, positionTone, TRAINING_FOCUSES } from '../../../lib/constants';
 import { cx, loyaltyLabel } from '../../../lib/format';
 import { soundManager } from '../../../audio/webAudio';
+import { trainPlayer } from '../../../services/api';
 import { ClubCrest, ErrorState, LoadingState, Modal, PlayerPortrait, ProgressBar } from '../../ui/ui';
 import { Sparkle, Shield, AlertTriangle, Trophy, TrendingUp, Calendar, Heart, Award, Activity, Briefcase } from 'lucide-react';
 import { AttackingRoleMap } from '../AttackingRoleMap';
@@ -18,6 +19,7 @@ export const PlayerSheetModal: React.FC<{
   onRetry?: () => void;
 }> = ({ profile, loading, error, open, onClose, onRetry }) => {
   const [activeTab, setActiveTab] = useState<PlayerSheetTab>('overview');
+  const [trainingResult, setTrainingResult] = useState('');
   const player = profile?.player;
 
   // Reset to overview tab when a new player is loaded
@@ -284,6 +286,31 @@ export const PlayerSheetModal: React.FC<{
                       </strong>
                     </div>
                   </div>
+                </div>
+
+                {/* Training control (Tier B2): one regimen per call from
+                    the shared weekly energy, for any player. */}
+                <div className="p-4 rounded-xl border border-line bg-ink/40 space-y-2 text-[13px]">
+                  <h4 className="font-display text-[14px] font-semibold text-bone mb-1">Training session</h4>
+                  <p className="text-[11px] text-sage">Run one focused session. Every session spends from the shared weekly training energy.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TRAINING_FOCUSES.map((focus) => (
+                      <button
+                        key={focus.value}
+                        type="button"
+                        onClick={() => {
+                          soundManager.playClick();
+                          void trainPlayer(player.player_id, focus.value).then((res) => {
+                            setTrainingResult(res.status === 'error' ? (res.message ?? 'Training failed.') : `Session complete · OVR ${res.ovr ?? player.ovr}`);
+                          });
+                        }}
+                        className="min-h-9 border border-line bg-cardLight px-3 text-[12px] font-semibold text-sage hover:border-brass/30 hover:text-bone"
+                      >
+                        {focus.label}
+                      </button>
+                    ))}
+                  </div>
+                  {trainingResult && <p className="text-[12px] text-brass">{trainingResult}</p>}
                 </div>
 
                 {/* Medical record (F11): per-player injury history */}

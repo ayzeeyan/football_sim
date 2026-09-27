@@ -401,6 +401,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/clubs/{club_id}/set-pieces` — set-piece briefing for the probable XI: penalty, free-kick, corner, and aerial picks with reasons; inspection only
 - `GET /api/clubs/{club_id}/medical` — club medical view: current injuries with rehab roadmaps, squad risk assessments, season injury history
 - `POST /api/clubs/{club_id}/lineup`, `DELETE /api/clubs/{club_id}/lineup` — viewer lineup override: set or clear a club's formation and starting XI (rigid tactical slots; AI fallback when unfieldable)
+- `POST /api/players/{player_id}/train` — train any squad player (Tier B): one regimen per call from the shared weekly energy; untracked players get a growth profile on demand
 - `GET /api/h2h/{club_a}/{club_b}`, `/api/players/{player_id}`, `/api/search?q=...`
 - `GET /api/prodigies`, `/api/prodigies/watch`, `/api/wonderkids` (legacy alias)
 - `GET /api/prodigies/{player_id}/timeline`, `/api/growth/milestones`, `/api/training/status`, `/api/training/projection/{player_id}`, `/api/nxgn50`
