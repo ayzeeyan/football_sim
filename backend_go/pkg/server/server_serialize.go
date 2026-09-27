@@ -98,6 +98,7 @@ func (s *Server) serializePlayer(p *models.Player) map[string]interface{} {
 		"suspended_matches":   p.SuspendedMatches,
 		"injured_matches":     p.InjuredMatches,
 		"injury":              p.Injury,
+		"injury_history":      p.InjuryHistory,
 		"availability":        p.AvailabilityNote("super-league", s.TournamentManager.CurrentMatchweek),
 		"effective_ovr":       p.EffectiveOVR(),
 		"consecutive_starts":  p.ConsecutiveStarts,

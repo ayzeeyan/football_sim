@@ -286,6 +286,24 @@ export const PlayerSheetModal: React.FC<{
                   </div>
                 </div>
 
+                {/* Medical record (F11): per-player injury history */}
+                {(player.injury_history?.length ?? 0) > 0 && (
+                  <div className="p-4 rounded-xl border border-line bg-ink/40 space-y-2 text-[13px]">
+                    <h4 className="font-display text-[14px] font-semibold text-bone mb-2">Medical record</h4>
+                    <ul className="divide-y divide-white/[0.07]">
+                      {[...(player.injury_history ?? [])].reverse().map((rec, i) => (
+                        <li key={`${rec.season}-${rec.matchweek}-${i}`} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-[12px]">
+                          <span className="text-bone">{rec.kind}</span>
+                          <span className="text-sage">
+                            {rec.season} week {rec.matchweek} · out {rec.matches_out} {rec.matches_out === 1 ? 'match' : 'matches'} ·{' '}
+                            <span className={rec.severity === 'serious' ? 'text-brass' : rec.severity === 'moderate' ? 'text-sage' : 'text-emerald-400'}>{rec.severity}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Leadership, Versatility & Identity */}
                 <div className="p-4 rounded-xl border border-line bg-ink/40 space-y-2 text-[13px]">
                   <h4 className="font-display text-[14px] font-semibold text-bone mb-2">Tactical Profile & Registration</h4>

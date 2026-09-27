@@ -7,7 +7,7 @@ export function formatWageBill(squad: Player[]): string {
   return `€${(annual / 1_000_000).toFixed(1)}M`;
 }
 
-export const CLUB_PROFILE_TABS = ['overview', 'squad', 'fixtures', 'transfers', 'finances', 'history', 'recruitment', 'set-pieces'] as const;
+export const CLUB_PROFILE_TABS = ['overview', 'squad', 'fixtures', 'transfers', 'finances', 'history', 'recruitment', 'set-pieces', 'medical'] as const;
 export type ClubProfileTab = (typeof CLUB_PROFILE_TABS)[number];
 
 /** Single fatigue cutoff shared by status counts, filters, and row styling. */

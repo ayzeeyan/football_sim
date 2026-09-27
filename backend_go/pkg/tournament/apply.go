@@ -7,6 +7,7 @@ import (
 
 	"football_sim/pkg/growth"
 	"football_sim/pkg/matchreport"
+	"football_sim/pkg/medical"
 	"football_sim/pkg/models"
 	"football_sim/pkg/transfers"
 )
@@ -413,9 +414,6 @@ func attributeOneProdigyPerformance(prodigy *models.Player, report *matchreport.
 	return events
 }
 
-var seriousInjuryKinds = []string{"ACL tear", "meniscus tear", "ruptured cruciate ligament"}
-var minorInjuryKinds = []string{"knock", "hamstring strain", "ankle sprain", "thigh strain", "calf issue"}
-
 func capitalizeKind(kind string) string {
 	if kind == "" {
 		return kind
@@ -541,22 +539,32 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 				}
 			}
 			chance := baseChance
-			if player.UniverseWonderkid {
-				chance *= 0.65
-			}
-			if row.Minutes >= 80 {
-				chance *= 1.15
-			}
+			density := float64(player.Appearances) / float64(maxInt(1, matchweek))
+			mult, _ := medical.RiskMultiplier(medical.RiskInput{
+				Age:           player.Age,
+				Fitness:       player.Fitness,
+				MinutesPlayed: row.Minutes,
+				MatchDensity:  density,
+				IsWonderkid:   player.UniverseWonderkid,
+				HighPress:     highPress,
+			})
+			chance *= mult
 			if rng.Float64() > chance {
 				continue
 			}
 
-			if rng.Float64() < 0.025 {
-				games := 15 + rng.Intn(11)
-				kind := seriousInjuryKinds[rng.Intn(len(seriousInjuryKinds))]
-				player.InjuredMatches = games
-				player.Injury = kind
-				appendInjuryEvent(report, sc.side, club, player, row, kind)
+			injury := medical.RollInjury(rng)
+			games := injury.MatchesOut
+			kind := injury.Kind
+			player.InjuredMatches = games
+			player.Injury = kind
+			player.InjuryHistory = medical.AppendHistory(player.InjuryHistory, medical.Record{
+				Season: tm.SeasonName, Matchweek: matchweek,
+				Kind: kind, Severity: injury.Severity, MatchesOut: games,
+				FixtureID: fixtureID,
+			})
+			appendInjuryEvent(report, sc.side, club, player, row, kind)
+			if injury.Severity == medical.SeveritySerious {
 				tm.PushInbox(
 					"injury",
 					fmt.Sprintf("CRUSHING BLOW: %s suffers %s", player.FullName, kind),
@@ -565,11 +573,6 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 					[]string{club.ClubID}, player.PlayerID, fixtureID,
 				)
 			} else {
-				games := 1 + rng.Intn(3)
-				kind := minorInjuryKinds[rng.Intn(len(minorInjuryKinds))]
-				player.InjuredMatches = games
-				player.Injury = kind
-				appendInjuryEvent(report, sc.side, club, player, row, kind)
 				unit := "matches"
 				if games == 1 {
 					unit = "match"

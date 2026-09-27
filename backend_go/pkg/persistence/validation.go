@@ -3,6 +3,7 @@ package persistence
 import (
 	"fmt"
 
+	"football_sim/pkg/medical"
 	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 	"football_sim/pkg/transfers"
@@ -117,6 +118,21 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 			}
 			if player.UniverseWonderkid && player.OnLoan {
 				return fmt.Errorf("career snapshot canonical wonderkid %q must not be on loan", player.PlayerID)
+			}
+			// Injury history (SaveVersion 12): entries must be well-formed
+			// and bounded.
+			if len(player.InjuryHistory) > medical.MaxHistoryPerPlayer {
+				return fmt.Errorf("career snapshot player %q has %d injury records, above the cap of %d", player.PlayerID, len(player.InjuryHistory), medical.MaxHistoryPerPlayer)
+			}
+			for _, rec := range player.InjuryHistory {
+				switch rec.Severity {
+				case medical.SeverityMinor, medical.SeverityModerate, medical.SeveritySerious:
+				default:
+					return fmt.Errorf("career snapshot player %q has injury record with unknown severity %q", player.PlayerID, rec.Severity)
+				}
+				if rec.Kind == "" || rec.MatchesOut < 1 || rec.MatchesOut > 25 {
+					return fmt.Errorf("career snapshot player %q has malformed injury record: %+v", player.PlayerID, rec)
+				}
 			}
 			if player.UniverseWonderkid && !transfers.IsDesignatedSuperLeagueClub(player.ClubID) {
 				return fmt.Errorf("career snapshot canonical wonderkid %q is outside the designated 12-club ecosystem at %q", player.PlayerID, player.ClubID)

@@ -14,6 +14,7 @@ import (
 	"football_sim/pkg/growth"
 	"football_sim/pkg/managers"
 	"football_sim/pkg/matchreport"
+	"football_sim/pkg/medical"
 	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 	"football_sim/pkg/transfers"
@@ -25,7 +26,8 @@ const (
 	// SaveVersion 10 adds the multi-entity watchlist (WatchlistState).
 	// SaveVersion 11 adds the achievement ledger (Achievements,
 	// AchievementsFired, ClubUnbeatenRuns, YoungestScorer).
-	SaveVersion     = 11
+	// SaveVersion 12 adds per-player injury history (Player.InjuryHistory).
+	SaveVersion     = 12
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -1340,6 +1342,13 @@ func updatePlayerFromSaved(dest, src *models.Player) {
 	dest.SuspendedMatches = src.SuspendedMatches
 	dest.InjuredMatches = src.InjuredMatches
 	dest.Injury = src.Injury
+	// Injury history (SaveVersion 12) must round-trip; deep-copy so the live
+	// squad never aliases the snapshot.
+	if src.InjuryHistory != nil {
+		dest.InjuryHistory = append([]medical.Record(nil), src.InjuryHistory...)
+	} else {
+		dest.InjuryHistory = nil
+	}
 	dest.Education = src.Education
 	dest.EducationPending = src.EducationPending
 	dest.SchoolWant = src.SchoolWant

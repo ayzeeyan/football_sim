@@ -1,5 +1,5 @@
 import { apiFetch } from './core';
-import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity, ClubScoutingResponse, ClubSetPiecesResponse } from '../../types';
+import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity, ClubScoutingResponse, ClubSetPiecesResponse, ClubMedicalResponse } from '../../types';
 
 
 // --- Clubs & squads ---------------------------------------------------------
@@ -78,6 +78,15 @@ export function fetchClubScouting(clubId: string, limit = 12): Promise<ClubScout
 export function fetchClubSetPieces(clubId: string): Promise<ClubSetPiecesResponse | null> {
   return apiFetch<ClubSetPiecesResponse | null>(
     `/clubs/${encodeURIComponent(clubId)}/set-pieces`,
+    undefined,
+    null,
+  );
+}
+
+
+export function fetchClubMedical(clubId: string): Promise<ClubMedicalResponse | null> {
+  return apiFetch<ClubMedicalResponse | null>(
+    `/clubs/${encodeURIComponent(clubId)}/medical`,
     undefined,
     null,
   );

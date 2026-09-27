@@ -15,6 +15,7 @@ import { CLUB_PROFILE_TABS, FIXTURE_COMP_FILTERS, formatWageBill, isSquadFatigue
 import { ClubFinancesPanel, ClubFixturesPanel, ClubHistoryPanel, ClubOverviewPanel, ClubTransfersPanel } from './panels';
 import { RecruitmentPanel } from './RecruitmentPanel';
 import { SetPiecesPanel } from './SetPiecesPanel';
+import { MedicalPanel } from './MedicalPanel';
 
 export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatchClub, onWatchFixture }) => {
   const { openPlayer } = usePlayerSheet();
@@ -843,6 +844,10 @@ export const SquadTab: React.FC<SquadTabProps> = ({ clubs, initialClubId, onWatc
 
       {selectedClub && profileTab === 'set-pieces' && (
         <SetPiecesPanel club={selectedClub} />
+      )}
+
+      {selectedClub && profileTab === 'medical' && (
+        <MedicalPanel club={selectedClub} onOpenPlayer={(id) => openPlayer(id)} />
       )}
 
       {/* Dynamic View Mode Content */}

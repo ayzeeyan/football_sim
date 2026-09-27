@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"football_sim/pkg/medical"
 )
 
 // Player represents a football player with season stats, dynamic tracking,
@@ -44,6 +46,9 @@ type Player struct {
 	SuspendedMatches int    `json:"suspended_matches"`
 	InjuredMatches   int    `json:"injured_matches"`
 	Injury           string `json:"injury"`
+	// InjuryHistory is the persisted medical ledger (SaveVersion 12), newest
+	// entry last, bounded by medical.MaxHistoryPerPlayer.
+	InjuryHistory []medical.Record `json:"injury_history,omitempty"`
 
 	// Wonderkid & Academics
 	Education         string `json:"education"`

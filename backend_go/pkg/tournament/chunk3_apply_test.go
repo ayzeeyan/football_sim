@@ -372,8 +372,32 @@ func TestChunk3Injuries(t *testing.T) {
 				if p.InjuredMatches < 0 || p.InjuredMatches > 25 {
 					t.Errorf("injury span out of bounds: %+v", p)
 				}
-				if p.InjuredMatches > 3 && !isSeriousKind(p.Injury) {
-					t.Errorf("long layoff without serious kind: %+v", p)
+				// Severity tiers (pkg/medical): 1-3 minor, 4-10 moderate,
+				// 15-25 serious. The layoff length must match the tier of the
+				// recorded kind, and the history ledger must agree.
+				if p.InjuredMatches > 0 {
+					switch {
+					case p.InjuredMatches <= 3:
+						if isSeriousKind(p.Injury) || isModerateKind(p.Injury) {
+							t.Errorf("short layoff with a non-minor kind: %+v", p)
+						}
+					case p.InjuredMatches <= 10:
+						if !isModerateKind(p.Injury) {
+							t.Errorf("moderate layoff without a moderate kind: %+v", p)
+						}
+					default:
+						if !isSeriousKind(p.Injury) {
+							t.Errorf("long layoff without serious kind: %+v", p)
+						}
+					}
+					if len(p.InjuryHistory) == 0 {
+						t.Errorf("injury without a history record: %+v", p)
+					} else {
+						rec := p.InjuryHistory[len(p.InjuryHistory)-1]
+						if rec.Kind != p.Injury || rec.MatchesOut != p.InjuredMatches {
+							t.Errorf("history record disagrees with the injury: %+v vs %+v", rec, p)
+						}
+					}
 				}
 			}
 		}
@@ -498,6 +522,14 @@ func countInjured(club *models.Club) int {
 
 func isSeriousKind(kind string) bool {
 	return kind == "ACL tear" || kind == "meniscus tear" || kind == "ruptured cruciate ligament"
+}
+
+func isModerateKind(kind string) bool {
+	switch kind {
+	case "hamstring tear", "ankle ligament damage", "stress fracture", "knee sprain":
+		return true
+	}
+	return false
 }
 
 // --------------------------------------------------------------------------

@@ -33,6 +33,7 @@ export interface Player {
   suspended_matches?: number;
   injured_matches?: number;
   injury?: string;
+  injury_history?: InjuryRecord[];
   availability?: string;
   grew_note?: string | null;
   education?: string;
@@ -1852,5 +1853,63 @@ export interface ClubSetPiecesResponse {
   club_name: string;
   short_name: string;
   set_pieces: SetPieceInspection;
+}
+
+
+export interface InjuryRecord {
+  season: string;
+  matchweek: number;
+  kind: string;
+  severity: 'minor' | 'moderate' | 'serious';
+  matches_out: number;
+  fixture_id?: string;
+}
+
+export interface RehabStage {
+  phase: string;
+  detail: string;
+}
+
+export interface RehabPlan {
+  kind: string;
+  severity: string;
+  matches_out: number;
+  stages: RehabStage[];
+}
+
+export interface MedicalInjuredRow {
+  player_id: string;
+  full_name: string;
+  position: string;
+  ovr: number;
+  kind: string;
+  matches_out: number;
+  rehab: RehabPlan;
+}
+
+export interface MedicalRiskRow {
+  player_id: string;
+  full_name: string;
+  position: string;
+  ovr: number;
+  fitness: number;
+  assessment: {
+    risk_score: number;
+    factors: Array<{ label: string; mult: number }>;
+  };
+}
+
+export interface ClubMedicalResponse {
+  club_id: string;
+  club_name: string;
+  season: string;
+  injured: MedicalInjuredRow[];
+  top_risks: MedicalRiskRow[];
+  history: {
+    season: string;
+    total_injuries: number;
+    by_severity: Record<string, number>;
+    matches_lost: number;
+  };
 }
 
