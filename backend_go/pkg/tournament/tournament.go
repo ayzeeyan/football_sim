@@ -2,7 +2,6 @@ package tournament
 
 import (
 	"fmt"
-	"football_sim/pkg/brain"
 	"math"
 	"math/rand"
 	"sort"
@@ -41,7 +40,6 @@ type TournamentManager struct {
 	ClubUnbeatenRuns      map[string]int
 	YoungestScorer        *YoungestScorerRecord
 	SeasonLeagueMoves     []RelegationMove
-	Brain                 *brain.Model
 	ManagerConsecutiveHot map[string]int
 	ManagerLastChange     map[string]int
 	ManagerHistory        []ManagerHistoryEntry

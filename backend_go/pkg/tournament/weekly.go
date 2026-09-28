@@ -14,7 +14,6 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 		tm.GrowthEngine.ReplenishTrainingEnergy()
 	}
 	tm.evaluatePlayerUnrestUnlocked(completedMW)
-	tm.trainBrainUnlocked(completedMW)
 	focuses := []string{"hypertrophy", "technical", "tactical"}
 	focus := focuses[(completedMW-1)%3]
 	var growthEvents []string

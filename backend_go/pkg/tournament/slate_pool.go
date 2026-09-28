@@ -168,10 +168,6 @@ func (tm *TournamentManager) computeSlateFixture(f *Fixture, rng *rand.Rand) (sl
 	}
 	homeMgr := tm.Managers[f.HomeID]
 	awayMgr := tm.Managers[f.AwayID]
-	if homeMgr != nil && awayMgr != nil {
-		edge := tm.BrainTacticEdge(homeMgr.Style, awayMgr.Style)
-		cfg.EdgeOverride = &edge
-	}
 	report := matchengine.SimulateInstantMatch(home, away, homeMgr, awayMgr, tm.GrowthEngine, cfg, rng)
 	homeStyle, homeFocus, awayStyle, awayFocus := "", "", "", ""
 	if homeMgr != nil {

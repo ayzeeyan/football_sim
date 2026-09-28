@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"football_sim/pkg/brain"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,12 +36,13 @@ const (
 	// SaveVersion 17 writes back swap-era saves realigned to the
 	// country-pure pyramid (domestic registries re-seeded from the clubs'
 	// national leagues; the season restarts from matchweek 1).
-	// SaveVersion 19 adds the online-learned world brain (Brain).
+	// SaveVersion 20 removes the online-learned world models (the
+	// brain keys in older saves are ignored on load).
 	// SaveVersion 18 removes the directed-control fields (viewer lineup
 	// override, viewer manager career, viewer national squads): the world
 	// is a neutral simulation again and every club, player, and transfer is
 	// machine-selected. Older saves load; the dropped keys are ignored.
-	SaveVersion     = 19
+	SaveVersion     = 20
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -147,7 +147,6 @@ type CareerSnapshot struct {
 	ClubUnbeatenRuns      map[string]int                       `json:"club_unbeaten_runs,omitempty"`
 	YoungestScorer        *tournament.YoungestScorerRecord     `json:"youngest_scorer,omitempty"`
 	SeasonLeagueMoves     []tournament.RelegationMove          `json:"season_league_moves,omitempty"`
-	Brain                 *brain.Model                         `json:"brain,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
 	ReputationAppliedSeason string   `json:"reputation_applied_season,omitempty"`
@@ -236,7 +235,6 @@ func BuildSnapshot(
 		ClubUnbeatenRuns:      tm.ClubUnbeatenRuns,
 		YoungestScorer:        tm.YoungestScorer,
 		SeasonLeagueMoves:     tm.SeasonLeagueMoves,
-		Brain:                 tm.Brain,
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
 		ReputationAppliedSeason: tm.ReputationAppliedSeason,
@@ -768,9 +766,6 @@ func RestoreCareer(
 		tm.YoungestScorer = snap.YoungestScorer
 	}
 	tm.SeasonLeagueMoves = snap.SeasonLeagueMoves
-	if snap.Brain != nil && snap.Brain.Valid() {
-		tm.Brain = snap.Brain
-	}
 	tm.LastCareerShuffle = snap.LastCareerShuffle
 
 	// 2. Build index of existing players for fast lookup and deduplication

@@ -90,7 +90,6 @@ func NewEuropeanWorldManager(clubs []*models.Club, ge *growth.GrowthEngine, seed
 		tm.scheduleEuropeanLeaguePhaseUnlocked(competition)
 	}
 	tm.initializeNationalTeamsUnlocked()
-	tm.InitBrainUnlocked()
 	tm.Inbox = nil
 	tm.InboxSeq = 0
 	tm.AssignSquadRolesUnlocked()
