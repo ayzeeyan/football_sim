@@ -13,6 +13,7 @@ func (tm *TournamentManager) runWeeklyTicks(completedMW int) {
 	if tm.GrowthEngine != nil {
 		tm.GrowthEngine.ReplenishTrainingEnergy()
 	}
+	tm.evaluatePlayerUnrestUnlocked(completedMW)
 	focuses := []string{"hypertrophy", "technical", "tactical"}
 	focus := focuses[(completedMW-1)%3]
 	var growthEvents []string

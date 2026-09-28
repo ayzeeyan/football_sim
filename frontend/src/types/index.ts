@@ -1609,6 +1609,8 @@ export interface PlayerProfile {
   contract_history?: PlayerContractEvent[];
   awards_history?: PlayerHonourRecord[];
   previous_clubs?: string[];
+  unrest_level?: 'content' | 'unsettled' | 'wants_to_leave' | string;
+  unrest_reason?: string;
   timeline?: Array<{ season?: string; age?: number; ovr?: number; note?: string }>;
 }
 

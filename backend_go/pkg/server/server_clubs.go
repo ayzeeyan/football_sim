@@ -163,6 +163,7 @@ func (s *Server) handleGetPlayerProfile(w http.ResponseWriter, r *http.Request) 
 			timeline = append([]growth.TimelineEntry{}, s.GrowthEngine.Timeline[p.PlayerID]...)
 		}
 
+		unrestLevel, unrestReason := s.TournamentManager.PlayerUnrestLevel(pid)
 		log := s.TournamentManager.PlayerMatchLog(pid, 8)
 		var avg interface{}
 		rated := 0
@@ -186,6 +187,8 @@ func (s *Server) handleGetPlayerProfile(w http.ResponseWriter, r *http.Request) 
 			"avg_rating":     avg,
 			"apps_rated":     rated,
 			"previous_clubs": playerPreviousClubs(p),
+			"unrest_level":   unrestLevel,
+			"unrest_reason":  unrestReason,
 		}
 	}
 	s.worldMu.RUnlock()
@@ -360,4 +363,16 @@ func (s *Server) handleGetClubTransfers(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, payload)
+}
+
+// handleGetClubUnrest returns the derived unrest rows for one club:
+// quality players starved of minutes, most severe first. Observational.
+func (s *Server) handleGetClubUnrest(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	rows := s.TournamentManager.PlayerUnrestForClub(r.PathValue("club_id"))
+	s.worldMu.RUnlock()
+	if rows == nil {
+		rows = []tournament.PlayerUnrest{}
+	}
+	writeJSON(w, map[string]interface{}{"unrest": rows})
 }

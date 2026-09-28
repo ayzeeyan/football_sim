@@ -1017,8 +1017,12 @@ func (te *TransferEngine) aiInitiateBid() {
 	if len(validTargets) == 0 {
 		return
 	}
+	ranks := models.SquadRankByRating(seller)
 	sort.Slice(validTargets, func(i, j int) bool {
 		si, sj := te.scoreTransferTarget(buyer, seller, validTargets[i]), te.scoreTransferTarget(buyer, seller, validTargets[j])
+		// Unrest boost: a starved, unhappy player is a more willing seller.
+		ui, uj := unrestTargetBoost(seller, validTargets[i], ranks), unrestTargetBoost(seller, validTargets[j], ranks)
+		si, sj = si+ui, sj+uj
 		if si != sj {
 			return si > sj
 		}

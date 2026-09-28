@@ -400,6 +400,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/clubs/{club_id}/scouting?limit=` — deterministic AI recruitment shortlist (consistency, ceiling, form, value trend, risk); observational only
 - `GET /api/clubs/{club_id}/set-pieces` — set-piece briefing for the probable XI: penalty, free-kick, corner, and aerial picks with reasons; inspection only
 - `GET /api/clubs/{club_id}/medical` — club medical view: current injuries with rehab roadmaps, squad risk assessments, season injury history
+- `GET /api/clubs/{club_id}/unrest` — derived player unrest: quality players starved of minutes, most severe first (observational; the weekly tick applies the morale cost and publishes the story)
 - `GET /api/h2h/{club_a}/{club_b}`, `/api/players/{player_id}`, `/api/search?q=...`
 - `GET /api/prodigies`, `/api/prodigies/watch`, `/api/wonderkids` (legacy alias)
 - `GET /api/prodigies/{player_id}/timeline`, `/api/growth/milestones`, `/api/training/status`, `/api/training/projection/{player_id}`, `/api/nxgn50`

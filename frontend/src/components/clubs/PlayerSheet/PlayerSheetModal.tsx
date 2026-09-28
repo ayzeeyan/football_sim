@@ -286,6 +286,16 @@ export const PlayerSheetModal: React.FC<{
                   </div>
                 </div>
 
+                {/* Derived unrest: starved quality players want out */}
+                {profile?.unrest_level && profile.unrest_level !== 'content' && (
+                  <div className={cx('p-4 rounded-xl border space-y-1 text-[13px]', profile.unrest_level === 'wants_to_leave' ? 'border-ember/40 bg-ember/[0.06]' : 'border-brass/30 bg-brass/[0.05]')} data-unrest-banner="true">
+                    <h4 className="font-display text-[14px] font-semibold text-bone mb-1">
+                      {profile.unrest_level === 'wants_to_leave' ? 'Wants to leave' : 'Unsettled'}
+                    </h4>
+                    <p className="text-[12px] text-sage">{profile.unrest_reason}</p>
+                  </div>
+                )}
+
                 {/* Medical record (F11): per-player injury history */}
                 {(player.injury_history?.length ?? 0) > 0 && (
                   <div className="p-4 rounded-xl border border-line bg-ink/40 space-y-2 text-[13px]">
