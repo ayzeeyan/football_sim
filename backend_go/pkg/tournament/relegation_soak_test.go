@@ -73,6 +73,14 @@ func TestRelegationStakesMultiSeasonSoak(t *testing.T) {
 	if tm.SeasonLeagueMoves == nil || len(tm.SeasonLeagueMoves) != 0 {
 		t.Fatalf("SeasonLeagueMoves must be empty, got %+v", tm.SeasonLeagueMoves)
 	}
+	// The international competition survives the calendar rebuild with its
+	// archived history intact (one entry per completed season).
+	if tm.World.NationalTeams == nil {
+		t.Fatal("national teams lost across the transition")
+	}
+	if len(tm.World.NationalTeams.History) < 1 {
+		t.Fatalf("nations history lost across the transition: %+v", tm.World.NationalTeams.History)
+	}
 
 	// Second season: the invariants hold across another transition — a soak
 	// against drift.
@@ -90,6 +98,9 @@ func TestRelegationStakesMultiSeasonSoak(t *testing.T) {
 	}
 	if err := tm.ValidateWorldState(); err != nil {
 		t.Fatalf("world invalid after second transition: %v", err)
+	}
+	if len(tm.World.NationalTeams.History) < 2 {
+		t.Fatalf("nations history must accumulate across seasons: %+v", tm.World.NationalTeams.History)
 	}
 }
 

@@ -33,7 +33,10 @@ const (
 	// (NationalTeamsCompetition.ViewerSquads).
 	// SaveVersion 16 adds the current season's promotion/relegation moves
 	// (SeasonLeagueMoves).
-	SaveVersion     = 16
+	// SaveVersion 17 writes back swap-era saves realigned to the
+	// country-pure pyramid (domestic registries re-seeded from the clubs'
+	// national leagues; the season restarts from matchweek 1).
+	SaveVersion     = 17
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -943,6 +946,13 @@ func RestoreCareer(
 	if snap.World != nil {
 		tm.World = snap.World
 		wireWorldFixtureClubs(tm)
+		// Swap-era saves can carry domestic registries that disagree with
+		// the dataset-derived club leagues. The country-pure invariant is
+		// enforced here: a misaligned world is re-seeded and the season
+		// restarts from matchweek 1 (all-time history kept).
+		if tm.RealignCountryPureWorld() {
+			wireWorldFixtureClubs(tm)
+		}
 	}
 	// Tactical-slot fields are additive to the current save format. Finished
 	// reports from before the field existed are reconstructed in memory from

@@ -713,7 +713,15 @@ func (tm *TournamentManager) rebuildEuropeanWorldCalendarUnlocked(qualification 
 	if tm.World != nil && tm.World.Seed != 0 {
 		seed = tm.World.Seed
 	}
+	// The international competition is season-independent state: its
+	// history, viewer squads, and current table must survive the calendar
+	// rebuild (initializeNationalTeamsUnlocked reads them right after).
+	var nations *NationalTeamsCompetition
+	if tm.World != nil {
+		nations = tm.World.NationalTeams
+	}
 	tm.World = &EuropeanWorld{Version: 1, Seed: seed, Competitions: map[string]*Competition{}, Fixtures: []Fixture{}}
+	tm.World.NationalTeams = nations
 	byLeague := map[string][]*models.Club{}
 	for _, club := range tm.ClubsList {
 		if club != nil && isTopFiveLeague(club.League) {
