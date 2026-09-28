@@ -2,31 +2,40 @@ package tournament
 
 import (
 	"fmt"
-	"sort"
 	"strings"
+
+	"football_sim/pkg/models"
 )
 
-// Domestic promotion and relegation for the closed 96-club world.
+// Domestic relegation stakes for the closed 96-club world.
 //
 // The dataset contains only the five top flights — there is no second
-// division to promote from — so the pyramid is closed: the five leagues
-// form a prestige ladder and each adjacent pair exchanges its boundary
-// clubs. The bottom three of the stronger league are relegated to the
-// weaker league; the top three of the weaker league are promoted into
-// the stronger one. The base of the ladder (the weakest league) has no
-// lower tier: its relegation places are a survival battle whose stakes
-// are reputation and finances rather than demotion.
-//
-// The exchange is a pure function of the final tables: no randomness,
-// no clock, deterministic ordering. League sizes never change and the
-// 96 dataset clubs (and their crest mappings) are preserved exactly.
+// division — and every league is national: a German club belongs in the
+// Bundesliga for the life of the world. No club ever changes leagues. The
+// relegation places are instead a survival battle with real stakes: at the
+// season transition the bottom three of every league lose reputation and
+// pay a financial penalty. The stakes are a pure function of the final
+// tables: no randomness, no clock, deterministic ordering. League sizes
+// never change and the 96 dataset clubs (and their crest mappings) are
+// preserved exactly.
 
-// relegationSwapSize is how many clubs cross each boundary. It matches
-// the frontend qualification band ("last three go down").
-const relegationSwapSize = 3
+// relegationStakesSize is how many clubs per league pay the survival
+// stakes. It matches the frontend qualification band ("last three go down").
+const relegationStakesSize = 3
+
+// relegationReputationPenalty is the reputation hit each relegated club
+// takes on top of the annual table-driven reputation update.
+const relegationReputationPenalty = 3
+
+// relegationFinancePenaltyPercent of the available balance is lost to the
+// relegation stakes; the deduction can never push a balance negative and
+// the transfer budget is clamped back under the reduced balance.
+const relegationFinancePenaltyPercent = 10
 
 // RelegationMove records one club crossing a league boundary at the
-// season transition.
+// season transition. The closed country-pure pyramid never produces moves;
+// the type and the persisted ledger are retained so older saves load and
+// the wire contract stays stable if second divisions are ever added.
 type RelegationMove struct {
 	ClubID     string `json:"club_id"`
 	ClubName   string `json:"club_name"`
@@ -35,99 +44,91 @@ type RelegationMove struct {
 	Direction  string `json:"direction"` // "relegated" | "promoted"
 }
 
-// domesticRelegationChain returns the five league definitions ordered
-// strongest-first by prestige; ties keep definition order so the chain
-// is stable across runs.
-func domesticRelegationChain() []CompetitionDefinition {
-	chain := append([]CompetitionDefinition(nil), domesticLeagueDefinitions...)
-	sort.SliceStable(chain, func(i, j int) bool { return chain[i].Prestige > chain[j].Prestige })
-	return chain
+// RelegationStake records one club paying the survival-battle price.
+type RelegationStake struct {
+	ClubID   string `json:"club_id"`
+	ClubName string `json:"club_name"`
+	League   string `json:"league"`
 }
 
-// PlanDomesticPromotionRelegation computes the boundary swaps from the
+// PlanDomesticRelegationStakes computes the survival-battle stakes from the
 // current (final) league tables without mutating anything. Exposed for
 // tests and for the season-preview surface.
-func (tm *TournamentManager) PlanDomesticPromotionRelegation() []RelegationMove {
+func (tm *TournamentManager) PlanDomesticRelegationStakes() []RelegationStake {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
-	return tm.planDomesticPromotionRelegationUnlocked()
+	return tm.planDomesticRelegationStakesUnlocked()
 }
 
-func (tm *TournamentManager) planDomesticPromotionRelegationUnlocked() []RelegationMove {
+func (tm *TournamentManager) planDomesticRelegationStakesUnlocked() []RelegationStake {
 	if tm.World == nil {
 		return nil
 	}
-	chain := domesticRelegationChain()
-	var moves []RelegationMove
-	for i := 0; i+1 < len(chain); i++ {
-		stronger, weaker := chain[i], chain[i+1]
-		down := tm.worldLeagueStandingsUnlocked(stronger.ID)
-		up := tm.worldLeagueStandingsUnlocked(weaker.ID)
-		if len(down) < 2*relegationSwapSize || len(up) < 2*relegationSwapSize {
-			// Degenerate league sizes never exchange boundary clubs.
+	var stakes []RelegationStake
+	for _, def := range domesticLeagueDefinitions {
+		table := tm.worldLeagueStandingsUnlocked(def.ID)
+		if len(table) < relegationStakesSize {
+			// Degenerate league sizes never pay stakes.
 			continue
 		}
-		for _, club := range down[len(down)-relegationSwapSize:] {
-			moves = append(moves, RelegationMove{
-				ClubID: club.ClubID, ClubName: club.ClubName,
-				FromLeague: stronger.League, ToLeague: weaker.League,
-				Direction: "relegated",
-			})
-		}
-		for _, club := range up[:relegationSwapSize] {
-			moves = append(moves, RelegationMove{
-				ClubID: club.ClubID, ClubName: club.ClubName,
-				FromLeague: weaker.League, ToLeague: stronger.League,
-				Direction: "promoted",
+		for _, club := range table[len(table)-relegationStakesSize:] {
+			stakes = append(stakes, RelegationStake{
+				ClubID: club.ClubID, ClubName: club.ClubName, League: def.League,
 			})
 		}
 	}
-	sort.SliceStable(moves, func(i, j int) bool {
-		if moves[i].Direction != moves[j].Direction {
-			return moves[i].Direction == "relegated"
-		}
-		if moves[i].FromLeague != moves[j].FromLeague {
-			return moves[i].FromLeague < moves[j].FromLeague
-		}
-		return moves[i].ClubID < moves[j].ClubID
-	})
-	return moves
+	return stakes
 }
 
-// applyPlannedRelegationUnlocked executes pre-computed swaps by rewriting
-// each moving club's League field. Planning happens while the final tables
-// are intact; application happens after every table read in the transition
-// and before the calendar rebuild re-seeds league and cup participants.
-// The caller must hold tm.mu.
-func (tm *TournamentManager) applyPlannedRelegationUnlocked(moves []RelegationMove) {
-	for _, move := range moves {
-		if club := tm.Clubs[move.ClubID]; club != nil {
-			club.League = move.ToLeague
+// applyRelegationStakesUnlocked charges the survival-battle price: a
+// reputation hit and a balance deduction for each staked club. Penalties
+// are computed from live finances at application time, so the deduction
+// can never push a balance negative and the budget invariant
+// (budget <= balance) is preserved by clamping. The caller must hold tm.mu.
+func (tm *TournamentManager) applyRelegationStakesUnlocked(stakes []RelegationStake) {
+	for _, stake := range stakes {
+		club := tm.Clubs[stake.ClubID]
+		if club == nil {
+			continue
+		}
+		club.Identity.Reputation = models.ClampClubRating(club.Identity.Reputation - relegationReputationPenalty)
+		penalty := club.Finances.Balance / 100 * relegationFinancePenaltyPercent
+		if penalty <= 0 {
+			continue
+		}
+		if penalty > club.Finances.Balance {
+			penalty = club.Finances.Balance
+		}
+		club.Finances.Balance -= penalty
+		if club.Finances.TransferBudget > club.Finances.Balance {
+			club.Finances.TransferBudget = club.Finances.Balance
 		}
 	}
 }
 
-// pushRelegationNewsUnlocked publishes the boundary swaps to the inbox.
-// The base league's survival battle is stated explicitly so the viewer
-// never infers a demotion that cannot happen.
-func (tm *TournamentManager) pushRelegationNewsUnlocked(moves []RelegationMove, matchweek int) {
-	if len(moves) == 0 {
+// pushRelegationStakesNewsUnlocked publishes the survival-battle outcome to
+// the inbox. The copy states explicitly that no club changes league: the
+// closed pyramid has no second division and every league is national.
+func (tm *TournamentManager) pushRelegationStakesNewsUnlocked(stakes []RelegationStake, matchweek int) {
+	if len(stakes) == 0 {
 		return
 	}
-	var lines []string
-	for _, move := range moves {
-		verb := "promoted"
-		if move.Direction == "relegated" {
-			verb = "relegated"
+	byLeague := map[string][]string{}
+	var leagues []string
+	for _, stake := range stakes {
+		if _, ok := byLeague[stake.League]; !ok {
+			leagues = append(leagues, stake.League)
 		}
-		lines = append(lines, fmt.Sprintf("%s %s from %s to %s.", move.ClubName, verb, move.FromLeague, move.ToLeague))
+		byLeague[stake.League] = append(byLeague[stake.League], stake.ClubName)
 	}
-	chain := domesticRelegationChain()
-	base := chain[len(chain)-1]
-	body := strings.Join(lines, " ") + fmt.Sprintf(" %s's bottom three survive: the closed pyramid has no lower tier.", base.Name)
-	clubIDs := make([]string, 0, len(moves))
-	for _, move := range moves {
-		clubIDs = append(clubIDs, move.ClubID)
+	var lines []string
+	for _, league := range leagues {
+		lines = append(lines, fmt.Sprintf("%s: %s pay the survival price.", league, strings.Join(byLeague[league], ", ")))
 	}
-	tm.PushInbox(MsgCategorySystem, "Promotion and relegation confirmed", body, matchweek, clubIDs, "", "")
+	body := strings.Join(lines, " ") + " No club changes league: the closed pyramid has no second division, so the bottom three lose reputation and finances instead of their place."
+	clubIDs := make([]string, 0, len(stakes))
+	for _, stake := range stakes {
+		clubIDs = append(clubIDs, stake.ClubID)
+	}
+	tm.PushInbox(MsgCategorySystem, "Survival battle settled: relegation stakes paid", body, matchweek, clubIDs, "", "")
 }

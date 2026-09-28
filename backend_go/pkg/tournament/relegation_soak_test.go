@@ -6,12 +6,14 @@ import (
 	"football_sim/pkg/transfers"
 )
 
-// Multi-season soak: promotion and relegation must move clubs across league
-// boundaries at every transition, conserve league sizes, keep the world
-// valid, and stay deterministic across identical seeds.
-func TestPromotionRelegationMultiSeasonSoak(t *testing.T) {
+// Multi-season soak: the closed country-pure pyramid never moves a club
+// between leagues. Every transition must conserve league membership, keep
+// the world valid, publish the survival-battle news, and stay deterministic
+// across identical seeds.
+func TestRelegationStakesMultiSeasonSoak(t *testing.T) {
 	tm, _, te := loadEuropeanWorldForTest(t)
 
+	startLeague := map[string]string{}
 	leagueSizes := func() map[string]int {
 		sizes := map[string]int{}
 		for _, club := range tm.ClubsList {
@@ -19,17 +21,15 @@ func TestPromotionRelegationMultiSeasonSoak(t *testing.T) {
 		}
 		return sizes
 	}
+	for _, club := range tm.ClubsList {
+		startLeague[club.ClubID] = club.League
+	}
 	startSizes := leagueSizes()
 
-	runSeasonAndTransition := func(season int) []RelegationMove {
+	runSeasonAndTransition := func(season int) {
 		batch := tm.SimulateBatchWeeks(tm.MaxMatchweeks)
 		if batch.Status != "success" || !batch.SeasonFinished {
 			t.Fatalf("season %d did not finish: %+v", season, batch)
-		}
-		// Capture the final tables before the transition mutates anything.
-		moves := tm.PlanDomesticPromotionRelegation()
-		if len(moves) == 0 {
-			t.Fatalf("season %d planned no promotion/relegation moves", season)
 		}
 		te.BeginOffSeasonWindow()
 		for i := 0; i < transfers.TransferWindowWeeks; i++ {
@@ -38,48 +38,49 @@ func TestPromotionRelegationMultiSeasonSoak(t *testing.T) {
 		if transition := tm.FinalizeSeasonTransition(); transition["status"] != "success" {
 			t.Fatalf("season %d transition failed: %v", season, transition)
 		}
-		return moves
 	}
 
-	moves1 := runSeasonAndTransition(1)
+	runSeasonAndTransition(1)
 
-	// Every planned move was applied to the club's League field.
-	for _, move := range moves1 {
-		club := tm.Clubs[move.ClubID]
-		if club == nil {
-			t.Fatalf("move references unknown club %s", move.ClubID)
-		}
-		if club.League != move.ToLeague {
-			t.Fatalf("%s league=%q want %q", move.ClubID, club.League, move.ToLeague)
+	// No club changed league across the transition.
+	for _, club := range tm.ClubsList {
+		if club.League != startLeague[club.ClubID] {
+			t.Fatalf("%s changed league: %q -> %q (cross-country moves are forbidden)", club.ClubID, startLeague[club.ClubID], club.League)
 		}
 	}
-	// League sizes are conserved.
+	// League membership is conserved.
 	afterSizes := leagueSizes()
 	for league, size := range startSizes {
 		if afterSizes[league] != size {
 			t.Fatalf("league %s size drifted: %d -> %d", league, size, afterSizes[league])
 		}
 	}
-	// The world stays valid after the swap (schedules, participants, cups).
+	// The world stays valid after the stakes (schedules, participants, cups).
 	if err := tm.ValidateWorldState(); err != nil {
 		t.Fatalf("world invalid after transition: %v", err)
 	}
-	// The relegation news item was published.
+	// The survival-battle news item was published.
 	foundNews := false
 	for _, item := range tm.Inbox {
-		if item.Headline == "Promotion and relegation confirmed" {
+		if item.Headline == "Survival battle settled: relegation stakes paid" {
 			foundNews = true
 		}
 	}
 	if !foundNews {
-		t.Fatal("no promotion/relegation news item was pushed")
+		t.Fatal("no survival-battle news item was pushed")
+	}
+	// The persisted move ledger stays an empty array, never null.
+	if tm.SeasonLeagueMoves == nil || len(tm.SeasonLeagueMoves) != 0 {
+		t.Fatalf("SeasonLeagueMoves must be empty, got %+v", tm.SeasonLeagueMoves)
 	}
 
-	// Second season: the swap repeats, sizes stay conserved, and the world
-	// remains valid — a soak against drift across transitions.
-	moves2 := runSeasonAndTransition(2)
-	if len(moves2) == 0 {
-		t.Fatal("season 2 planned no moves")
+	// Second season: the invariants hold across another transition — a soak
+	// against drift.
+	runSeasonAndTransition(2)
+	for _, club := range tm.ClubsList {
+		if club.League != startLeague[club.ClubID] {
+			t.Fatalf("%s changed league in season 2: %q -> %q", club.ClubID, startLeague[club.ClubID], club.League)
+		}
 	}
 	after2 := leagueSizes()
 	for league, size := range startSizes {
@@ -90,21 +91,17 @@ func TestPromotionRelegationMultiSeasonSoak(t *testing.T) {
 	if err := tm.ValidateWorldState(); err != nil {
 		t.Fatalf("world invalid after second transition: %v", err)
 	}
-	// A club that moved in season 1 can move again: the boundary exchange is
-	// unbounded across seasons (worst-to-champion journeys are possible).
-	t.Logf("season 1 moves=%d season 2 moves=%d", len(moves1), len(moves2))
 }
 
-// Identical seeds produce identical first-season swap plans.
-func TestPromotionRelegationPlanIsDeterministicAcrossSeeds(t *testing.T) {
-	run := func() []RelegationMove {
-		tm, _, te := loadEuropeanWorldForTest(t)
+// Identical seeds produce identical stakes plans.
+func TestRelegationStakesPlanIsDeterministicAcrossSeeds(t *testing.T) {
+	run := func() []RelegationStake {
+		tm, _, _ := loadEuropeanWorldForTest(t)
 		batch := tm.SimulateBatchWeeks(tm.MaxMatchweeks)
 		if batch.Status != "success" {
 			t.Fatalf("season did not finish: %+v", batch)
 		}
-		_ = te
-		return tm.PlanDomesticPromotionRelegation()
+		return tm.PlanDomesticRelegationStakes()
 	}
 	a := run()
 	b := run()
@@ -113,7 +110,7 @@ func TestPromotionRelegationPlanIsDeterministicAcrossSeeds(t *testing.T) {
 	}
 	for i := range a {
 		if a[i] != b[i] {
-			t.Fatalf("move %d differs between identical seeds: %+v vs %+v", i, a[i], b[i])
+			t.Fatalf("stake %d differs between identical seeds: %+v vs %+v", i, a[i], b[i])
 		}
 	}
 }

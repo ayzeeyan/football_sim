@@ -858,10 +858,11 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	// accumulate) for the season ahead.
 	tm.resetEuropeanRevenueLedgerUnlocked()
 	tm.archiveEuropeanSeasonUnlocked()
-	// Promotion and relegation are planned from the final tables here;
-	// the swaps are applied after every table read, just before the
-	// calendar rebuild re-seeds league and cup participants.
-	relegationMoves := tm.planDomesticPromotionRelegationUnlocked()
+	// Relegation stakes are planned from the final tables here; the
+	// penalties are applied after every table read, just before the
+	// calendar rebuild re-seeds league and cup participants. No club ever
+	// changes league in the closed country-pure pyramid.
+	relegationStakes := tm.planDomesticRelegationStakesUnlocked()
 	for _, club := range tm.ClubsList {
 		place := tm.leaguePlaceUnlocked(club)
 		for _, player := range club.Squad {
@@ -939,10 +940,10 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	tm.ReputationAppliedSeason = ""
 	tm.ContractsResolvedSeason = ""
 	tm.runYouthIntakeUnlocked()
-	tm.applyPlannedRelegationUnlocked(relegationMoves)
-	// The applied moves stay visible all season so the UI can badge every
-	// promoted and relegated club in the tables.
-	tm.SeasonLeagueMoves = relegationMoves
+	tm.applyRelegationStakesUnlocked(relegationStakes)
+	// No club ever changes league, so the persisted move ledger stays an
+	// empty array (never null — the frontend types it as a list).
+	tm.SeasonLeagueMoves = []RelegationMove{}
 	tm.rebuildEuropeanWorldCalendarUnlocked(qualification)
 	tm.initializeNationalTeamsUnlocked()
 	tm.AssignSquadRolesUnlocked()
@@ -959,7 +960,7 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	}
 	tm.ManagerConsecutiveHot, tm.ManagerLastChange = map[string]int{}, map[string]int{}
 	PairSeniorMentors(tm.ClubsList, tm.GrowthEngine)
-	tm.pushRelegationNewsUnlocked(relegationMoves, 1)
+	tm.pushRelegationStakesNewsUnlocked(relegationStakes, 1)
 	tm.PushInbox(MsgCategorySystem, tm.SeasonName+" European season begins", "Domestic tables reset, national cups are drawn, and qualification has set the European fields.", 1, nil, "", "")
 	return map[string]interface{}{"status": "success", "message": "New European season initialized.", "current_matchweek": 1, "max_matchweeks": tm.MaxMatchweeks, "retired_player_ids": retired, "league_changes": tm.SeasonLeagueMoves}
 }

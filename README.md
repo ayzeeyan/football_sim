@@ -261,7 +261,7 @@ Ranks 9–24 play two-legged knockout play-offs; ranks 1–8 bye to the Round of
 
 ### Promotion and relegation
 
-The dataset contains only the five top flights — there is no second division — so the world is a closed pyramid: the five leagues form a prestige ladder (Premier League → La Liga → Bundesliga → Serie A → Ligue 1) and each adjacent pair exchanges boundary clubs at the season transition. The bottom three of the stronger league are relegated into the weaker league; the top three of the weaker league are promoted into the stronger one. League sizes never change, all 96 dataset clubs (and their crest mappings) are preserved, and the exchange is a deterministic function of the final tables. Ligue 1 is the base of the pyramid: its relegation places are a survival battle with no lower tier to drop into, and the season-transition news says so explicitly.
+The dataset contains only the five top flights — there is no second division — and every league is national: a German club belongs in the Bundesliga for the life of the world. No club ever changes leagues. The relegation places are instead a survival battle with real stakes: at the season transition the bottom three of every league lose reputation and pay a financial penalty (10% of the available balance, never pushing it negative, with the transfer budget clamped back under the reduced balance). League sizes never change, all 96 dataset clubs (and their crest mappings) are preserved exactly, and the stakes are a deterministic function of the final tables. The season-transition news names every staked club and states explicitly that no club changes league.
 
 ### Qualification quotas
 
@@ -420,7 +420,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/achievements` — career milestone ledger (catalogue with unlocked flags, unlocked entries, youngest-scorer record)
 - `GET /api/season/awards`, `/api/season/awards/ceremony`, `/api/season/history`, `/api/season/stats`, `/api/season/stats/advanced`
 - `POST /api/season/reset`, `POST /api/season/restart`
-- `GET /api/season/league-changes` — this season's promotion and relegation moves (closed-pyramid prestige ladder; the response of `POST /api/season/reset` carries the same `league_changes` list)
+- `GET /api/season/league-changes` — the league boundary move ledger (always an empty array in the closed country-pure pyramid, where no club ever changes league; retained for wire stability if second divisions are ever added; the response of `POST /api/season/reset` carries the same `league_changes` list)
 - `GET /api/career/default-homes`, `/api/career/preview-shuffle`, `POST /api/career/new` — `{ "shuffle", "homes" }`
 - `GET /api/career/slots`, `POST /api/career/slots`, `POST /api/career/slots/import?name=`, `POST /api/career/slots/{slot_id}/rename`, `POST /api/career/slots/{slot_id}/duplicate`, `POST /api/career/slots/{slot_id}/delete`, `GET /api/career/slots/{slot_id}/export` — named save-slot archives of the current career
 - `GET /api/career/manager`, `POST /api/career/manager/job`, `POST /api/career/manager/resign` — Tier B viewer manager career: accept a dugout, track job security, sackings, and trophies
