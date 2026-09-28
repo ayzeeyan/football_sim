@@ -1,5 +1,5 @@
 export type PositionFit = 'NATURAL' | 'SECONDARY' | 'OUT_OF_POSITION' | 'OUT_OF_SLOT' | string;
-export type FormationName = '4-3-3' | '4-2-3-1' | '3-4-3' | '4-4-2' | '5-3-2' | string;
+export type FormationName = '4-3-3' | '4-3-3 Attack' | '4-2-3-1' | '4-4-2' | '3-4-3' | '3-5-2' | '4-1-4-1' | '5-3-2' | string;
 
 export interface Player {
   player_id: string;

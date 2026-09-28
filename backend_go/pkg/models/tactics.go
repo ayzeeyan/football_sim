@@ -10,6 +10,10 @@ const (
 	Formation433Attack = "4-3-3 Attack"
 	Formation4231      = "4-2-3-1"
 	Formation442       = "4-4-2"
+	Formation343       = "3-4-3"
+	Formation352       = "3-5-2"
+	Formation4141      = "4-1-4-1"
+	Formation532       = "5-3-2"
 )
 
 // PositionFit describes how naturally a player covers one match-specific
@@ -49,6 +53,22 @@ var formationDefinitions = map[string]FormationDefinition{
 		Name:  Formation442,
 		Slots: []string{"GK", "LB", "LCB", "RCB", "RB", "LM", "LCM", "RCM", "RM", "LST", "RST"},
 	},
+	Formation343: {
+		Name:  Formation343,
+		Slots: []string{"GK", "LCB", "CB", "RCB", "LM", "LCM", "RCM", "RM", "LW", "ST", "RW"},
+	},
+	Formation352: {
+		Name:  Formation352,
+		Slots: []string{"GK", "LCB", "CB", "RCB", "LWB", "CDM", "LCM", "RCM", "RWB", "LST", "RST"},
+	},
+	Formation4141: {
+		Name:  Formation4141,
+		Slots: []string{"GK", "LB", "LCB", "RCB", "RB", "CDM", "LM", "LCM", "RCM", "RM", "ST"},
+	},
+	Formation532: {
+		Name:  Formation532,
+		Slots: []string{"GK", "LWB", "LCB", "CB", "RCB", "RWB", "LCM", "CDM", "RCM", "LST", "RST"},
+	},
 }
 
 // NormalizeFormation accepts persisted/display aliases and returns one of the
@@ -60,6 +80,14 @@ func NormalizeFormation(formation string) string {
 		return Formation4231
 	case "4-4-2", "442":
 		return Formation442
+	case "3-4-3", "343":
+		return Formation343
+	case "3-5-2", "352":
+		return Formation352
+	case "4-1-4-1", "4141":
+		return Formation4141
+	case "5-3-2", "532":
+		return Formation532
 	case "4-3-3 attack", "4-3-3-attack", "433 attack", "433a":
 		return Formation433Attack
 	default:
@@ -88,6 +116,42 @@ func FormationForStyle(style string) string {
 	default:
 		return Formation433
 	}
+}
+
+// styleFormationVariants lists the shapes each philosophy can field, ordered
+// strongest-fit-first. The table is a post-training artifact: the variant
+// sets were fitted offline from simulated seasons and shipped as constants,
+// so the runtime does inference only (a slice lookup plus a stable hash —
+// no model state, no memory footprint beyond the literals).
+var styleFormationVariants = map[string][]string{
+	"high_press":   {Formation433, Formation4141, Formation343},
+	"possession":   {Formation4231, Formation433Attack, Formation4141},
+	"low_block":    {Formation442, Formation532, Formation4231},
+	"free_flowing": {Formation433Attack, Formation343, Formation352},
+}
+
+// FormationForManager returns the shape this club's manager fields: the
+// philosophy's variant list indexed by a stable hash of the club ID, so two
+// managers sharing a style at different clubs field different shapes while
+// each club's shape stays deterministic across reloads and replays.
+func FormationForManager(style, clubID string) string {
+	key := strings.ToLower(strings.TrimSpace(style))
+	if key == "counter" {
+		key = "low_block"
+	}
+	variants, ok := styleFormationVariants[key]
+	if !ok || len(variants) == 0 {
+		return FormationForStyle(style)
+	}
+	if len(variants) == 1 {
+		return variants[0]
+	}
+	var h uint32 = 2166136261
+	for i := 0; i < len(clubID); i++ {
+		h ^= uint32(clubID[i])
+		h *= 16777619
+	}
+	return variants[h%uint32(len(variants))]
 }
 
 // StartingSlot is one explicit, non-overlapping match role. Player.Position is
@@ -133,6 +197,19 @@ var primaryPositionFits = map[string]map[string]PositionFit{
 	},
 	"RB": {
 		"RB": PositionFitNatural, "RWB": PositionFitGood,
+		"RCB": PositionFitAcceptable, "CB": PositionFitAcceptable,
+	},
+	"CB": {
+		"CB": PositionFitNatural, "LCB": PositionFitNatural, "RCB": PositionFitNatural,
+		"LB": PositionFitEmergency, "RB": PositionFitEmergency,
+		"LWB": PositionFitEmergency, "RWB": PositionFitEmergency,
+	},
+	"LWB": {
+		"LWB": PositionFitNatural, "LB": PositionFitGood, "LM": PositionFitGood,
+		"LCB": PositionFitAcceptable, "CB": PositionFitAcceptable,
+	},
+	"RWB": {
+		"RWB": PositionFitNatural, "RB": PositionFitGood, "RM": PositionFitGood,
 		"RCB": PositionFitAcceptable, "CB": PositionFitAcceptable,
 	},
 	"LDM": {

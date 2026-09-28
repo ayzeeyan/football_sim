@@ -957,7 +957,7 @@ func RestoreCareer(
 	// restore via MaybeWriteMigratedCareer.
 	formationForClub := func(clubID string) string {
 		if manager := tm.Managers[clubID]; manager != nil {
-			return models.FormationForStyle(manager.Style)
+			return models.FormationForManager(manager.Style, clubID)
 		}
 		return models.Formation433
 	}

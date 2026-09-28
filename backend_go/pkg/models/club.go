@@ -422,7 +422,7 @@ func (c *Club) GetStartingElevenSlots(fixture ...string) []StartingSlot {
 // squad and fixture previews. It retains the same selection priorities as
 // GetStartingElevenWithBias while exposing a renderer-safe tactical slot.
 func (c *Club) GetStartingElevenSlotsWithBias(style, focus string, fixture ...string) []StartingSlot {
-	return c.GetStartingElevenSlotsForFormation(FormationForStyle(style), style, focus, fixture...)
+	return c.GetStartingElevenSlotsForFormation(FormationForManager(style, c.ClubID), style, focus, fixture...)
 }
 
 // GetStartingElevenSlotsForFormation selects one globally optimal,

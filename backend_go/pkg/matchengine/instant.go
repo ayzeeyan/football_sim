@@ -133,8 +133,8 @@ func SimulateInstantMatch(
 	if awayMgr != nil {
 		awayFocus = awayMgr.Focus
 	}
-	homeFormation := models.FormationForStyle(homeSelectionStyle)
-	awayFormation := models.FormationForStyle(awaySelectionStyle)
+	homeFormation := models.FormationForManager(homeSelectionStyle, homeClub.ClubID)
+	awayFormation := models.FormationForManager(awaySelectionStyle, awayClub.ClubID)
 	homeSlots := homeClub.GetStartingElevenSlotsForFormation(homeFormation, homeSelectionStyle, homeFocus, fxKey)
 	awaySlots := awayClub.GetStartingElevenSlotsForFormation(awayFormation, awaySelectionStyle, awayFocus, fxKey)
 	homeXI := models.PlayersFromStartingSlots(homeSlots)

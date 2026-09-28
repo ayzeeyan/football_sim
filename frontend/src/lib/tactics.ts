@@ -5,6 +5,10 @@ export const FORMATION_SLOTS: Record<FormationName, readonly string[]> = {
   '4-3-3 Attack': ['GK', 'LB', 'LCB', 'RCB', 'RB', 'LCM', 'RCM', 'CAM', 'LW', 'ST', 'RW'],
   '4-2-3-1': ['GK', 'LB', 'LCB', 'RCB', 'RB', 'LDM', 'RDM', 'LW', 'CAM', 'RW', 'ST'],
   '4-4-2': ['GK', 'LB', 'LCB', 'RCB', 'RB', 'LM', 'LCM', 'RCM', 'RM', 'LST', 'RST'],
+  '3-4-3': ['GK', 'LCB', 'CB', 'RCB', 'LM', 'LCM', 'RCM', 'RM', 'LW', 'ST', 'RW'],
+  '3-5-2': ['GK', 'LCB', 'CB', 'RCB', 'LWB', 'CDM', 'LCM', 'RCM', 'RWB', 'LST', 'RST'],
+  '4-1-4-1': ['GK', 'LB', 'LCB', 'RCB', 'RB', 'CDM', 'LM', 'LCM', 'RCM', 'RM', 'ST'],
+  '5-3-2': ['GK', 'LWB', 'LCB', 'CB', 'RCB', 'RWB', 'LCM', 'CDM', 'RCM', 'LST', 'RST'],
 };
 
 export const FORMATION_PITCH_COORDS: Record<string, [number, number]> = {
@@ -58,6 +62,10 @@ export function normalizeFormation(formation?: string): FormationName {
   switch ((formation ?? '').trim().toLowerCase()) {
     case '4-2-3-1': case '4231': return '4-2-3-1';
     case '4-4-2': case '442': return '4-4-2';
+    case '3-4-3': case '343': return '3-4-3';
+    case '3-5-2': case '352': return '3-5-2';
+    case '4-1-4-1': case '4141': return '4-1-4-1';
+    case '5-3-2': case '532': return '5-3-2';
     case '4-3-3 attack': case '4-3-3-attack': case '433 attack': case '433a': return '4-3-3 Attack';
     default: return '4-3-3';
   }
@@ -69,6 +77,9 @@ const FITS: Record<string, Record<string, PositionFit>> = {
   LCB: { LCB: 'Natural', CB: 'Natural', RCB: 'Good', LB: 'Emergency', LWB: 'Emergency', RB: 'Emergency' },
   RCB: { RCB: 'Natural', CB: 'Natural', LCB: 'Good', RB: 'Emergency', RWB: 'Emergency', LB: 'Emergency' },
   RB: { RB: 'Natural', RWB: 'Good', RCB: 'Acceptable', CB: 'Acceptable' },
+  CB: { CB: 'Natural', LCB: 'Natural', RCB: 'Natural', LB: 'Emergency', RB: 'Emergency', LWB: 'Emergency', RWB: 'Emergency' },
+  LWB: { LWB: 'Natural', LB: 'Good', LM: 'Good', LCB: 'Acceptable', CB: 'Acceptable' },
+  RWB: { RWB: 'Natural', RB: 'Good', RM: 'Good', RCB: 'Acceptable', CB: 'Acceptable' },
   LDM: { LDM: 'Natural', CDM: 'Natural', DM: 'Natural', CM: 'Acceptable', LCM: 'Acceptable', RCM: 'Acceptable' },
   CDM: { CDM: 'Natural', DM: 'Natural', LDM: 'Good', RDM: 'Good', CM: 'Acceptable', LCM: 'Acceptable', RCM: 'Acceptable' },
   RDM: { RDM: 'Natural', CDM: 'Natural', DM: 'Natural', CM: 'Acceptable', LCM: 'Acceptable', RCM: 'Acceptable' },
