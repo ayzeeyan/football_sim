@@ -25,6 +25,7 @@ const GroupTable: React.FC<{ title: string; clubs: Club[] }> = ({ title, clubs }
       </h3>
       <span className="text-[11px] font-mono text-sage">Top four advance</span>
     </div>
+    <div className="overflow-x-auto">
     <table className="w-full text-left text-[13px]">
       <thead className="table-head">
         <tr>
@@ -74,6 +75,7 @@ const GroupTable: React.FC<{ title: string; clubs: Club[] }> = ({ title, clubs }
         })}
       </tbody>
     </table>
+    </div>
   </div>
 );
 

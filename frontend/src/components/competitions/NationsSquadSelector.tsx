@@ -22,6 +22,7 @@ export const NationsSquadSelector: React.FC<{
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
   useEffect(() => {
     if (!teamId) {
@@ -55,8 +56,13 @@ export const NationsSquadSelector: React.FC<{
       const next = new Set(prev);
       if (next.has(playerId)) {
         next.delete(playerId);
+        setHint(null);
       } else if (next.size < squadSize) {
         next.add(playerId);
+        setHint(null);
+      } else {
+        // Never silently ignore the click: tell the viewer why nothing moved.
+        setHint(`The squad is full — remove one of the ${squadSize} call-ups first.`);
       }
       return next;
     });
@@ -140,6 +146,7 @@ export const NationsSquadSelector: React.FC<{
           </div>
         </div>
         {error && <p className="px-4 py-2 text-[12px] text-red-400">{error}</p>}
+        {hint && !error && <p className="px-4 py-2 text-[12px] text-brass">{hint}</p>}
         <ul className="max-h-[26rem] divide-y divide-line/60 overflow-y-auto" data-nations-squad-pool="true">
           {pool.length === 0 && <li className="px-4 py-8 text-center text-[12px] text-sage">Loading the eligible pool…</li>}
           {pool.map((row) => {

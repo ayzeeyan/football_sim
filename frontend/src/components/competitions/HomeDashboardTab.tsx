@@ -33,6 +33,7 @@ interface HomeDashboardTabProps {
   onOpenTransfers: () => void;
   onOpenLeague: () => void;
   onOpenCompetitions: () => void;
+  onShowToast: (msg: string) => void;
 }
 
 function asClub(club: CompetitionClub | null | undefined): Club | null {
@@ -73,6 +74,7 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
   onOpenTransfers,
   onOpenLeague,
   onOpenCompetitions,
+  onShowToast,
 }) => {
   const { openPlayer } = usePlayerSheet();
   const { data, loading, error, reload } = useAsyncData(fetchWorldDashboard, [careerKey]);
@@ -380,12 +382,12 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
       <WatchlistPanel
         onOpenClub={(clubId) => onViewSquad(clubId)}
         onOpenPlayer={openPlayer}
-        onShowToast={() => undefined}
+        onShowToast={onShowToast}
       />
 
       <ManagerCareerPanel
         onOpenClub={(clubId) => onViewSquad(clubId)}
-        onShowToast={() => undefined}
+        onShowToast={onShowToast}
       />
       {/* Club pulse, loan watch and inbox headlines — all emitted by WorldDashboard(). */}
       {((data.club_pulse != null) || (data.loan_watch?.length ?? 0) > 0 || (data.headlines?.length ?? 0) > 0) && (

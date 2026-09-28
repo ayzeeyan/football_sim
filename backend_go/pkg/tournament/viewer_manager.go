@@ -52,7 +52,7 @@ func (tm *TournamentManager) AcceptViewerJob(clubID, name string) (*ViewerManage
 		tm.resignViewerJobUnlocked("resigned")
 	}
 	if tm.ViewerManager == nil {
-		tm.ViewerManager = &ViewerManager{Name: name}
+		tm.ViewerManager = &ViewerManager{Name: name, Trophies: []string{}, History: []ViewerJobRecord{}}
 	}
 	tm.ViewerManager.Name = name
 
@@ -63,19 +63,19 @@ func (tm *TournamentManager) AcceptViewerJob(clubID, name string) (*ViewerManage
 	}
 	next := &managers.ManagerProfile{
 		ClubID:             clubID,
-		Name:              name,
-		Style:             style,
-		Focus:             focus,
-		BudgetEur:         club.Finances.TransferBudget,
-		JobSecurity:       "Safe",
-		AppointedSeason:   tm.SeasonName,
+		Name:               name,
+		Style:              style,
+		Focus:              focus,
+		BudgetEur:          club.Finances.TransferBudget,
+		JobSecurity:        "Safe",
+		AppointedSeason:    tm.SeasonName,
 		AppointedMatchweek: tm.CurrentMatchweek + 1,
 	}
 	if old != nil {
 		next.History = append([]managers.ManagerHistoryEntry(nil), old.History...)
 		next.History = append(next.History, managers.ManagerHistoryEntry{
 			ClubID: clubID, ClubName: club.ClubName, ManagerName: old.Name,
-			Style: old.CanonicalStyle(),
+			Style:           old.CanonicalStyle(),
 			AppointedSeason: old.AppointedSeason, AppointedMatchweek: old.AppointedMatchweek,
 			DepartedSeason: tm.SeasonName, DepartedMatchweek: tm.CurrentMatchweek,
 			Reason: "took a new role",
@@ -140,7 +140,7 @@ func (tm *TournamentManager) ResignViewerJob() (*ViewerManager, string) {
 				next.History = append([]managers.ManagerHistoryEntry(nil), old.History...)
 				next.History = append(next.History, managers.ManagerHistoryEntry{
 					ClubID: clubID, ClubName: club.ClubName, ManagerName: old.Name,
-					Style: old.CanonicalStyle(),
+					Style:           old.CanonicalStyle(),
 					AppointedSeason: old.AppointedSeason, AppointedMatchweek: old.AppointedMatchweek,
 					DepartedSeason: tm.SeasonName, DepartedMatchweek: tm.CurrentMatchweek,
 					Reason: "resigned",
@@ -199,7 +199,9 @@ func (tm *TournamentManager) GetViewerManager() *ViewerManager {
 		return nil
 	}
 	cp := *tm.ViewerManager
-	cp.Trophies = append([]string(nil), tm.ViewerManager.Trophies...)
-	cp.History = append([]ViewerJobRecord(nil), tm.ViewerManager.History...)
+	// Never hand out nil slices: the wire contract types them as arrays
+	// and a nil slice would marshal as null.
+	cp.Trophies = append([]string{}, tm.ViewerManager.Trophies...)
+	cp.History = append([]ViewerJobRecord{}, tm.ViewerManager.History...)
 	return &cp
 }

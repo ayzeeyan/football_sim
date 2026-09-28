@@ -51,6 +51,7 @@ export const LeagueContextCard: React.FC<{ fixture: Fixture }> = ({ fixture }) =
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-sage">{detail?.name}</span>
       </div>
+      <div className="overflow-x-auto">
       <table className="w-full text-left text-[12px]">
         <thead className="table-head">
           <tr>
@@ -83,6 +84,7 @@ export const LeagueContextCard: React.FC<{ fixture: Fixture }> = ({ fixture }) =
           })}
         </tbody>
       </table>
+      </div>
     </section>
   );
 };

@@ -32,6 +32,14 @@ func TestAcceptViewerJobInstallsViewer(t *testing.T) {
 	if msg != "" || vm == nil {
 		t.Fatalf("AcceptViewerJob failed: %v", msg)
 	}
+	// Wire contract: array-typed fields must never be nil (a nil slice
+	// marshals as null and crashes the frontend's .length access).
+	if vm.Trophies == nil || vm.History == nil {
+		t.Fatalf("trophies/history must be non-nil arrays: %+v", vm)
+	}
+	if got := tm.GetViewerManager(); got == nil || got.Trophies == nil || got.History == nil {
+		t.Fatalf("GetViewerManager must return non-nil arrays: %+v", got)
+	}
 	if vm.Name != ViewerManagerName {
 		t.Fatalf("default name=%q want %q", vm.Name, ViewerManagerName)
 	}

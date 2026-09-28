@@ -308,6 +308,7 @@ export const App: React.FC = () => {
               onOpenTransfers={() => setActiveTab(4)}
               onOpenLeague={() => setActiveTab(2)}
               onOpenCompetitions={() => setActiveTab(7)}
+              onShowToast={showToast}
             />
           )}
           {activeTab === 0 && (

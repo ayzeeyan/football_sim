@@ -100,7 +100,7 @@ export const ManagerCareerPanel: React.FC<ManagerCareerPanelProps> = ({ onOpenCl
           <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-md border border-line bg-cardLight p-2">
               <dt className="text-[10px] uppercase tracking-[0.1em] text-sage">Jobs</dt>
-              <dd className="font-display text-[16px] font-bold text-bone">{manager.history.length}</dd>
+              <dd className="font-display text-[16px] font-bold text-bone">{(manager.history ?? []).length}</dd>
             </div>
             <div className="rounded-md border border-line bg-cardLight p-2">
               <dt className="text-[10px] uppercase tracking-[0.1em] text-sage">Sackings</dt>
@@ -108,12 +108,12 @@ export const ManagerCareerPanel: React.FC<ManagerCareerPanelProps> = ({ onOpenCl
             </div>
             <div className="rounded-md border border-line bg-cardLight p-2">
               <dt className="text-[10px] uppercase tracking-[0.1em] text-sage">Trophies</dt>
-              <dd className="font-display text-[16px] font-bold text-bone">{manager.trophies.length}</dd>
+              <dd className="font-display text-[16px] font-bold text-bone">{(manager.trophies ?? []).length}</dd>
             </div>
           </dl>
-          {manager.trophies.length > 0 && (
+          {(manager.trophies ?? []).length > 0 && (
             <ul className="mt-3 space-y-1">
-              {manager.trophies.map((trophy) => (
+              {(manager.trophies ?? []).map((trophy) => (
                 <li key={trophy} className="flex items-center gap-1.5 text-[12px] text-bone">
                   <Trophy size={12} className="text-brass" aria-hidden="true" /> {trophy}
                 </li>
@@ -162,7 +162,7 @@ export const ManagerCareerPanel: React.FC<ManagerCareerPanelProps> = ({ onOpenCl
       ) : (
         <p className="mt-1 text-[11px] text-sage">
           {manager
-            ? `Between jobs. ${manager.sackings} sacking${manager.sackings === 1 ? '' : 's'} and ${manager.trophies.length} trophy${manager.trophies.length === 1 ? '' : 'ies'} so far.`
+            ? `Between jobs. ${manager.sackings} sacking${manager.sackings === 1 ? '' : 's'} and ${(manager.trophies ?? []).length} trophy${(manager.trophies ?? []).length === 1 ? '' : 'ies'} so far.`
             : 'Unemployed. Pick a dugout below to start a managerial career.'}
         </p>
       )}
@@ -202,11 +202,11 @@ export const ManagerCareerPanel: React.FC<ManagerCareerPanelProps> = ({ onOpenCl
         </div>
       )}
 
-      {manager && manager.history.length > 0 && (
+      {manager && (manager.history ?? []).length > 0 && (
         <div className="mt-4">
           <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-sage">Career ledger</p>
           <ul className="space-y-0.5">
-            {manager.history.map((rec, i) => (
+            {(manager.history ?? []).map((rec, i) => (
               <li key={`${rec.club_id}-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
                 <span className="truncate text-bone">{rec.club_name}</span>
                 <span className="shrink-0 text-sage">

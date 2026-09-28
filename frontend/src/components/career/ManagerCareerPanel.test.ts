@@ -15,7 +15,7 @@ describe('ManagerCareerPanel (Tier B5 viewer manager career)', () => {
     expect(panelSource).toContain('job_security');
     expect(panelSource).toContain('Sackings');
     expect(panelSource).toContain('Trophies');
-    expect(panelSource).toContain('manager.trophies.map');
+    expect(panelSource).toContain('(manager.trophies ?? []).map');
   });
 
   test('offers every dugout and guards the resign action behind a confirm', () => {
