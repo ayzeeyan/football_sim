@@ -394,6 +394,7 @@ scripts/run.ps1      One-command play / -Dev launcher
 
 Same origin as the page when you use the built client. Vite dev proxies these:
 
+- `GET /api/brain` — the world brain: an online-learned linear model (eight weights, ~100 bytes) that ships pre-trained from cmd/pretrain and post-trains continuously on every finished matchweek; exposes its learned weights, training volume, running loss, and learned-vs-fixed tactical edges (observational)
 - `GET /api/health` — `{ "backend": "go", "status": "ok" }`
 - `GET /api/stats` — Diagnostics snapshot (`DiagnosticsSnapshot`)
 - `GET /api/clubs`, `/api/clubs/{club_id}/squad`, `/api/clubs/{club_id}/xi`, `/api/clubs/{club_id}/history`, `/api/clubs/{club_id}/profile`, `/api/clubs/{club_id}/fixtures`, `/api/clubs/{club_id}/transfers`

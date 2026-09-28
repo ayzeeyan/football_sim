@@ -418,6 +418,12 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
+	// World brain (SaveVersion 19): the learned state must be finite and
+	// bounded; a corrupted brain is rejected rather than restored.
+	if snap.Brain != nil && !snap.Brain.Valid() {
+		return fmt.Errorf("career snapshot brain is corrupted (non-finite or out-of-range weights)")
+	}
+
 	// Season league moves (SaveVersion 16): every promotion/relegation
 	// record must reference a known club and a known direction.
 	for _, move := range snap.SeasonLeagueMoves {

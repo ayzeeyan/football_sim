@@ -13,12 +13,15 @@ import (
 
 // InstantMatchConfig sets optional rules for instant match simulation.
 type InstantMatchConfig struct {
-	Weather     string // clear, rain, snow, wind
-	DerbyHeat   int    // 0 - 100
-	IsDerby     bool   // true if high-stakes rivalry
-	Referee     string // official name or personality: strict, lenient, balanced
-	Competition string // super-league, ucl, super-cup
-	Matchweek   int
+	Weather string // clear, rain, snow, wind
+	// EdgeOverride replaces the fixed style-table tactical edge with a
+	// caller-computed learned edge (nil keeps the table).
+	EdgeOverride *float64
+	DerbyHeat    int    // 0 - 100
+	IsDerby      bool   // true if high-stakes rivalry
+	Referee      string // official name or personality: strict, lenient, balanced
+	Competition  string // super-league, ucl, super-cup
+	Matchweek    int
 }
 
 // shootingAccuracyWeatherFactor returns the existing on-target accuracy
@@ -124,6 +127,9 @@ func SimulateInstantMatch(
 		awaySelectionStyle = awayMgr.Style
 	}
 	homeEdge := managers.TacticEdge(homeStyle, awayStyle)
+	if cfg.EdgeOverride != nil {
+		homeEdge = *cfg.EdgeOverride
+	}
 
 	fxKey := models.FixtureContext(cfg.Competition, cfg.Matchweek)
 	homeFocus, awayFocus := "", ""

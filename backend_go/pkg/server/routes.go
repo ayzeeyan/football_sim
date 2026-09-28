@@ -25,6 +25,7 @@ func (s *Server) apiRoutes() []Route {
 		// Health & System
 		{Method: "GET", Path: "/api/health", Handler: s.handleHealth, Summary: "Liveness probe"},
 		{Method: "GET", Path: "/api/stats", Handler: s.handleStats, Summary: "Diagnostics snapshot"},
+		{Method: "GET", Path: "/api/brain", Handler: s.handleGetBrain, Summary: "The world brain: learned weights, training volume, running loss, and learned tactical edges"},
 
 		// Clubs & Rosters
 		{Method: "GET", Path: "/api/clubs", Handler: s.handleGetClubs, Summary: "All clubs"},
