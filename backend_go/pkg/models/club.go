@@ -33,17 +33,14 @@ type Club struct {
 	// applies until points are earned).
 	Coefficient int `json:"coefficient,omitempty"`
 
-	CaptainID     string `json:"captain_id,omitempty"`
-	ViceCaptainID string `json:"vice_captain_id,omitempty"`
-	// LineupOverride is the viewer-set starting XI (Tier B, SaveVersion 13).
-	// Nil means the AI's automatic selection decides the XI.
-	LineupOverride    *LineupOverride `json:"lineup_override,omitempty"`
-	FanExpectation    int             `json:"fan_expectation,omitempty"`
-	MediaPressure     int             `json:"media_pressure,omitempty"`
-	Chemistry         int             `json:"chemistry,omitempty"`
-	SeasonAttendance  int             `json:"season_attendance,omitempty"`
-	AttendanceMatches int             `json:"attendance_matches,omitempty"`
-	PowerRank         int             `json:"power_rank,omitempty"`
+	CaptainID         string `json:"captain_id,omitempty"`
+	ViceCaptainID     string `json:"vice_captain_id,omitempty"`
+	FanExpectation    int    `json:"fan_expectation,omitempty"`
+	MediaPressure     int    `json:"media_pressure,omitempty"`
+	Chemistry         int    `json:"chemistry,omitempty"`
+	SeasonAttendance  int    `json:"season_attendance,omitempty"`
+	AttendanceMatches int    `json:"attendance_matches,omitempty"`
+	PowerRank         int    `json:"power_rank,omitempty"`
 
 	// Standings & Form
 	Played         int      `json:"p"`
@@ -435,11 +432,6 @@ func (c *Club) GetStartingElevenSlotsForFormation(formation, style, focus string
 	pool := c.AvailableSquad(fixture...)
 	if len(pool) == 0 {
 		return nil
-	}
-	// A valid viewer lineup (Tier B) wins over the AI selection; an override
-	// that can no longer be fielded falls through to the automatic pick.
-	if slots := startingSlotsFromOverride(c.LineupOverride, pool); slots != nil {
-		return slots
 	}
 	comp, week := parseFixtureArgs(fixture)
 	return assignPlayersToFormation(pool, formation, comp, week, style, focus)

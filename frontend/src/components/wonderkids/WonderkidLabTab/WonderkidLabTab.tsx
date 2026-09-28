@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { GrowthMilestoneItem, ProdigyData, ProdigyTimelineResponse, ProdigyWatchRow } from '../../../types';
-import { fetchProdigies, fetchGrowthMilestones, setProdigyPositionPath, setProdigySchoolTrack, fetchProdigyTimeline, fetchProdigyWatch } from '../../../services/api';
+import { fetchProdigies, fetchGrowthMilestones, fetchProdigyTimeline, fetchProdigyWatch } from '../../../services/api';
 import { Dna, Zap, TrendingUp, Award, LayoutGrid, Eye, Sparkle, Microscope, CheckCircle2, Lock, Ruler, Scale, Calendar, Trophy, ChevronRight } from 'lucide-react';
 import { soundManager } from '../../../audio/webAudio';
 import { cx, stripEmojis, formatHeight } from '../../../lib/format';
@@ -10,9 +10,9 @@ import { ProdigyWatch } from '../ProdigyWatch';
 import { TrainingPlanner } from '../TrainingPlanner';
 import { usePlayerSheet } from '../../clubs/PlayerSheet';
 
-import { milestoneTone, type WonderkidLabTabProps } from './helpers';
+import { milestoneTone } from './helpers';
 
-export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast }) => {
+export const WonderkidLabTab: React.FC = () => {
   const { openPlayer } = usePlayerSheet();
   const [prodigies, setProdigies] = useState<ProdigyData[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -226,7 +226,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
               )}
               <div>
                 <p className="text-[11px] font-mono uppercase tracking-[0.1em] text-sage mb-1.5">School track</p>
-                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="School track">
+                <div className="flex flex-wrap gap-1.5" aria-label="School track">
                   {([
                     ['stay', 'Stay-in-school'],
                     ['football_first', 'Football-first'],
@@ -234,29 +234,19 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
                   ] as const).map(([value, label]) => {
                     const active = (selected.school_track || 'stay') === value;
                     return (
-                      <button
+                      <span
                         key={value}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        onClick={async () => {
-                          if (active) return;
-                          soundManager.playClick();
-                          const res = await setProdigySchoolTrack(selected.player_id, value);
-                          onShowToast(stripEmojis(res.status === 'success' ? `School track: ${label}.` : (res.message || 'Could not set school track.')));
-                          void loadData();
-                        }}
+                        aria-current={active ? 'true' : undefined}
                         className={cx(
-                          'px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors',
-                          active ? 'bg-brass text-ink border-brass' : 'bg-cardBg text-sage hover:text-bone border-line',
+                          'px-3 py-1.5 rounded-lg text-[12px] font-semibold border',
+                          active ? 'bg-brass text-ink border-brass' : 'bg-cardBg text-sage border-line opacity-70',
                         )}
                       >
                         {label}
-                      </button>
+                      </span>
                     );
                   })}
-                </div>
-                <p className="text-[12px] text-sage mt-1.5">{selected.school_track_label || 'Stay-in-school · sits exam weeks'}</p>
+                </div>                <p className="text-[12px] text-sage mt-1.5">{selected.school_track_label || 'Stay-in-school · sits exam weeks'}</p>
               </div>
             </div>
 
@@ -316,19 +306,9 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {(selected.position_options ?? []).map((pos) => (
-                        <button
-                          key={pos}
-                          type="button"
-                          onClick={async () => {
-                            soundManager.playClick();
-                            const res = await setProdigyPositionPath(selected.player_id, pos);
-                            onShowToast(stripEmojis(res.message || `Learning ${pos}.`));
-                            void loadData();
-                          }}
-                          className="px-3 py-2 text-[12px] font-semibold border border-line bg-cardLight hover:bg-cardHover text-bone"
-                        >
-                          Learn {pos}
-                        </button>
+                        <span key={pos} className="px-3 py-2 text-[12px] font-semibold border border-line bg-cardLight text-sage opacity-70">
+                          {pos}
+                        </span>
                       ))}
                       {(selected.position_options ?? []).length === 0 && (
                         <p className="text-[13px] text-sage">No path from this position.</p>
@@ -364,7 +344,7 @@ export const WonderkidLabTab: React.FC<WonderkidLabTabProps> = ({ onShowToast })
           <Card className="lg:col-span-4 flex flex-col justify-between">
             <ProdigyRadar attributes={selected.attributes} ovr={selected.ovr} />
             <div className="mt-4">
-              <TrainingPlanner prodigy={selected} onShowToast={onShowToast} onTrained={() => void loadData()} />
+              <TrainingPlanner playerId={selected.player_id} />
             </div>
           </Card>
 

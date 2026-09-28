@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Flame, Sparkle } from 'lucide-react';
 import { soundManager } from '../../../audio/webAudio';
 import type { TransferNegotiation } from '../../../types';
@@ -6,15 +6,11 @@ import { cx } from '../../../lib/format';
 import { ClubDot, ProgressBar } from '../../ui/ui';
 import { STAGE_LABELS, STAGE_TONES } from './helpers';
 
-export type NegotiationRespondFn = (neg: TransferNegotiation, action: 'improve' | 'withdraw', amount?: number) => void;
 
 export const NegotiationCard: React.FC<{
   neg: TransferNegotiation;
   onPlayerClick: (id: string) => void;
-  /** Tier B (B3): when provided, the viewer can improve or withdraw. */
-  onRespond?: NegotiationRespondFn;
-}> = ({ neg, onPlayerClick, onRespond }) => {
-  const [amount, setAmount] = useState('');
+}> = ({ neg, onPlayerClick }) => {
   const closed = neg.stage_name === 'COLLAPSED' || neg.stage_name === 'COMPLETED';
 
   return (
@@ -68,40 +64,6 @@ export const NegotiationCard: React.FC<{
         <ProgressBar pct={neg.progress_pct} toneClass={STAGE_TONES[neg.stage_index] || 'bg-brass'} />
       </div>
 
-      {onRespond && !closed && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line/60 pt-3">
-          <input
-            type="number"
-            min={0}
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Improved offer (EUR)"
-            className="min-w-0 flex-1 border border-line bg-ink px-2 py-1.5 text-[12px] text-bone"
-            aria-label={`Improved offer for ${neg.player.full_name}`}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              soundManager.playClick();
-              onRespond(neg, 'improve', Number(amount) || 0);
-            }}
-            disabled={amount === ''}
-            className="min-h-8 border border-brass/40 bg-brass/10 px-2.5 text-[11px] font-semibold text-brass hover:bg-brass/20 disabled:opacity-50"
-          >
-            Improve offer
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              soundManager.playClick();
-              onRespond(neg, 'withdraw');
-            }}
-            className="min-h-8 border border-line px-2.5 text-[11px] text-sage hover:text-bone"
-          >
-            Withdraw
-          </button>
-        </div>
-      )}
     </div>
   );
 };

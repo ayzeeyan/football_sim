@@ -37,9 +37,6 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/clubs/{club_id}/scouting", Handler: s.handleGetClubScouting, Summary: "AI recruitment shortlist for one club (?limit=)"},
 		{Method: "GET", Path: "/api/clubs/{club_id}/set-pieces", Handler: s.handleGetClubSetPieces, Summary: "Set-piece briefing for the probable XI (penalty, free-kick, corner, aerial picks and why)"},
 		{Method: "GET", Path: "/api/clubs/{club_id}/medical", Handler: s.handleGetClubMedical, Summary: "Club medical view: injuries with rehab roadmaps, risk assessments, season history"},
-		{Method: "POST", Path: "/api/clubs/{club_id}/lineup", Handler: s.handleSetClubLineup, Summary: "Set the viewer lineup override (formation + player per rigid tactical slot)"},
-		{Method: "POST", Path: "/api/clubs/{club_id}/board", Handler: s.handleSetClubBoard, Summary: "Set transfer budget, wage cap, and board objective (Tier B; budget <= balance, cap >= wage bill)"},
-		{Method: "DELETE", Path: "/api/clubs/{club_id}/lineup", Handler: s.handleClearClubLineup, Summary: "Clear the viewer lineup override and return the club to AI selection"},
 		{Method: "GET", Path: "/api/h2h/{club_a}/{club_b}", Handler: s.handleGetH2H, Summary: "Head-to-head record"},
 		{Method: "GET", Path: "/api/players/{player_id}", Handler: s.handleGetPlayerProfile, Summary: "Player profile"},
 
@@ -47,14 +44,10 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/prodigies", Handler: s.handleGetProdigies, Summary: "Franchise prodigies"},
 		{Method: "GET", Path: "/api/prodigies/watch", Handler: s.handleGetProdigyWatch, Summary: "Prodigy watch list"},
 		{Method: "GET", Path: "/api/wonderkids", Handler: s.handleGetWonderkids, Summary: "Wonderkids (legacy alias of /api/prodigies)"},
-		{Method: "POST", Path: "/api/prodigies/{player_id}/train", Handler: s.handleTrainProdigy, Summary: "Run one training regimen"},
-		{Method: "POST", Path: "/api/prodigies/{player_id}/position-path", Handler: s.handleSetPositionPath, Summary: "Set a prodigy's position path"},
-		{Method: "POST", Path: "/api/prodigies/{player_id}/school-track", Handler: s.handleSetSchoolTrack, Summary: "Set a prodigy's education track"},
 		{Method: "GET", Path: "/api/growth/milestones", Handler: s.handleGetGrowthMilestones, Summary: "Growth milestone ledger"},
 		{Method: "GET", Path: "/api/prodigies/{player_id}/timeline", Handler: s.handleGetProdigyTimeline, Summary: "Prodigy development timeline"},
 		{Method: "GET", Path: "/api/training/status", Handler: s.handleGetTrainingStatus, Summary: "Weekly training energy"},
 		{Method: "GET", Path: "/api/training/projection/{player_id}", Handler: s.handleGetTrainingProjection, Summary: "Read-only staff training projection for any player"},
-		{Method: "POST", Path: "/api/players/{player_id}/train", Handler: s.handleTrainPlayer, Summary: "Train any squad player (Tier B; registers a growth profile on demand)"},
 		{Method: "GET", Path: "/api/nxgn50", Handler: s.handleGetNXGN50, Summary: "NXGN 50 wonderkid rankings"},
 
 		// Competitions & Calendar
@@ -66,9 +59,6 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "GET", Path: "/api/competitions/nations-cup", Handler: s.handleGetNationsCup, Summary: "European Nations Cup (explicit alias of the competition endpoint)"},
 		{Method: "GET", Path: "/api/competitions/nations-cup/fixtures/{fixture_id}", Handler: s.handleGetNationsFixture, Summary: "One national-team fixture"},
 		{Method: "POST", Path: "/api/competitions/nations-cup/fixtures/{fixture_id}/simulate", Handler: s.handleSimulateNationsFixture, Summary: "Simulate one national-team fixture"},
-		{Method: "GET", Path: "/api/competitions/nations-cup/teams/{team_id}/squad", Handler: s.handleGetNationsSquad, Summary: "One nation's squad, eligible player pool, and viewer-selected flag"},
-		{Method: "POST", Path: "/api/competitions/nations-cup/teams/{team_id}/squad", Handler: s.handleSetNationsSquad, Summary: "Set a viewer-selected national squad (Tier B; exactly 23 eligible players, at least one goalkeeper)"},
-		{Method: "DELETE", Path: "/api/competitions/nations-cup/teams/{team_id}/squad", Handler: s.handleClearNationsSquad, Summary: "Return a nation to the AI squad selection"},
 		{Method: "GET", Path: "/api/ucl/fixtures", Handler: s.handleGetUCLFixtures, Summary: "Champions League fixtures"},
 		{Method: "GET", Path: "/api/calendar", Handler: s.handleGetCalendar, Summary: "Season calendar"},
 		{Method: "GET", Path: "/api/fixtures", Handler: s.handleGetFixtures, Summary: "Matchweek fixture summaries"},
@@ -110,9 +100,6 @@ func (s *Server) apiRoutes() []Route {
 		{Method: "POST", Path: "/api/career/slots/{slot_id}/duplicate", Handler: s.handleDuplicateSlot, Summary: "Duplicate a slot"},
 		{Method: "POST", Path: "/api/career/slots/{slot_id}/delete", Handler: s.handleDeleteSlot, Summary: "Delete a slot"},
 		{Method: "GET", Path: "/api/career/slots/{slot_id}/export", Handler: s.handleExportSlot, Summary: "Download a slot's snapshot"},
-		{Method: "GET", Path: "/api/career/manager", Handler: s.handleGetViewerManager, Summary: "Viewer manager career: ledger, current job security, and every club's dugout"},
-		{Method: "POST", Path: "/api/career/manager/job", Handler: s.handleAcceptViewerJob, Summary: "Accept one club's dugout (Tier B; the previous manager's record is preserved)"},
-		{Method: "POST", Path: "/api/career/manager/resign", Handler: s.handleResignViewerJob, Summary: "Resign from the current job; the club appoints a deterministic successor"},
 		{Method: "GET", Path: "/api/favourite", Handler: s.handleGetFavourite, Summary: "Observational favourite club"},
 		{Method: "POST", Path: "/api/favourite", Handler: s.handleSetFavourite, Summary: "Set the observational favourite club"},
 		{Method: "GET", Path: "/api/week/watch", Handler: s.handleWeekWatch, Summary: "Matchweek watch digest"},
@@ -121,10 +108,6 @@ func (s *Server) apiRoutes() []Route {
 
 		// Transfer Market
 		{Method: "GET", Path: "/api/transfers", Handler: s.handleGetTransfers, Summary: "Transfer market state"},
-		{Method: "POST", Path: "/api/transfers/bid", Handler: s.handleTransferBid, Summary: "Submit a transfer bid"},
-		{Method: "POST", Path: "/api/transfers/offer", Handler: s.handleTransferOffer, Summary: "Open a negotiation with a viewer offer (Tier B; validated against corridor, budget, and wage cap)"},
-		{Method: "POST", Path: "/api/transfers/negotiations/{negotiation_id}/respond", Handler: s.handleNegotiationRespond, Summary: "Improve or withdraw an active negotiation (Tier B; meeting the asking price completes the transfer)"},
-		{Method: "POST", Path: "/api/transfers/advance", Handler: s.handleTransferAdvance, Summary: "Advance the window"},
 		{Method: "GET", Path: "/api/transfers/records", Handler: s.handleGetTransferRecords, Summary: "Transfer records"},
 
 		// News Wire & Inbox

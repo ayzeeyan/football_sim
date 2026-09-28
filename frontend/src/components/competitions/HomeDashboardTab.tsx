@@ -13,7 +13,6 @@ import {
 import type { Club, CompetitionClub, CompetitionFixtureRow } from '../../types';
 import { fetchWorldDashboard } from '../../services/api';
 import { WatchlistPanel } from '../layout/WatchlistPanel';
-import { ManagerCareerPanel } from '../career/ManagerCareerPanel';
 import { useAsyncData } from '../../hooks/useAsyncData';
 import { usePlayerSheet } from '../clubs/PlayerSheet';
 import {
@@ -385,10 +384,6 @@ export const HomeDashboardTab: React.FC<HomeDashboardTabProps> = ({
         onShowToast={onShowToast}
       />
 
-      <ManagerCareerPanel
-        onOpenClub={(clubId) => onViewSquad(clubId)}
-        onShowToast={onShowToast}
-      />
       {/* Club pulse, loan watch and inbox headlines — all emitted by WorldDashboard(). */}
       {((data.club_pulse != null) || (data.loan_watch?.length ?? 0) > 0 || (data.headlines?.length ?? 0) > 0) && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

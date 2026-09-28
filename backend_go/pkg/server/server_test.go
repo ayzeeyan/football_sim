@@ -311,20 +311,7 @@ func TestServer_ProdigiesAndTraining(t *testing.T) {
 		t.Fatalf("expected prodigy player_id in payload: %v", prodigies[0])
 	}
 
-	// 2. Train Prodigy
-	reqBody := strings.NewReader(`{"focus": "hypertrophy"}`)
-	respTrain, err := http.Post(ts.URL+"/api/prodigies/"+wkID+"/train", "application/json", reqBody)
-	if err != nil {
-		t.Fatalf("POST /api/prodigies/%s/train failed: %v", wkID, err)
-	}
-	defer respTrain.Body.Close()
-	var trainResult map[string]interface{}
-	_ = json.NewDecoder(respTrain.Body).Decode(&trainResult)
-	if trainResult["status"] != "success" {
-		t.Errorf("expected success training result, got %v", trainResult)
-	}
-
-	// 3. Timeline
+	// 2. Timeline
 	respTimeline, err := http.Get(ts.URL + "/api/prodigies/" + wkID + "/timeline")
 	if err != nil {
 		t.Fatalf("GET /api/prodigies/%s/timeline failed: %v", wkID, err)

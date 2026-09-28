@@ -36,7 +36,11 @@ const (
 	// SaveVersion 17 writes back swap-era saves realigned to the
 	// country-pure pyramid (domestic registries re-seeded from the clubs'
 	// national leagues; the season restarts from matchweek 1).
-	SaveVersion     = 17
+	// SaveVersion 18 removes the directed-control fields (viewer lineup
+	// override, viewer manager career, viewer national squads): the world
+	// is a neutral simulation again and every club, player, and transfer is
+	// machine-selected. Older saves load; the dropped keys are ignored.
+	SaveVersion     = 18
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -140,7 +144,6 @@ type CareerSnapshot struct {
 	AchievementsFired     map[string]bool                      `json:"achievements_fired,omitempty"`
 	ClubUnbeatenRuns      map[string]int                       `json:"club_unbeaten_runs,omitempty"`
 	YoungestScorer        *tournament.YoungestScorerRecord     `json:"youngest_scorer,omitempty"`
-	ViewerManager         *tournament.ViewerManager            `json:"viewer_manager,omitempty"`
 	SeasonLeagueMoves     []tournament.RelegationMove          `json:"season_league_moves,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
@@ -229,7 +232,6 @@ func BuildSnapshot(
 		AchievementsFired:     tm.AchievementsFired,
 		ClubUnbeatenRuns:      tm.ClubUnbeatenRuns,
 		YoungestScorer:        tm.YoungestScorer,
-		ViewerManager:         tm.ViewerManager,
 		SeasonLeagueMoves:     tm.SeasonLeagueMoves,
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
@@ -761,9 +763,6 @@ func RestoreCareer(
 	if snap.YoungestScorer != nil {
 		tm.YoungestScorer = snap.YoungestScorer
 	}
-	if snap.ViewerManager != nil {
-		tm.ViewerManager = snap.ViewerManager
-	}
 	tm.SeasonLeagueMoves = snap.SeasonLeagueMoves
 	tm.LastCareerShuffle = snap.LastCareerShuffle
 
@@ -826,9 +825,6 @@ func RestoreCareer(
 		}
 		club.CaptainID = savedClub.CaptainID
 		club.ViceCaptainID = savedClub.ViceCaptainID
-		// Viewer lineup override (SaveVersion 13): saved state wins, nil
-		// restores AI control.
-		club.LineupOverride = savedClub.LineupOverride
 		club.FanExpectation = savedClub.FanExpectation
 		club.MediaPressure = savedClub.MediaPressure
 		club.Chemistry = savedClub.Chemistry

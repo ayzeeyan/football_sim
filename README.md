@@ -16,7 +16,7 @@ Go is the server. React is the match centre. There is no Python runtime.
 - **Matchday** — simulation-only fixtures with bookings, reds, rain, derbies, European nights, and detailed post-match reports.
 - **Window** — SUMMER / WINTER / CLOSED transfer FSM with squad-need AI, contract-sensitive offers, wage and budget checks, and sporting destination logic.
 
-The UI is a football-world viewer with directed control: every club is AI-controlled by default and selected clubs and fixtures change inspection context, while the viewer can explicitly set one club's starting lineup and formation (per-club opt-in, rigid tactical slots, AI fallback when the lineup cannot be fielded). The primary navigation tabs are Home, Match Centre, Competitions, Tables, Clubs, Players, Transfers, News, History, and Wonderkids.
+The UI is a neutral football-world viewer: every club, player, transfer, and squad decision is machine-selected by the AI world — the viewer only simulates and inspects. The primary navigation tabs are Home, Match Centre, Competitions, Tables, Clubs, Players, Transfers, News, History, and Wonderkids.
 
 Legacy note: old 12-club 44-week Super League / Champions Cup / Super Cup saves are ignored for fresh careers (never silently converted) and remain only for isolated unit/match tests via `NewTournamentManager`. The retired live WebSocket match (`/ws/match`) returns HTTP 410 in normal server runs; the legacy live engine remains compiled in only for opt-in contract tests.
 
@@ -400,17 +400,12 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/clubs/{club_id}/scouting?limit=` — deterministic AI recruitment shortlist (consistency, ceiling, form, value trend, risk); observational only
 - `GET /api/clubs/{club_id}/set-pieces` — set-piece briefing for the probable XI: penalty, free-kick, corner, and aerial picks with reasons; inspection only
 - `GET /api/clubs/{club_id}/medical` — club medical view: current injuries with rehab roadmaps, squad risk assessments, season injury history
-- `POST /api/clubs/{club_id}/lineup`, `DELETE /api/clubs/{club_id}/lineup` — viewer lineup override: set or clear a club's formation and starting XI (rigid tactical slots; AI fallback when unfieldable)
-- `POST /api/players/{player_id}/train` — train any squad player (Tier B): one regimen per call from the shared weekly energy; untracked players get a growth profile on demand
-- `POST /api/clubs/{club_id}/board` — Tier B board control: set transfer budget (never above the balance), wage cap (never below the wage bill), and board objective
 - `GET /api/h2h/{club_a}/{club_b}`, `/api/players/{player_id}`, `/api/search?q=...`
 - `GET /api/prodigies`, `/api/prodigies/watch`, `/api/wonderkids` (legacy alias)
 - `GET /api/prodigies/{player_id}/timeline`, `/api/growth/milestones`, `/api/training/status`, `/api/training/projection/{player_id}`, `/api/nxgn50`
-- `POST /api/prodigies/{player_id}/train`, `POST /api/prodigies/{player_id}/position-path`, `POST /api/prodigies/{player_id}/school-track`
 - `GET /api/calendar`, `/api/fixtures`, `/api/fixtures/{fixture_id}`, `/api/competitions`, `/api/competitions/{competition_id}`
 - `GET /api/competitions/nations-cup` — national squads, results, table, and history
 - `GET /api/competitions/nations-cup/fixtures/{fixture_id}`, `POST /api/competitions/nations-cup/fixtures/{fixture_id}/simulate` — national-team fixtures (never mutate club data)
-- `GET /api/competitions/nations-cup/teams/{team_id}/squad`, `POST /api/competitions/nations-cup/teams/{team_id}/squad`, `DELETE /api/competitions/nations-cup/teams/{team_id}/squad` — Tier B national squad control: inspect the eligible pool, set a viewer-selected 23 (eligibility by original club country, at least one goalkeeper), or return to the AI selection
 - `GET /api/openapi.json` — OpenAPI 3.1 spec generated from the server's route table
 - `GET /api/super-league` (compatibility: selected domestic-league view in world careers; optional `?league=` accepts a league name or competition ID and falls back to the default view), `/api/ucl`, `/api/ucl/fixtures`, `/api/super-cup`
 - `POST /api/fixtures/{fixture_id}/simulate`, `POST /api/fixtures/simulate-remaining`
@@ -423,11 +418,9 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/season/league-changes` — the league boundary move ledger (always an empty array in the closed country-pure pyramid, where no club ever changes league; retained for wire stability if second divisions are ever added; the response of `POST /api/season/reset` carries the same `league_changes` list)
 - `GET /api/career/default-homes`, `/api/career/preview-shuffle`, `POST /api/career/new` — `{ "shuffle", "homes" }`
 - `GET /api/career/slots`, `POST /api/career/slots`, `POST /api/career/slots/import?name=`, `POST /api/career/slots/{slot_id}/rename`, `POST /api/career/slots/{slot_id}/duplicate`, `POST /api/career/slots/{slot_id}/delete`, `GET /api/career/slots/{slot_id}/export` — named save-slot archives of the current career
-- `GET /api/career/manager`, `POST /api/career/manager/job`, `POST /api/career/manager/resign` — Tier B viewer manager career: accept a dugout, track job security, sackings, and trophies
 - `GET /api/favourite`, `POST /api/favourite` (observational viewing preference), `GET /api/week/watch`
 - `GET /api/watchlist`, `POST /api/watchlist` — multi-entity watchlist (clubs, players, competitions; observational only, feeds weekly watch digests)
-- `GET /api/transfers`, `/api/transfers/records`, `POST /api/transfers/bid`, `POST /api/transfers/advance`
-- `POST /api/transfers/offer`, `POST /api/transfers/negotiations/{negotiation_id}/respond` — Tier B viewer transfer control: open a negotiation with an offer, then improve (meeting the asking price completes the deal) or withdraw
+- `GET /api/transfers`, `/api/transfers/records`
 - `GET /api/inbox`, `POST /api/inbox/read`, `POST /api/inbox/reply`
 - `GET /api/export/standings?league=`, `/api/export/squad?club_id=`, `/api/export/fixtures`, `/api/export/transfers` — user-initiated CSV downloads of resolved state
 

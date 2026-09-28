@@ -1,18 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, Crown, Trophy, UserCog } from 'lucide-react';
+import { CalendarDays, Crown, Trophy } from 'lucide-react';
 import { soundManager } from '../../../audio/webAudio';
 import type { CompetitionDetail, CompetitionFixtureRow, CompetitionTableRow, NationsCupFixture, NationsCupResponse } from '../../../types';
 import { formatGd, cx } from '../../../lib/format';
 import { qualificationBand, qualificationBarClass, qualificationLabel, type QualBand } from '../../../lib/qualification';
 import { Card, ClubCrest, ClubDot } from '../../ui/ui';
 import { NationsMatchModal } from '../NationsMatchModal';
-import { NationsSquadSelector } from '../NationsSquadSelector';
 import { asClub, scoreLine, legLabel, isWatchable } from './helpers';
 import { tieGroups, aggregateLine, tieWinnerId } from './ties';
 
 export const NationsCupBoard: React.FC<{ data: NationsCupResponse; onRefresh?: () => void }> = ({ data, onRefresh }) => {
   const [matchFixture, setMatchFixture] = useState<NationsCupFixture | null>(null);
-  const [squadTeam, setSquadTeam] = useState<{ id: string; name: string } | null>(null);
   const teams = useMemo(() => new Map(data.participants.map((team) => [team.id, team])), [data.participants]);
   const teamLabel = (id: string, compact?: { name: string; country: string } | null) => compact?.name ?? teams.get(id)?.name ?? id;
 
@@ -91,11 +89,6 @@ export const NationsCupBoard: React.FC<{ data: NationsCupResponse; onRefresh?: (
                 <span className="min-w-0"><strong className="block truncate text-[12px] text-bone">{team.name}</strong><span className="text-[10px] text-sage">{team.country}</span></span>
                 <span className="shrink-0 text-right"><strong className="block font-mono text-[12px] text-brass">{team.rating}</strong><span className="text-[9px] text-sage">{team.players.length} players</span></span>
               </summary>
-              <div className="flex justify-end border-t border-line px-3 py-1.5">
-                <button type="button" onClick={() => { soundManager.playClick(); setSquadTeam({ id: team.id, name: team.name }); }} className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-brass hover:text-bone">
-                  <UserCog size={11} aria-hidden="true" /> Select squad
-                </button>
-              </div>
               <ul className="max-h-56 divide-y divide-line/60 overflow-y-auto border-t border-line px-3">
                 {team.players.map((player) => <li key={player.player_id} className="flex items-center justify-between gap-2 py-1.5 text-[10px]"><span className="min-w-0 truncate text-bone">{player.full_name}<span className="text-sage"> · {player.position}</span></span><span className="shrink-0 font-mono text-sage">{player.ovr} · {player.age}</span></li>)}
               </ul>
@@ -110,7 +103,6 @@ export const NationsCupBoard: React.FC<{ data: NationsCupResponse; onRefresh?: (
       </section>
 
       <NationsMatchModal fixture={matchFixture} onClose={() => setMatchFixture(null)} onPlayed={onRefresh} />
-      <NationsSquadSelector teamId={squadTeam?.id ?? null} teamName={squadTeam?.name} onClose={() => setSquadTeam(null)} onChanged={onRefresh} />
     </div>
   );
 };

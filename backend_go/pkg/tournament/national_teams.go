@@ -100,9 +100,6 @@ type NationalTeamsCompetition struct {
 	Fixtures        []NationalTeamFixture    `json:"fixtures"`
 	ChampionID      string                   `json:"champion_id,omitempty"`
 	History         []NationalTeamSeason     `json:"history,omitempty"`
-	// ViewerSquads holds Tier B viewer-selected squads (team ID -> player
-	// IDs). Absent entries mean the AI selection.
-	ViewerSquads map[string][]string `json:"viewer_squads,omitempty"`
 }
 
 type nationalPlayerCandidate struct {
@@ -134,10 +131,8 @@ func (tm *TournamentManager) initializeNationalTeamsUnlocked() {
 		return
 	}
 	var history []NationalTeamSeason
-	var viewerSquads map[string][]string
 	if tm.World.NationalTeams != nil {
 		history = append(history, tm.World.NationalTeams.History...)
-		viewerSquads = tm.World.NationalTeams.ViewerSquads
 	}
 	competition := &NationalTeamsCompetition{
 		ID:              nationalTeamsCompetitionID,
@@ -150,10 +145,49 @@ func (tm *TournamentManager) initializeNationalTeamsUnlocked() {
 		EligibilityRule: "Inferred from each player's original club country; player nationality is not present in the source dataset.",
 		Teams:           map[string]*NationalTeam{},
 		History:         history,
-		ViewerSquads:    viewerSquads,
 	}
 
-	playersByCountry := tm.nationalCandidatesByCountryUnlocked()
+	playersByCountry := make(map[string][]nationalPlayerCandidate)
+	seen := make(map[string]bool)
+	for _, club := range tm.ClubsList {
+		if club == nil {
+			continue
+		}
+		for _, player := range club.Squad {
+			if player == nil || player.PlayerID == "" || seen[player.PlayerID] {
+				continue
+			}
+			seen[player.PlayerID] = true
+			originID := player.OriginalClubID
+			if originID == "" {
+				originID = player.ClubID
+			}
+			origin := tm.Clubs[originID]
+			if origin == nil {
+				origin = club
+			}
+			if origin.Country == "" {
+				continue
+			}
+			playersByCountry[origin.Country] = append(playersByCountry[origin.Country], nationalPlayerCandidate{player: player})
+		}
+	}
+	if tm.TransferEngine != nil {
+		for _, player := range tm.TransferEngine.FreeAgents {
+			if player == nil || player.PlayerID == "" || seen[player.PlayerID] {
+				continue
+			}
+			seen[player.PlayerID] = true
+			originID := player.OriginalClubID
+			if originID == "" {
+				originID = player.ClubID
+			}
+			origin := tm.Clubs[originID]
+			if origin != nil && origin.Country != "" {
+				playersByCountry[origin.Country] = append(playersByCountry[origin.Country], nationalPlayerCandidate{player: player})
+			}
+		}
+	}
 
 	for _, def := range domesticLeagueDefinitions {
 		candidates := playersByCountry[def.Country]
@@ -168,7 +202,6 @@ func (tm *TournamentManager) initializeNationalTeamsUnlocked() {
 		competition.Teams[teamID] = team
 	}
 	competition.Fixtures = generateNationalRoundRobin(competition.Season, competition.TeamOrder)
-	tm.applyViewerNationalSquadsUnlocked(competition, playersByCountry)
 	tm.World.NationalTeams = competition
 }
 

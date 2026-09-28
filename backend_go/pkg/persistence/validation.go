@@ -94,11 +94,6 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 			return fmt.Errorf("career snapshot contains duplicate club id %q", club.ClubID)
 		}
 		clubIDs[club.ClubID] = struct{}{}
-		// Viewer lineup override (SaveVersion 13): must satisfy the
-		// rigid-slot contract against the persisted squad.
-		if err := models.ValidateLineupOverride(club.Squad, club.LineupOverride); club.LineupOverride != nil && err != nil {
-			return fmt.Errorf("career snapshot club %q has an invalid lineup override: %w", club.ClubID, err)
-		}
 		if club.Played < 0 || club.Won < 0 || club.Drawn < 0 || club.Lost < 0 || club.GoalsFor < 0 || club.GoalsAgainst < 0 || club.Points < 0 {
 			return fmt.Errorf("career snapshot club %q has negative standings values", club.ClubID)
 		}
@@ -295,42 +290,6 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
-	// Viewer national squads (SaveVersion 15): every selection must satisfy
-	// the rigid squad contract against the nation's eligibility pool.
-	if snap.World != nil && snap.World.NationalTeams != nil {
-		nations := snap.World.NationalTeams
-		for teamID, ids := range nations.ViewerSquads {
-			team := nations.Teams[teamID]
-			if team == nil {
-				return fmt.Errorf("career snapshot viewer squad references unknown national team %q", teamID)
-			}
-			if len(ids) != tournament.NationalSquadSize {
-				return fmt.Errorf("career snapshot viewer squad for %q has %d players, want %d", teamID, len(ids), tournament.NationalSquadSize)
-			}
-			seen := make(map[string]bool, len(ids))
-			goalkeepers := 0
-			for _, pid := range ids {
-				if seen[pid] {
-					return fmt.Errorf("career snapshot viewer squad for %q selects player %q twice", teamID, pid)
-				}
-				seen[pid] = true
-				originCountry, ok := playerOriginCountries[pid]
-				if !ok {
-					return fmt.Errorf("career snapshot viewer squad for %q references unknown player %q", teamID, pid)
-				}
-				if originCountry != team.Country {
-					return fmt.Errorf("career snapshot viewer squad for %q selects ineligible player %q (origin %q)", teamID, pid, originCountry)
-				}
-				if models.GetPositionCategory(playerByID[pid].Position) == "GK" {
-					goalkeepers++
-				}
-			}
-			if goalkeepers == 0 {
-				return fmt.Errorf("career snapshot viewer squad for %q has no goalkeeper", teamID)
-			}
-		}
-	}
-
 	// Knockout cup structure validation
 	if snap.UCLFinal.WinnerID != "" && snap.UCLFinal.WinnerID != snap.UCLFinal.HomeID && snap.UCLFinal.WinnerID != snap.UCLFinal.AwayID {
 		return fmt.Errorf("career snapshot ucl final winner %q must be one of finalists (%s, %s)", snap.UCLFinal.WinnerID, snap.UCLFinal.HomeID, snap.UCLFinal.AwayID)
@@ -456,29 +415,6 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 		if _, ok := playerIDs[snap.YoungestScorer.PlayerID]; !ok {
 			return fmt.Errorf("career snapshot youngest scorer references unknown player %q", snap.YoungestScorer.PlayerID)
-		}
-	}
-
-	// Viewer manager career (SaveVersion 14): the current employer must
-	// exist and the ledger must be bounded and well-formed.
-	if vm := snap.ViewerManager; vm != nil {
-		if vm.Name == "" {
-			return fmt.Errorf("career snapshot viewer manager has an empty name")
-		}
-		if vm.ClubID != "" {
-			if _, ok := clubIDs[vm.ClubID]; !ok {
-				return fmt.Errorf("career snapshot viewer manager references unknown club %q", vm.ClubID)
-			}
-		}
-		if len(vm.History) > tournament.MaxViewerJobRecords {
-			return fmt.Errorf("career snapshot viewer manager has %d job records, above the cap of %d", len(vm.History), tournament.MaxViewerJobRecords)
-		}
-		for _, rec := range vm.History {
-			switch rec.Outcome {
-			case "active", "sacked", "resigned":
-			default:
-				return fmt.Errorf("career snapshot viewer job has unknown outcome %q", rec.Outcome)
-			}
 		}
 	}
 

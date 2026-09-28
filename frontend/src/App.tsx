@@ -326,13 +326,14 @@ export const App: React.FC = () => {
               onViewClub={(club) => viewSquadOf(club)}
             />
           )}
-          {activeTab === 1 && <WonderkidLabTab key={`lab-${careerKey}`} onShowToast={(m) => showToast(stripEmojis(m))} />}
+          {activeTab === 1 && <WonderkidLabTab key={`lab-${careerKey}`} />}
           {activeTab === 2 && (
             <StandingsTab
               key={`league-${careerKey}`}
               onWatchFixture={openFixture}
-              onViewSquad={viewSquadOf}
               onShowToast={(m) => showToast(stripEmojis(m))}
+              onViewSquad={viewSquadOf}
+             
               onOpenCeremony={() => setCeremonyOpen(true)}
               onSeasonTick={() => {
                 fetchInbox(1).then((feed) => setInboxUnread(filterUnreadCount(feed, settings))).catch(() => undefined);
@@ -371,7 +372,7 @@ export const App: React.FC = () => {
               initialClubId={selectedClubId}
               onWatchClub={watchClub}
               onWatchFixture={openFixture}
-              onShowToast={(m) => showToast(stripEmojis(m))}
+             
             />
           )}
           {activeTab === 4 && <TransfersTab key={`transfers-${careerKey}`} onShowToast={(m) => showToast(stripEmojis(m))} />}

@@ -1,4 +1,4 @@
-import { apiFetch, invalidateApiCache, API_BASE } from './core';
+import { apiFetch } from './core';
 import type { GrowthMilestoneItem, Player, ProdigyData, ProdigyTimelineResponse, ProdigyWatchRow } from '../../types';
 
 
@@ -66,49 +66,7 @@ export interface TrainProdigyResponse {
 }
 
 // Consumed by the prodigy training planner (Phase 3 F1); focus values come
-// from TRAINING_FOCUSES in lib/constants.ts.
-export function trainProdigy(playerId: string, focus: string): Promise<TrainProdigyResponse> {
-  return apiFetch<TrainProdigyResponse>(
-    `/prodigies/${playerId}/train`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ focus }),
-    },
-    { status: 'error', message: 'Network error communicating with the incubator engine.' },
-  );
-}
 
-export async function setProdigyPositionPath(playerId: string, position: string): Promise<{ status: string; message?: string; position_path?: string; position_xp?: number }> {  try {
-    const res = await fetch(`${API_BASE}/prodigies/${encodeURIComponent(playerId)}/position-path`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { status: 'error', message: data.detail || 'Could not set position path.' };
-    invalidateApiCache();
-    return data;
-  } catch {
-    return { status: 'error', message: 'Network error setting position path.' };
-  }
-}
-
-export async function setProdigySchoolTrack(playerId: string, track: string): Promise<{ status: string; message?: string }> {
-  try {
-    const res = await fetch(`${API_BASE}/prodigies/${encodeURIComponent(playerId)}/school-track`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ track }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { status: 'error', message: data.detail || data.message || 'Could not set school track.' };
-    invalidateApiCache();
-    return { status: 'success' };
-  } catch {
-    return { status: 'error', message: 'Network error setting school track.' };
-  }
-}
 
 export function fetchGrowthMilestones(): Promise<GrowthMilestoneItem[]> {
   return apiFetch<GrowthMilestoneItem[]>('/growth/milestones', undefined, []);

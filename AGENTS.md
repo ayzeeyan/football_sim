@@ -66,7 +66,7 @@ The full architecture breakdown (boot pipeline, weekly simulation lifecycle, dom
    - Two-legged knockout ties are resolved on aggregate scorelines across swapped venues with no away goals rule; level aggregate after Leg 2 goes to extra time and penalties.
    - The Ballon d'Or score includes an explicit +10 bonus for players at the domestic league champion club.
    - Club crests are real assets mapped for all 96 dataset clubs in `frontend/src/lib/clubLogos.ts`; do not replace them with placeholders or introduce a fallback that masks missing mappings.
-   - The UI is a football-world viewer with directed control (Tier B): every club remains AI-controlled by default and selecting a club or fixture provides inspection context, but the viewer may explicitly set one club's starting lineup and formation through the lineup override (`Club.LineupOverride`, `POST/DELETE /api/clubs/{club_id}/lineup`). Lineup control is a per-club opt-in that must reuse the rigid tactical-slot contract (`models.ValidateLineupOverride`, `models.FormationSlots`) and must never alter match-resolution rules; an override that cannot be fielded falls back to the AI selection.
+   - The UI is a neutral football-world viewer: every club, player, transfer, squad, and training decision is machine-selected by the AI world. Selecting a club or fixture provides inspection context only and never implies human club or player management; no endpoint may accept viewer-directed control of AI entities. The viewer's only verbs are simulate (advance the world) and inspect (read state).
 5. **Development & Verification**:
    - Run backend tests with: `cd backend_go && go test ./...`
    - Run backend static checks with: `cd backend_go && go vet ./...`

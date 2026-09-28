@@ -1,12 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import type { TransferRecordsData } from '../../../types';
-import { fetchTransfers, fetchTransferRecords, advanceMarket, resetSeason, respondToNegotiation} from '../../../services/api';
-import { Zap, CheckCircle, Newspaper, Handshake, ListChecks, Heart, Hourglass, FlagOff, Landmark, Sparkle, Trophy } from 'lucide-react';
+
+import { CheckCircle, Newspaper, Handshake, ListChecks, Heart, Hourglass, FlagOff, Landmark, Sparkle, Trophy } from 'lucide-react';
 import { soundManager } from '../../../audio/webAudio';
 import { useAsyncData } from '../../../hooks/useAsyncData';
 import { formatMillions, cx, stripEmojis } from '../../../lib/format';
 import { getClubCrestUrlByShort } from '../../../lib/clubLogos';
 import { focusTabAt, nextTabIndex } from '../../../lib/rovingTabindex';
+import { fetchTransfers, fetchTransferRecords, resetSeason } from '../../../services/api';
 import { Badge, Card, ConfirmBar, EmptyState, ErrorState, LoadingState, PanelHeader, PrimaryButton, ProgressBar } from '../../ui/ui';
 import { usePlayerSheet } from '../../clubs/PlayerSheet';
 import { canStartNextSeason, type TransfersSubTab, type TransfersTabProps } from './helpers';
@@ -19,7 +20,6 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
   const { data, loading, error, reload } = useAsyncData(fetchTransfers);
   const { openPlayer } = usePlayerSheet();
   const [subTab, setSubTab] = useState<TransfersSubTab>('negotiations');
-  const [advancing, setAdvancing] = useState(false);
   const [endingWindow, setEndingWindow] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [records, setRecords] = useState<TransferRecordsData | null>(null);
@@ -32,25 +32,6 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
       .then((res) => setRecords({ ...res, top_signings: res.top_signings ?? [] }))
       .finally(() => setRecordsLoading(false));
   }, [records]);
-
-  const handleAdvance = async () => {
-    soundManager.playClick();
-    setAdvancing(true);
-    try {
-      const res = await advanceMarket();
-      if (!res.is_window_open && res.window_name.includes('opens')) {
-        onShowToast(res.window_name);
-      } else {
-        const week = res.window_week ?? res.window_day;
-        onShowToast(`Transfer week ${week} of ${res.max_window_weeks ?? 12}. Negotiations and wire updated.`);
-      }
-      reload();
-    } catch {
-      onShowToast('Could not advance the market. Try again.');
-    } finally {
-      setAdvancing(false);
-    }
-  };
 
   const handleEndWindow = async () => {
     soundManager.playWhistle();
@@ -141,19 +122,11 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
               >
                 {t('action.exportCsv')}
               </button>
-              {windowOpen ? (
-              <PrimaryButton tone="cyan" onClick={handleAdvance} disabled={advancing}>
-                <Zap size={15} aria-hidden="true" /> {advancing ? 'Advancing…' : isDeadlineDay ? 'Process Deadline Midnight' : 'Advance One Week'}
-              </PrimaryButton>
-            ) : startNextSeason ? (
+
               <PrimaryButton tone="brass" onClick={() => setConfirmEnd(true)} disabled={endingWindow}>
                 <FlagOff size={15} aria-hidden="true" /> {endingWindow ? 'Starting…' : 'Start New Campaign'}
               </PrimaryButton>
-            ) : (
-              <PrimaryButton tone="cyan" onClick={handleAdvance} disabled>
-                <Zap size={15} /> Window closed
-              </PrimaryButton>
-            )}
+
             </div>
           }
         />
@@ -363,16 +336,6 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ onShowToast }) => {
                     key={neg.negotiation_id}
                     neg={neg}
                     onPlayerClick={openPlayer}
-                    onRespond={(n, action, amount) => {
-                      void respondToNegotiation(n.negotiation_id, action, amount).then((res) => {
-                        if (res.ok) {
-                          onShowToast(action === 'improve' ? 'Offer submitted.' : 'Negotiation withdrawn.');
-                        } else {
-                          onShowToast(res.message ?? 'The response was refused.');
-                        }
-                        reload();
-                      });
-                    }}
                   />
                 ))}
               </div>

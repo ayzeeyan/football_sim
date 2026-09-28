@@ -1,4 +1,4 @@
-import { apiFetch, invalidateApiCache, API_BASE } from './core';
+import { apiFetch } from './core';
 import type { CompletedTransfer, TransferFeedItem, TransferNegotiation, TransferRecordsData } from '../../types';
 
 
@@ -64,26 +64,7 @@ export function fetchTransfers(): Promise<TransfersResponse> {
 
 // Tier B only (B3 transfer bid UX): hands a human control of an AI transfer
 // negotiation, which the neutral-viewer contract in AGENTS.md forbids today.
-// Do not wire without amending that invariant first.
-export function submitTransferBid(buyerId: string, sellerId: string, playerId: string): Promise<TransferNegotiation | null> {
-  return apiFetch<TransferNegotiation | null>(
-    '/transfers/bid',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ buyer_id: buyerId, seller_id: sellerId, player_id: playerId }),
-    },
-    null,
-  );
-}
 
-export async function advanceMarket(): Promise<TransfersResponse> {
-  const res = await fetch(`${API_BASE}/transfers/advance`, { method: 'POST' });
-  const data = (await res.json()) as TransfersResponse & { detail?: string; message?: string };
-  if (!res.ok) throw new Error(data.message || data.detail || 'The window cannot advance right now.');
-  invalidateApiCache();
-  return data;
-}
 
 export function fetchTransferRecords(): Promise<TransferRecordsData> {
   return apiFetch<TransferRecordsData>('/transfers/records', undefined, {
@@ -95,42 +76,6 @@ export function fetchTransferRecords(): Promise<TransferRecordsData> {
 
 // Tier B (B3): open a negotiation with a viewer offer. The backend validates
 // the amount against the valuation corridor, the buyer's budget, and the
-// wage cap before the negotiation opens.
-export async function submitTransferOffer(playerId: string, buyerId: string, amount: number): Promise<{ ok: boolean; message?: string; negotiation?: TransferNegotiation }> {
-  try {
-    const res = await fetch('/api/transfers/offer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player_id: playerId, buyer_id: buyerId, amount }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { ok: false, message: data.detail || 'The offer was refused.' };
-    invalidateApiCache();
-    return { ok: true, negotiation: data as TransferNegotiation };
-  } catch {
-    return { ok: false, message: 'Network error submitting the offer.' };
-  }
-}
 
 // Tier B (B3): improve an active negotiation (meeting the asking price
-// completes the transfer) or withdraw it.
-export async function respondToNegotiation(
-  negotiationId: string,
-  action: 'improve' | 'withdraw',
-  amount?: number,
-): Promise<{ ok: boolean; message?: string; negotiation?: TransferNegotiation }> {
-  try {
-    const res = await fetch(`/api/transfers/negotiations/${encodeURIComponent(negotiationId)}/respond`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, amount: amount ?? 0 }),
-    });
-    const data = await res.json();
-    invalidateApiCache();
-    if (data.status === 'error') return { ok: false, message: data.message || 'The response was refused.', negotiation: data as TransferNegotiation };
-    return { ok: true, negotiation: data as TransferNegotiation };
-  } catch {
-    return { ok: false, message: 'Network error responding to the negotiation.' };
-  }
-}
 

@@ -111,7 +111,6 @@ func (tm *TournamentManager) archiveSeasonUnlocked() {
 			"gf": club.GoalsFor, "ga": club.GoalsAgainst, "gd": club.GoalDifference,
 			"trophies": trophies,
 		})
-		tm.RecordViewerTrophies(club, trophies)
 	}
 	tm.evaluateSeasonAchievementsUnlocked()
 }

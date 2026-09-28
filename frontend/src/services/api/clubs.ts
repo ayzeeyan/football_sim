@@ -1,5 +1,5 @@
-import { apiFetch, invalidateApiCache } from './core';
-import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity, ClubScoutingResponse, ClubSetPiecesResponse, ClubMedicalResponse, LineupOverride } from '../../types';
+import { apiFetch } from './core';
+import type { Club, Fixture, Player, HeadToHeadData, ClubHistoryResponse, ClubProfile, ClubTransferActivity, ClubScoutingResponse, ClubSetPiecesResponse, ClubMedicalResponse } from '../../types';
 
 
 // --- Clubs & squads ---------------------------------------------------------
@@ -74,7 +74,6 @@ export function fetchClubScouting(clubId: string, limit = 12): Promise<ClubScout
 }
 
 
-
 export function fetchClubSetPieces(clubId: string): Promise<ClubSetPiecesResponse | null> {
   return apiFetch<ClubSetPiecesResponse | null>(
     `/clubs/${encodeURIComponent(clubId)}/set-pieces`,
@@ -93,55 +92,5 @@ export function fetchClubMedical(clubId: string): Promise<ClubMedicalResponse | 
 }
 
 
-export async function setClubLineup(
-  clubId: string,
-  formation: string,
-  players: Record<string, string>,
-): Promise<{ status: string; message?: string; override?: LineupOverride }> {
-  try {
-    const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/lineup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ formation, players }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { status: 'error', message: data.detail || 'The lineup was rejected.' };
-    invalidateApiCache();
-    return data;
-  } catch {
-    return { status: 'error', message: 'Network error saving the lineup.' };
-  }
-}
-
-export async function clearClubLineup(clubId: string): Promise<{ status: string }> {
-  try {
-    const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/lineup`, { method: 'DELETE' });
-    invalidateApiCache();
-    return { status: res.ok ? 'success' : 'error' };
-  } catch {
-    return { status: 'error' };
-  }
-}
-
-
 // Tier B (B4): set a club's transfer budget, wage cap, and board objective.
-// The backend enforces budget <= balance and cap >= wage bill.
-export async function setClubBoard(
-  clubId: string,
-  settings: { transfer_budget?: number; wage_cap?: number; board_objective?: string },
-): Promise<{ ok: boolean; message?: string }> {
-  try {
-    const res = await fetch(`/api/clubs/${encodeURIComponent(clubId)}/board`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
-    });
-    const data = await res.json();
-    if (!res.ok) return { ok: false, message: data.detail || 'The board rejected the request.' };
-    invalidateApiCache();
-    return { ok: true };
-  } catch {
-    return { ok: false, message: 'Network error saving board settings.' };
-  }
-}
 
