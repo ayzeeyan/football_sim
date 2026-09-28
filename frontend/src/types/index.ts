@@ -1125,6 +1125,19 @@ export interface SuperLeagueState {
 
 export type CompetitionKind = 'LEAGUE' | 'DOMESTIC_CUP' | 'EUROPEAN' | 'INTERNATIONAL';
 
+export interface LeagueChange {
+  club_id: string;
+  club_name: string;
+  from_league: string;
+  to_league: string;
+  direction: 'relegated' | 'promoted';
+}
+
+export interface LeagueChangesResponse {
+  season: string;
+  moves: LeagueChange[];
+}
+
 export interface NationalTeamPlayer {
   player_id: string;
   full_name: string;

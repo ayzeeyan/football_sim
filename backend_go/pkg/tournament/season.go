@@ -940,6 +940,9 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	tm.ContractsResolvedSeason = ""
 	tm.runYouthIntakeUnlocked()
 	tm.applyPlannedRelegationUnlocked(relegationMoves)
+	// The applied moves stay visible all season so the UI can badge every
+	// promoted and relegated club in the tables.
+	tm.SeasonLeagueMoves = relegationMoves
 	tm.rebuildEuropeanWorldCalendarUnlocked(qualification)
 	tm.initializeNationalTeamsUnlocked()
 	tm.AssignSquadRolesUnlocked()
@@ -958,7 +961,7 @@ func (tm *TournamentManager) resetEuropeanWorldNewSeasonUnlocked() map[string]in
 	PairSeniorMentors(tm.ClubsList, tm.GrowthEngine)
 	tm.pushRelegationNewsUnlocked(relegationMoves, 1)
 	tm.PushInbox(MsgCategorySystem, tm.SeasonName+" European season begins", "Domestic tables reset, national cups are drawn, and qualification has set the European fields.", 1, nil, "", "")
-	return map[string]interface{}{"status": "success", "message": "New European season initialized.", "current_matchweek": 1, "max_matchweeks": tm.MaxMatchweeks, "retired_player_ids": retired}
+	return map[string]interface{}{"status": "success", "message": "New European season initialized.", "current_matchweek": 1, "max_matchweeks": tm.MaxMatchweeks, "retired_player_ids": retired, "league_changes": tm.SeasonLeagueMoves}
 }
 
 // AdoptLongSeason migrates legacy short/long calendar saves onto the current

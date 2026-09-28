@@ -482,6 +482,22 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 		}
 	}
 
+	// Season league moves (SaveVersion 16): every promotion/relegation
+	// record must reference a known club and a known direction.
+	for _, move := range snap.SeasonLeagueMoves {
+		if _, ok := clubIDs[move.ClubID]; !ok {
+			return fmt.Errorf("career snapshot league move references unknown club %q", move.ClubID)
+		}
+		switch move.Direction {
+		case "relegated", "promoted":
+		default:
+			return fmt.Errorf("career snapshot league move for %q has unknown direction %q", move.ClubID, move.Direction)
+		}
+		if move.FromLeague == "" || move.ToLeague == "" {
+			return fmt.Errorf("career snapshot league move for %q has an empty league", move.ClubID)
+		}
+	}
+
 	return nil
 }
 

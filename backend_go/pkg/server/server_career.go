@@ -19,6 +19,25 @@ import (
 )
 
 // Career lifecycle: seasons, transfer market and inbox.
+
+// handleGetLeagueChanges returns this season's promotion and relegation
+// moves so the UI can badge every club that crossed a league boundary.
+func (s *Server) handleGetLeagueChanges(w http.ResponseWriter, r *http.Request) {
+	s.worldMu.RLock()
+	moves := append([]tournament.RelegationMove(nil), s.TournamentManager.SeasonLeagueMoves...)
+	season := s.TournamentManager.SeasonName
+	s.worldMu.RUnlock()
+	if moves == nil {
+		// A fresh career has no moves yet; the frontend types expect an
+		// array, and a nil slice would marshal as null.
+		moves = []tournament.RelegationMove{}
+	}
+	writeJSON(w, map[string]interface{}{
+		"season": season,
+		"moves":  moves,
+	})
+}
+
 func (s *Server) handleResetSeason(w http.ResponseWriter, r *http.Request) {
 	s.worldMu.Lock()
 	held := true

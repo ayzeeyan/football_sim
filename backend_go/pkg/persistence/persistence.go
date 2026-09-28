@@ -31,7 +31,9 @@ const (
 	// SaveVersion 14 adds the viewer manager career (ViewerManager).
 	// SaveVersion 15 adds viewer-selected national squads
 	// (NationalTeamsCompetition.ViewerSquads).
-	SaveVersion     = 15
+	// SaveVersion 16 adds the current season's promotion/relegation moves
+	// (SeasonLeagueMoves).
+	SaveVersion     = 16
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )
@@ -136,6 +138,7 @@ type CareerSnapshot struct {
 	ClubUnbeatenRuns      map[string]int                       `json:"club_unbeaten_runs,omitempty"`
 	YoungestScorer        *tournament.YoungestScorerRecord     `json:"youngest_scorer,omitempty"`
 	ViewerManager         *tournament.ViewerManager            `json:"viewer_manager,omitempty"`
+	SeasonLeagueMoves     []tournament.RelegationMove          `json:"season_league_moves,omitempty"`
 	LastCareerShuffle     bool                                 `json:"last_career_shuffle,omitempty"`
 
 	ReputationAppliedSeason string   `json:"reputation_applied_season,omitempty"`
@@ -224,6 +227,7 @@ func BuildSnapshot(
 		ClubUnbeatenRuns:      tm.ClubUnbeatenRuns,
 		YoungestScorer:        tm.YoungestScorer,
 		ViewerManager:         tm.ViewerManager,
+		SeasonLeagueMoves:     tm.SeasonLeagueMoves,
 		LastCareerShuffle:     tm.LastCareerShuffle,
 
 		ReputationAppliedSeason: tm.ReputationAppliedSeason,
@@ -757,6 +761,7 @@ func RestoreCareer(
 	if snap.ViewerManager != nil {
 		tm.ViewerManager = snap.ViewerManager
 	}
+	tm.SeasonLeagueMoves = snap.SeasonLeagueMoves
 	tm.LastCareerShuffle = snap.LastCareerShuffle
 
 	// 2. Build index of existing players for fast lookup and deduplication

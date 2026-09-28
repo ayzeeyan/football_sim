@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { Club, Fixture } from '../../types';
-import { fetchSuperLeague, fetchFixtureSummaries, fetchFixture, simulateFixture, simulateRemaining, resetSeason, restartSeason, fetchScoringRace, fetchSeasonStats, fetchCalendar, fetchSuperCup, fetchWeekWatch, type WeekWatch } from '../../services/api';
+import type { Club, Fixture, LeagueChange } from '../../types';
+import { fetchSuperLeague, fetchFixtureSummaries, fetchFixture, simulateFixture, simulateRemaining, resetSeason, restartSeason, fetchScoringRace, fetchSeasonStats, fetchCalendar, fetchSuperCup, fetchWeekWatch, fetchLeagueChanges, type WeekWatch } from '../../services/api';
 import type { ScoringRaceRow, SeasonStats, CalendarState, SuperCupState } from '../../services/api';
 import type { SuperLeagueState, FixturesResponse } from '../../types';
 import { Trophy, RotateCcw, Users, Zap, CalendarDays } from 'lucide-react';
@@ -117,6 +117,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
   const [previewFixture, setPreviewFixture] = useState<Fixture | null>(null);
   const [watch, setWatch] = useState<WeekWatch | null>(null);
   const [leagueSelector, setLeagueSelector] = useState<string>(LEAGUES_5[0]);
+  const [leagueChanges, setLeagueChanges] = useState<Record<string, LeagueChange>>({});
   const fixturesRef = useRef<HTMLDivElement>(null);
 
   const loadAll = useCallback(async (mw?: number) => {
@@ -140,6 +141,9 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
   useEffect(() => {
     loadAll().finally(() => setLoading(false));
     fetchWeekWatch().then(setWatch).catch(() => undefined);
+    fetchLeagueChanges()
+      .then((res) => setLeagueChanges(Object.fromEntries(res.moves.map((m) => [m.club_id, m]))))
+      .catch(() => undefined);
   }, [loadAll]);
 
   useEffect(() => {
@@ -213,6 +217,9 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
     try {
       const res = await resetSeason();
       onShowToast(stripEmojis(res.message));
+      if (res.league_changes && res.league_changes.length > 0) {
+        onShowToast(`${res.league_changes.length} clubs crossed league boundaries in the closed pyramid — badged Up/Down in the tables.`);
+      }
       setViewMw(1);
       await loadAll(1);
     } catch {
@@ -517,6 +524,7 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
             <tbody className="divide-y divide-line/70">
               {league.clubs.map((c, idx) => {
                 const pos = idx + 1;
+                const change = leagueChanges[c.club_id];
                 const band = league.world ? qualificationBand(c.league, pos, league.clubs.length) : null;
                 const bar = league.world ? qualificationBarClass(band) : positionMarker(pos);
                 return (
@@ -531,6 +539,14 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
                       <span className="flex items-center gap-3">
                         <ClubCrest club={c} size={28} />
                         <span className="text-[15px]">{c.club_name}</span>
+                        {change && (
+                          <span
+                            title={change.direction === 'promoted' ? `Promoted from ${change.from_league} last season` : `Relegated from ${change.from_league} last season`}
+                            className={cx('rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide', change.direction === 'promoted' ? 'bg-pitchtone/20 text-pitchtone' : 'bg-ember/20 text-ember')}
+                          >
+                            {change.direction === 'promoted' ? 'Up' : 'Down'}
+                          </span>
+                        )}
                         <span className="text-sage font-mono text-[12px]">[{c.short_name}]</span>
                       </span>
                     </td>
@@ -571,6 +587,12 @@ export const StandingsTab: React.FC<StandingsTabProps> = ({ onWatchFixture, onVi
               <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#8AB4C8]" /> Europa League</span>
               <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pitchtone" /> Conference League</span>
               <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-ember" /> Relegation</span>
+              {Object.keys(leagueChanges).length > 0 && (
+                <>
+                  <span className="flex items-center gap-2"><span className="rounded bg-pitchtone/20 px-1 text-[9px] font-bold uppercase text-pitchtone">Up</span> Promoted this season</span>
+                  <span className="flex items-center gap-2"><span className="rounded bg-ember/20 px-1 text-[9px] font-bold uppercase text-ember">Down</span> Relegated this season</span>
+                </>
+              )}
             </>
           ) : (
             <>

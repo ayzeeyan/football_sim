@@ -40,6 +40,7 @@ type TournamentManager struct {
 	ClubUnbeatenRuns      map[string]int
 	YoungestScorer        *YoungestScorerRecord
 	ViewerManager         *ViewerManager
+	SeasonLeagueMoves     []RelegationMove
 	ManagerConsecutiveHot map[string]int
 	ManagerLastChange     map[string]int
 	ManagerHistory        []ManagerHistoryEntry

@@ -1,5 +1,5 @@
 import { apiFetch, invalidateApiCache, API_BASE } from './core';
-import type { AwardsCeremony, InboxFeed, PlayerProfile, SeasonAwards } from '../../types';
+import type { LeagueChange, LeagueChangesResponse, AwardsCeremony, InboxFeed, PlayerProfile, SeasonAwards } from '../../types';
 
 
 export interface ProdigyDrawRow {
@@ -49,7 +49,7 @@ export async function startNewCareer(shuffle: boolean, homes?: Record<string, st
   }
 }
 
-export function resetSeason(): Promise<{ status: string; message: string; current_matchweek: number; max_matchweeks: number }> {
+export function resetSeason(): Promise<{ status: string; message: string; current_matchweek: number; max_matchweeks: number; league_changes?: LeagueChange[] }> {
   return apiFetch(
     '/season/reset',
     { method: 'POST' },
@@ -269,4 +269,9 @@ export async function resignViewerJob(): Promise<{ status: string; message?: str
   } catch {
     return { status: 'error', message: 'Network error resigning.' };
   }
+}
+
+/** This season's promotion and relegation moves across the closed pyramid. */
+export function fetchLeagueChanges(): Promise<LeagueChangesResponse> {
+  return apiFetch<LeagueChangesResponse>('/season/league-changes', undefined, { season: '', moves: [] });
 }

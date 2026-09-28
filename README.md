@@ -420,6 +420,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/achievements` — career milestone ledger (catalogue with unlocked flags, unlocked entries, youngest-scorer record)
 - `GET /api/season/awards`, `/api/season/awards/ceremony`, `/api/season/history`, `/api/season/stats`, `/api/season/stats/advanced`
 - `POST /api/season/reset`, `POST /api/season/restart`
+- `GET /api/season/league-changes` — this season's promotion and relegation moves (closed-pyramid prestige ladder; the response of `POST /api/season/reset` carries the same `league_changes` list)
 - `GET /api/career/default-homes`, `/api/career/preview-shuffle`, `POST /api/career/new` — `{ "shuffle", "homes" }`
 - `GET /api/career/slots`, `POST /api/career/slots`, `POST /api/career/slots/import?name=`, `POST /api/career/slots/{slot_id}/rename`, `POST /api/career/slots/{slot_id}/duplicate`, `POST /api/career/slots/{slot_id}/delete`, `GET /api/career/slots/{slot_id}/export` — named save-slot archives of the current career
 - `GET /api/career/manager`, `POST /api/career/manager/job`, `POST /api/career/manager/resign` — Tier B viewer manager career: accept a dugout, track job security, sackings, and trophies
