@@ -718,6 +718,7 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	if tm.CurrentMatchweek > tm.MaxMatchweeks {
 		tm.completeNationalTeamsUnlocked()
 		tm.SeasonPhase = "transfer_window"
+		tm.archiveSeasonReportsUnlocked()
 		tm.finalizeWorldLeagueChampionsUnlocked()
 		tm.applyCompletedSeasonReputationUnlocked()
 		tm.openSummerWindowOnceUnlocked()
@@ -745,6 +746,7 @@ func (tm *TournamentManager) maybeRolloverUnlocked() map[string]interface{} {
 	if isFinished {
 		tm.completeNationalTeamsUnlocked()
 		tm.SeasonPhase = "transfer_window"
+		tm.archiveSeasonReportsUnlocked()
 		tm.finalizeWorldLeagueChampionsUnlocked()
 		// A same-week cup fixture can still be applied after the final league
 		// fixture. The helper is guarded and will wait for those results before
@@ -862,13 +864,13 @@ func (tm *TournamentManager) finishTableImpact(impact *matchreport.TableImpact, 
 	}
 }
 
-const reportArchiveKeepWeeks = 3
+const reportArchiveKeepWeeks = 2
 
 // reportSummaryKeepWeeks bounds how long a finished match keeps even its
 // compacted report. Beyond this window the report is replaced by an archival
 // summary (score, scorers with player+club IDs, MOTM, key stats), which keeps
 // the career save from growing without bound across a 38-week season.
-const reportSummaryKeepWeeks = 8
+const reportSummaryKeepWeeks = 6
 
 // CompactAgedReports applies the two-tier report retention policy:
 //   - last reportArchiveKeepWeeks matchweeks: full report
@@ -915,6 +917,37 @@ func (tm *TournamentManager) compactAgedReportsUnlocked() {
 	compactList(tm.SuperCupFixtures)
 	if tm.World != nil {
 		compactList(tm.World.Fixtures)
+	}
+}
+
+// archiveSeasonReportsUnlocked replaces every finished fixture's full report
+// with its archival summary the moment the season ends. The offseason would
+// otherwise carry the whole season's match reports (events, XIs, benches,
+// shot maps) through twelve transfer-window saves; the weekly achievements
+// have already scanned every matchweek, so nothing still needs the payloads.
+// The post-match UI renders the archived summary view for these games.
+// The caller must hold tm.mu.
+func (tm *TournamentManager) archiveSeasonReportsUnlocked() {
+	if tm == nil {
+		return
+	}
+	archiveList := func(list []Fixture) {
+		for i := range list {
+			f := &list[i]
+			if f.Status != "finished" || f.Report == nil {
+				continue
+			}
+			if f.ReportSummary == nil {
+				f.ReportSummary = matchreport.SummarizeReport(f.Report)
+			}
+			f.Report = nil
+		}
+	}
+	archiveList(tm.Fixtures)
+	archiveList(tm.UCLFixtures)
+	archiveList(tm.SuperCupFixtures)
+	if tm.World != nil {
+		archiveList(tm.World.Fixtures)
 	}
 }
 
