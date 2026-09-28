@@ -76,6 +76,10 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 
 	clubIDs := make(map[string]struct{}, len(snap.Clubs))
 	playerIDs := make(map[string]string)
+	// National eligibility view: player ID -> original club country and
+	// the player record, mirroring the tournament's eligibility rule.
+	playerOriginCountries := make(map[string]string)
+	playerByID := make(map[string]*models.Player)
 	for mapID, club := range snap.Clubs {
 		if club == nil {
 			return fmt.Errorf("career snapshot club %q is nil", mapID)
@@ -115,6 +119,16 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 				return fmt.Errorf("career snapshot duplicate player id %q in clubs %q and %q", player.PlayerID, previous, club.ClubID)
 			}
 			playerIDs[player.PlayerID] = club.ClubID
+			playerByID[player.PlayerID] = player
+			originID := player.OriginalClubID
+			if originID == "" {
+				originID = club.ClubID
+			}
+			if origin := snap.Clubs[originID]; origin != nil {
+				playerOriginCountries[player.PlayerID] = origin.Country
+			} else {
+				playerOriginCountries[player.PlayerID] = club.Country
+			}
 			// Squad membership is authoritative by map position: restore
 			// trusts the embedded ClubID to relocate transfers, so a mismatch
 			// here means corruption, not a pending move.
@@ -277,6 +291,42 @@ func ValidateCareerSnapshot(snap *CareerSnapshot) error {
 						return fmt.Errorf("career snapshot world competition %q round %q has an empty tie id", compID, round.Stage)
 					}
 				}
+			}
+		}
+	}
+
+	// Viewer national squads (SaveVersion 15): every selection must satisfy
+	// the rigid squad contract against the nation's eligibility pool.
+	if snap.World != nil && snap.World.NationalTeams != nil {
+		nations := snap.World.NationalTeams
+		for teamID, ids := range nations.ViewerSquads {
+			team := nations.Teams[teamID]
+			if team == nil {
+				return fmt.Errorf("career snapshot viewer squad references unknown national team %q", teamID)
+			}
+			if len(ids) != tournament.NationalSquadSize {
+				return fmt.Errorf("career snapshot viewer squad for %q has %d players, want %d", teamID, len(ids), tournament.NationalSquadSize)
+			}
+			seen := make(map[string]bool, len(ids))
+			goalkeepers := 0
+			for _, pid := range ids {
+				if seen[pid] {
+					return fmt.Errorf("career snapshot viewer squad for %q selects player %q twice", teamID, pid)
+				}
+				seen[pid] = true
+				originCountry, ok := playerOriginCountries[pid]
+				if !ok {
+					return fmt.Errorf("career snapshot viewer squad for %q references unknown player %q", teamID, pid)
+				}
+				if originCountry != team.Country {
+					return fmt.Errorf("career snapshot viewer squad for %q selects ineligible player %q (origin %q)", teamID, pid, originCountry)
+				}
+				if models.GetPositionCategory(playerByID[pid].Position) == "GK" {
+					goalkeepers++
+				}
+			}
+			if goalkeepers == 0 {
+				return fmt.Errorf("career snapshot viewer squad for %q has no goalkeeper", teamID)
 			}
 		}
 	}

@@ -410,6 +410,7 @@ Same origin as the page when you use the built client. Vite dev proxies these:
 - `GET /api/calendar`, `/api/fixtures`, `/api/fixtures/{fixture_id}`, `/api/competitions`, `/api/competitions/{competition_id}`
 - `GET /api/competitions/nations-cup` — national squads, results, table, and history
 - `GET /api/competitions/nations-cup/fixtures/{fixture_id}`, `POST /api/competitions/nations-cup/fixtures/{fixture_id}/simulate` — national-team fixtures (never mutate club data)
+- `GET /api/competitions/nations-cup/teams/{team_id}/squad`, `POST /api/competitions/nations-cup/teams/{team_id}/squad`, `DELETE /api/competitions/nations-cup/teams/{team_id}/squad` — Tier B national squad control: inspect the eligible pool, set a viewer-selected 23 (eligibility by original club country, at least one goalkeeper), or return to the AI selection
 - `GET /api/openapi.json` — OpenAPI 3.1 spec generated from the server's route table
 - `GET /api/super-league` (compatibility: selected domestic-league view in world careers; optional `?league=` accepts a league name or competition ID and falls back to the default view), `/api/ucl`, `/api/ucl/fixtures`, `/api/super-cup`
 - `POST /api/fixtures/{fixture_id}/simulate`, `POST /api/fixtures/simulate-remaining`

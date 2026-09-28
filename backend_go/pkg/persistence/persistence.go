@@ -29,7 +29,9 @@ const (
 	// SaveVersion 12 adds per-player injury history (Player.InjuryHistory).
 	// SaveVersion 13 adds the viewer lineup override (Club.LineupOverride).
 	// SaveVersion 14 adds the viewer manager career (ViewerManager).
-	SaveVersion     = 14
+	// SaveVersion 15 adds viewer-selected national squads
+	// (NationalTeamsCompetition.ViewerSquads).
+	SaveVersion     = 15
 	DefaultSavePath = "saves/career.json"
 	clubIndexKey    = "club_index"
 )

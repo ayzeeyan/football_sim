@@ -1144,6 +1144,17 @@ export interface NationalTeam {
   players: NationalTeamPlayer[];
 }
 
+export interface NationsEligiblePlayer extends NationalTeamPlayer {
+  selected: boolean;
+}
+
+export interface NationsSquadSelection {
+  team: NationalTeam;
+  eligible_pool: NationsEligiblePlayer[];
+  viewer_selected: boolean;
+  squad_size: number;
+}
+
 export interface NationsCupTableRow {
   team_id: string;
   name?: string;

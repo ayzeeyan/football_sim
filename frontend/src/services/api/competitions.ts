@@ -1,5 +1,5 @@
 import { apiFetch, invalidateApiCache, API_BASE } from './core';
-import type { CompetitionDetail, CompetitionsResponse, Fixture, FixturesResponse, SuperLeagueState, UCLTournamentState, NationsCupResponse, BatchSimResult } from '../../types';
+import type { CompetitionDetail, CompetitionsResponse, Fixture, FixturesResponse, SuperLeagueState, UCLTournamentState, NationsCupResponse, NationsSquadSelection, BatchSimResult } from '../../types';
 
 
 // --- Tournaments ------------------------------------------------------------
@@ -26,6 +26,41 @@ export function fetchCompetitions(): Promise<CompetitionsResponse> {
 /** National-team competition data is separate from club fixtures and standings. */
 export function fetchNationsCup(): Promise<NationsCupResponse> {
   return apiFetch<NationsCupResponse>('/competitions/nations-cup');
+}
+
+/** One nation's squad, eligible player pool, and viewer-selected flag (Tier B6). */
+export function fetchNationsSquadSelection(teamId: string): Promise<NationsSquadSelection | null> {
+  return apiFetch<NationsSquadSelection | null>(`/competitions/nations-cup/teams/${encodeURIComponent(teamId)}/squad`, undefined, null);
+}
+
+/** Installs a viewer-selected national squad (exactly 23 eligible players, at least one goalkeeper). */
+export async function setNationsSquad(teamId: string, playerIds: string[]): Promise<{ status: string; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/competitions/nations-cup/teams/${encodeURIComponent(teamId)}/squad`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_ids: playerIds }),
+    });
+    const data = (await res.json()) as { status?: string; detail?: string };
+    if (!res.ok) return { status: 'error', message: data.detail || 'Could not set the squad.' };
+    invalidateApiCache();
+    return { status: 'success' };
+  } catch {
+    return { status: 'error', message: 'Network error setting the squad.' };
+  }
+}
+
+/** Returns a nation to the AI squad selection. */
+export async function clearNationsSquad(teamId: string): Promise<{ status: string; message?: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/competitions/nations-cup/teams/${encodeURIComponent(teamId)}/squad`, { method: 'DELETE' });
+    const data = (await res.json()) as { status?: string; detail?: string };
+    if (!res.ok) return { status: 'error', message: data.detail || 'Could not clear the squad.' };
+    invalidateApiCache();
+    return { status: 'success' };
+  } catch {
+    return { status: 'error', message: 'Network error clearing the squad.' };
+  }
 }
 
 export function fetchNationsFixture(fixtureId: string): Promise<Fixture | null> {
