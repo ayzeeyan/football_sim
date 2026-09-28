@@ -960,7 +960,14 @@ func (te *TransferEngine) aiInitiateBid() {
 		return
 	}
 	sort.Slice(solvent, func(i, j int) bool { return solvent[i].ClubID < solvent[j].ClubID })
-	buyer := te.weightedClubChoice(solvent, buyerMarketWeight)
+	buyer := te.weightedClubChoice(solvent, func(c *models.Club) int {
+		w := buyerMarketWeight(c)
+		if mgr := te.Managers[c.ClubID]; mgr != nil {
+			aggr := managers.PersonalityForManager(mgr.Style, mgr.Name).TransferAggression
+			w = int(float64(w) * (0.6 + 0.8*aggr))
+		}
+		return w
+	})
 	if buyer == nil {
 		return
 	}

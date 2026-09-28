@@ -58,6 +58,16 @@ export const ClubOverviewPanel: React.FC<{
           </Card>
         ))}
       </div>
+      {club.manager?.personality && (
+        <Card>
+          <p className="eyebrow">Manager personality</p>
+          <p className="mt-1 font-display text-[16px] font-bold text-bone">{club.manager.personality.label}</p>
+          <p className="mt-1 text-[12px] text-sage">{club.manager.personality.description}</p>
+          <p className="mt-2 font-mono text-[11px] text-sage">
+            Press {club.manager.personality.press_intensity}/10 · Patience {club.manager.personality.patience}/10 · Youth trust {Math.round(club.manager.personality.youth_trust * 100)}% · Market aggression {Math.round(club.manager.personality.transfer_aggression * 100)}%
+          </p>
+        </Card>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <p className="eyebrow">Previous result</p>

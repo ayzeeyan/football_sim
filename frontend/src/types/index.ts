@@ -147,7 +147,20 @@ export interface ManagerHistoryEntry {
   reason?: string;
 }
 
+export interface ManagerPersonality {
+  key: string;
+  label: string;
+  description: string;
+  rotation: number;
+  youth_trust: number;
+  transfer_aggression: number;
+  press_intensity: number;
+  patience: number;
+  risk_appetite: number;
+}
+
 export interface ManagerInfo {
+  personality?: ManagerPersonality;
   name: string;
   tactic: string;
   formation?: string;

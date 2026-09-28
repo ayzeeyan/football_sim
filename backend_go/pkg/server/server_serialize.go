@@ -243,7 +243,19 @@ func (s *Server) serializeManager(m *managers.ManagerProfile) map[string]interfa
 	}
 
 	arch := m.ArchetypeInfo()
+	personality := managers.PersonalityForManager(m.Style, m.Name)
 	return map[string]interface{}{
+		"personality": map[string]interface{}{
+			"key":                 personality.Key,
+			"label":               personality.Label,
+			"description":         personality.Description,
+			"rotation":            personality.Rotation,
+			"youth_trust":         personality.YouthTrust,
+			"transfer_aggression": personality.TransferAggression,
+			"press_intensity":     personality.PressIntensity,
+			"patience":            personality.Patience,
+			"risk_appetite":       personality.RiskAppetite,
+		},
 		"name":                m.Name,
 		"tactic":              m.Tactic(),
 		"style":               m.Style,

@@ -50,6 +50,15 @@ func (tm *TournamentManager) evaluateManagerTenureWithPatience(completedMW int) 
 		}
 		tm.ManagerConsecutiveHot[club.ClubID]++
 		required := boardHotSeatWeeks(club)
+		if mgr != nil {
+			required += managers.PersonalityForManager(mgr.Style, mgr.Name).Patience/4 - 1
+			if required < 1 {
+				required = 1
+			}
+			if required > 4 {
+				required = 4
+			}
+		}
 		if tm.ManagerConsecutiveHot[club.ClubID] < required {
 			continue
 		}
