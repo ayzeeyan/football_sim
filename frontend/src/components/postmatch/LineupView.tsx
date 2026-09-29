@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, Star } from 'lucide-react';
 import type { Club, MatchPlayerRow } from '../../types';
 import { cx, rgbCss } from '../../lib/format';
-import { FORMATION_SLOTS, isOutOfPosition, normalizeFormation, pitchCoords, resolveLineupFormation, resolveTacticalAssignments } from '../../lib/tactics';
+import { FORMATION_SLOTS, UNIT_TONE_CLASSES, isOutOfPosition, normalizeFormation, pitchCoords, resolveLineupFormation, resolveTacticalAssignments, unitForSlot } from '../../lib/tactics';
 import { ClubCrest, PlayerPortrait } from '../ui/ui';
 
 function ratingClass(rating: number, played: boolean): string {
@@ -81,7 +81,7 @@ function ReportPitch({
   return (
     <div
       className="relative h-[390px] overflow-hidden rounded-lg border border-[#3b6b55] shadow-inner shadow-black/40 sm:h-[430px]"
-      style={{ background: 'repeating-linear-gradient(0deg, #12422f 0%, #12422f 12.5%, #103b2b 12.5%, #103b2b 25%)' }}
+      style={{ background: 'repeating-linear-gradient(0deg, #154734 0%, #154734 12.5%, #113e2d 12.5%, #113e2d 25%)' }}
     >
       <div className="pointer-events-none absolute inset-3 rounded-sm border border-bone/35" />
       <div className="pointer-events-none absolute left-3 right-3 top-1/2 border-t border-bone/30" />
@@ -98,6 +98,7 @@ function ReportPitch({
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,.045),transparent_55%)]" />
       {slots.map(({ player, slot, x, y }) => {
         const rating = player.rating ?? 0;
+        const tone = UNIT_TONE_CLASSES[unitForSlot(slot)];
         const surname = player.full_name.split(' ').slice(-1)[0];
         const notes = contribution(player);
         const isMotm = player.player_id === motmId;
@@ -107,13 +108,13 @@ function ReportPitch({
             key={player.player_id}
             type="button"
             onClick={() => onOpen(player.player_id)}
-            className="group absolute z-10 w-[82px] -translate-x-1/2 -translate-y-1/2 text-center focus-visible:z-20"
+            className="group absolute z-10 w-[72px] -translate-x-1/2 -translate-y-1/2 text-center focus-visible:z-20"
             style={{ left: `${x}%`, top: `${y}%` }}
             title={`${player.full_name} · ${slot} · ${rating ? `${rating.toFixed(1)} rating` : 'not rated'}${notes ? ` · ${notes}` : ''}`}
           >
             <span className="relative mx-auto block w-fit transition-transform group-hover:-translate-y-0.5 group-hover:scale-105">
               {isMotm ? <span className="absolute -inset-1.5 rounded-full border border-brass/80 shadow-[0_0_16px_rgba(243,230,196,.35)]" /> : null}
-              <PlayerPortrait player={player} size={34} className="!rounded-full !border-2 shadow-lg shadow-black/35" />
+              <PlayerPortrait player={player} size={32} className={cx('!rounded-full !border-2 shadow-lg shadow-black/35', tone.ring)} />
               <span className={cx('absolute -bottom-1.5 -right-2 min-w-[30px] rounded-full px-1.5 py-0.5 font-mono text-[10px] font-extrabold tabular-nums ring-1', ratingBadgeClass(rating, !!player.played))}>
                 {rating ? rating.toFixed(1) : '—'}
               </span>
@@ -121,7 +122,10 @@ function ReportPitch({
               {player.card ? <span className={cx('absolute -right-2 -top-1 h-3.5 w-2.5 rounded-[2px] border border-black/20 shadow', player.card === 'red' ? 'bg-red-500' : 'bg-yellow-300')} /> : null}
               {outOfPosition ? <AlertTriangle size={11} className="absolute -bottom-2 -left-2 fill-amber-400 text-amber-900" /> : null}
             </span>
-            <span className="mt-2.5 block truncate rounded bg-[#071810]/75 px-1.5 py-0.5 text-[10px] font-bold text-bone shadow-sm backdrop-blur-sm group-hover:bg-[#071810]">{surname}</span>
+            <span className="mt-2 flex items-center justify-center gap-1 rounded bg-[#071810]/75 px-1 py-0.5 shadow-sm backdrop-blur-sm group-hover:bg-[#071810]">
+              <span className={cx('shrink-0 rounded px-[3px] font-mono text-[8px] font-bold uppercase tracking-[0.06em]', tone.pill)}>{slot}</span>
+              <span className="min-w-0 truncate text-[10px] font-bold text-bone">{surname}</span>
+            </span>
             <span className="mt-0.5 flex min-h-3 items-center justify-center gap-1 text-[9px] font-bold text-bone drop-shadow">
               {player.match_goals ? <span title={`${player.match_goals} goal${player.match_goals === 1 ? '' : 's'}`}>⚽{player.match_goals > 1 ? player.match_goals : ''}</span> : null}
               {player.match_assists ? <span className="rounded bg-sky-300 px-1 text-[8px] text-[#092131]" title={`${player.match_assists} assist${player.match_assists === 1 ? '' : 's'}`}>A{player.match_assists > 1 ? player.match_assists : ''}</span> : null}

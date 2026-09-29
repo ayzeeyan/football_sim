@@ -99,8 +99,8 @@ describe('formation pitch slot assignment', () => {
     ]);
 
     expect(slots.map((slot) => slot.slot)).toEqual(['LCB', 'RCB']);
-    expect(slots[0].x).toBe(38);
-    expect(slots[1].x).toBe(62);
+    expect(slots[0].x).toBe(36);
+    expect(slots[1].x).toBe(64);
   });
 
   test('Cantalejo legacy payload is inferred as CAM in 4-2-3-1 regardless of row order', () => {
@@ -113,7 +113,7 @@ describe('formation pitch slot assignment', () => {
 
     expect(cantalejo?.slot).toBe('CAM');
     expect(cantalejo?.x).toBe(50);
-    expect(cantalejo?.y).toBe(38);
+    expect(cantalejo?.y).toBe(37);
   });
 
   test('new tactical_slot wins over natural position and reports the playing lane', () => {
@@ -154,19 +154,19 @@ describe('formation pitch slot assignment', () => {
     expect(new Set(slots.map((slot) => slot.slot)).size).toBe(11);
     expect(new Set(slots.map((slot) => `${slot.x}:${slot.y}`)).size).toBe(11);
     expect(slots.find((slot) => slot.slot === 'RW')?.player.player_id).toBe('RW');
-    expect(slots.find((slot) => slot.slot === 'LCB')?.x).toBe(38);
-    expect(slots.find((slot) => slot.slot === 'RCB')?.x).toBe(62);
+    expect(slots.find((slot) => slot.slot === 'LCB')?.x).toBe(36);
+    expect(slots.find((slot) => slot.slot === 'RCB')?.x).toBe(64);
     expect(reversed.map((slot) => `${slot.slot}:${slot.x}:${slot.y}`).sort()).toEqual(
       slots.map((slot) => `${slot.slot}:${slot.x}:${slot.y}`).sort(),
     );
   });
   test('pitchCoords applies formation-specific overrides for the newer shapes', () => {
     // 4-3-3 keeps the historical base positions.
-    expect(pitchCoords('4-3-3', 'LCB')).toEqual([38, 77]);
+    expect(pitchCoords('4-3-3', 'LCB')).toEqual([36, 78]);
     // A back three spreads wide instead of squeezing into the centre-half channel.
-    expect(pitchCoords('3-4-3', 'LCB')).toEqual([26, 76]);
-    expect(pitchCoords('3-5-2', 'RCB')).toEqual([74, 76]);
-    expect(pitchCoords('5-3-2', 'CB')).toEqual([50, 79]);
+    expect(pitchCoords('3-4-3', 'LCB')).toEqual([26, 78]);
+    expect(pitchCoords('3-5-2', 'RCB')).toEqual([74, 78]);
+    expect(pitchCoords('5-3-2', 'CB')).toEqual([50, 80]);
     // A flat midfield bank spreads evenly instead of leaving a central hole.
     expect(pitchCoords('4-1-4-1', 'LCM')).toEqual([38, 50]);
     // Unlisted slots fall back to the shared base table.
@@ -178,7 +178,7 @@ describe('formation pitch slot assignment', () => {
       const positions = slots.map((slot) => (pitchCoords(formation, slot) ?? [0, 0]).join(':'));
       expect(new Set(positions).size, formation).toBe(11);
       slots.forEach((slot) => {
-        expect(pitchCoords(formation, slot), formation + ' coordinate for ' + slot).toBeDefined();
+        expect(pitchCoords(formation, slot), `${formation} coordinate for ${slot}`).toBeDefined();
       });
     });
   });
@@ -187,7 +187,7 @@ describe('formation pitch slot assignment', () => {
     Object.entries(FORMATION_COORD_OVERRIDES).forEach(([formation, overrides]) => {
       const owned = new Set(FORMATION_SLOTS[formation as keyof typeof FORMATION_SLOTS] ?? []);
       Object.keys(overrides).forEach((slot) => {
-        expect(owned.has(slot), formation + ' override for foreign slot ' + slot).toBe(true);
+        expect(owned.has(slot), `${formation} override for foreign slot ${slot}`).toBe(true);
       });
     });
   });
@@ -231,5 +231,35 @@ describe('formation pitch slot assignment', () => {
       { player_id: 'A', position: 'GK', tactical_slot: 'GK' },
       { player_id: 'B', position: 'ST', tactical_slot: 'ST' },
     ])).toBeUndefined();
+  });
+  test('every slot sits inside the safe pitch margins', () => {
+    Object.entries(FORMATION_SLOTS).forEach(([formation, slots]) => {
+      slots.forEach((slot) => {
+        const [x, y] = pitchCoords(formation, slot) ?? [0, 0];
+        expect(x, `${formation} ${slot} x`).toBeGreaterThanOrEqual(10);
+        expect(x, `${formation} ${slot} x`).toBeLessThanOrEqual(90);
+        expect(y, `${formation} ${slot} y`).toBeGreaterThanOrEqual(12);
+        expect(y, `${formation} ${slot} y`).toBeLessThanOrEqual(94);
+      });
+    });
+  });
+
+  test('no two tokens in the same visual row collide at chip width', () => {
+    Object.entries(FORMATION_SLOTS).forEach(([formation, slots]) => {
+      const positions = slots.map((slot) => ({ slot, coords: pitchCoords(formation, slot) ?? [0, 0] }));
+      for (let i = 0; i < positions.length; i += 1) {
+        for (let j = i + 1; j < positions.length; j += 1) {
+          const a = positions[i]!;
+          const b = positions[j]!;
+          const dx = Math.abs(a.coords[0] - b.coords[0]);
+          const dy = Math.abs(a.coords[1] - b.coords[1]);
+          // Adjacent rows: either enough horizontal room for both chips
+          // (>=22% of pitch width) or enough vertical separation (>=6%).
+          if (dy < 6) {
+            expect(dx, `${formation} ${a.slot} vs ${b.slot} (dy ${dy})`).toBeGreaterThanOrEqual(22);
+          }
+        }
+      }
+    });
   });
 });

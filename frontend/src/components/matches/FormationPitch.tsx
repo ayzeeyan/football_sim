@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import type { Player } from '../../types';
 import { cx } from '../../lib/format';
-import { FORMATION_SLOTS, isOutOfPosition, pitchCoords, positionFit, resolveLineupFormation, resolveTacticalAssignments } from '../../lib/tactics';
+import { FORMATION_SLOTS, UNIT_TONE_CLASSES, isOutOfPosition, pitchCoords, positionFit, resolveLineupFormation, resolveTacticalAssignments, unitForSlot } from '../../lib/tactics';
 import { AlertTriangle } from 'lucide-react';
 import { PlayerPortrait } from '../ui/ui';
 
@@ -94,6 +94,8 @@ export const FormationPitch: React.FC<FormationPitchProps> = ({ players, formati
 
       {slots.map(({ player, x, y, slot, naturalPosition, positionFit }) => {
         const outOfPosition = isOutOfPosition(positionFit);
+        const unit = unitForSlot(slot);
+        const tone = UNIT_TONE_CLASSES[unit];
         const surname = player.full_name.split(' ').slice(-1)[0];
         const isFormGood = (player.form ?? 0) >= 4 || player.form_band === 'Excellent';
         const isTired = typeof player.fitness === 'number' && player.fitness < 65;
@@ -104,21 +106,23 @@ export const FormationPitch: React.FC<FormationPitchProps> = ({ players, formati
             key={player.player_id}
             type="button"
             onClick={() => onPlayerClick?.(player)}
-            className={cx('group absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center transition-transform hover:z-20 hover:scale-105 focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass', compact ? 'w-[72px]' : 'w-[86px]')}
+            className={cx('group absolute z-10 -translate-x-1/2 -translate-y-1/2 text-center transition-transform hover:z-20 hover:scale-105 focus-visible:z-20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass', compact ? 'w-[64px]' : 'w-[78px]')}
             style={{ left: `${x}%`, top: `${y}%` }}
             aria-label={`${player.full_name}, natural ${naturalPosition}, playing ${slot}, ${positionFit}, ${player.ovr} overall`}
             title={`${player.full_name} · Natural: ${naturalPosition} · Playing: ${slot} · ${positionFit}${outOfPosition ? ' · Out of position' : ''}`}
           >
             <span className="relative mx-auto block w-fit transition-transform group-hover:-translate-y-0.5">
-              <PlayerPortrait player={player} size={compact ? 28 : 34} className="!rounded-full !border-2 shadow-lg shadow-black/40" />
+              <PlayerPortrait player={player} size={compact ? 26 : 32} className={cx('!rounded-full !border-2 shadow-lg shadow-black/40', tone.ring)} />
               <span className={cx('absolute -bottom-1.5 -right-2 min-w-[28px] rounded-full border px-1.5 py-0.5 font-mono text-[9px] font-extrabold shadow-md', player.ovr >= 88 ? 'border-amber-200/50 bg-brass text-ink' : player.ovr >= 82 ? 'border-emerald-200/40 bg-[#3e9d68] text-white' : player.ovr >= 76 ? 'border-sky-200/35 bg-[#3d6b8a] text-white' : 'border-white/15 bg-[#263b31] text-bone')}>
                 {player.ovr}
               </span>
               <span className={cx('absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full border border-black/40', isUnhappy ? 'bg-purple-400' : isTired ? 'bg-amber-400' : isFormGood ? 'bg-emerald-400' : 'bg-sage/60')} title={isUnhappy ? 'Unhappy' : isTired ? 'Fatigued' : isFormGood ? 'In form' : 'Available'} />
               {outOfPosition ? <AlertTriangle size={11} className="absolute -bottom-2 -left-2 fill-amber-400 text-amber-950" /> : null}
             </span>
-            <span className="mt-2.5 block truncate rounded bg-[#06160f]/85 px-1.5 py-0.5 text-[10px] font-bold text-bone shadow-md backdrop-blur-sm group-hover:text-brass">{surname}</span>
-            <span className="mt-0.5 block text-[8px] font-bold uppercase tracking-[0.08em] text-bone/65">{slot}</span>
+            <span className="mt-2 flex items-center justify-center gap-1 rounded bg-[#06160f]/85 px-1 py-0.5 shadow-md backdrop-blur-sm">
+              <span className={cx('shrink-0 rounded px-[3px] font-mono text-[8px] font-bold uppercase tracking-[0.06em]', tone.pill)}>{slot}</span>
+              <span className="min-w-0 truncate text-[10px] font-bold text-bone group-hover:text-brass">{surname}</span>
+            </span>
           </button>
         );
       })}

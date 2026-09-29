@@ -12,13 +12,13 @@ export const FORMATION_SLOTS: Record<FormationName, readonly string[]> = {
 };
 
 export const FORMATION_PITCH_COORDS: Record<string, [number, number]> = {
-  GK: [50, 91],
-  LB: [16, 75], LWB: [13, 66], LCB: [38, 77], CB: [50, 77], RCB: [62, 77], RB: [84, 75], RWB: [87, 66],
-  LDM: [38, 62], CDM: [50, 62], RDM: [62, 62],
-  LM: [18, 50], LCM: [30, 52], CM: [50, 56], RCM: [70, 52], RM: [82, 50],
-  LAM: [31, 38], CAM: [50, 38], RAM: [69, 38],
-  LW: [18, 20], LF: [34, 24], CF: [50, 24], RF: [66, 24], RW: [82, 20],
-  LST: [38, 18], ST: [50, 18], RST: [62, 18],
+  GK: [50, 92],
+  LB: [14, 73], LWB: [12, 68], LCB: [36, 78], CB: [50, 80], RCB: [64, 78], RB: [86, 73], RWB: [88, 68],
+  LDM: [35, 62], CDM: [50, 62], RDM: [65, 62],
+  LM: [14, 49], LCM: [32, 51], CM: [50, 57], RCM: [68, 51], RM: [86, 49],
+  LAM: [32, 37], CAM: [50, 37], RAM: [68, 37],
+  LW: [17, 21], LF: [35, 24], CF: [50, 22], RF: [65, 24], RW: [83, 21],
+  LST: [37, 17], ST: [50, 15], RST: [63, 17],
 };
 
 // Match-report cards use a portrait pitch with their own goal at the top.
@@ -32,34 +32,35 @@ export const REPORT_PITCH_COORDS: Record<string, [number, number]> = {
   LST: [38, 112], ST: [50, 113], RST: [62, 112],
 };
 
-// Formation-specific layout overrides. The base table was drawn for the
-// original four shapes: reused verbatim it squeezes a back three into the
-// centre-half channel and leaves a hole between a flat midfield bank's
-// interior pairs. Each newer shape gets explicit slot positions so every
-// bank reads correctly on the pitch.
+// Formation-specific layout overrides. The base table places the interior
+// roles for a central trio; shapes with a flat bank of four or a back
+// three/five need their own spreads so adjacent name chips never collide
+// (same-row tokens keep >= 22% horizontal separation, or >= 6% vertical).
 export const FORMATION_COORD_OVERRIDES: Record<FormationName, Record<string, [number, number]>> = {
   '4-3-3': {},
   '4-3-3 Attack': {},
   '4-2-3-1': {},
-  '4-4-2': {},
+  '4-4-2': {
+    LM: [14, 49], LCM: [38, 52], RCM: [62, 52], RM: [86, 49],
+  },
   '3-4-3': {
-    LCB: [26, 76], CB: [50, 79], RCB: [74, 76],
-    LM: [15, 50], LCM: [38, 52], RCM: [62, 52], RM: [85, 50],
+    LCB: [26, 78], CB: [50, 80], RCB: [74, 78],
+    LM: [14, 50], LCM: [38, 53], RCM: [62, 53], RM: [86, 50],
   },
   '3-5-2': {
-    LCB: [26, 76], CB: [50, 79], RCB: [74, 76],
-    LWB: [12, 62], RWB: [88, 62],
-    CDM: [50, 58], LCM: [33, 48], RCM: [67, 48],
-    LST: [38, 17], RST: [62, 17],
+    LCB: [26, 78], CB: [50, 80], RCB: [74, 78],
+    LWB: [12, 64], RWB: [88, 64],
+    CDM: [50, 58], LCM: [32, 48], RCM: [68, 48],
+    LST: [37, 17], RST: [63, 17],
   },
   '4-1-4-1': {
     CDM: [50, 60],
-    LM: [15, 48], LCM: [38, 50], RCM: [62, 50], RM: [85, 48],
+    LM: [14, 48], LCM: [38, 50], RCM: [62, 50], RM: [86, 48],
   },
   '5-3-2': {
-    LWB: [12, 64], LCB: [30, 76], CB: [50, 79], RCB: [70, 76], RWB: [88, 64],
-    CDM: [50, 56], LCM: [33, 47], RCM: [67, 47],
-    LST: [38, 17], RST: [62, 17],
+    LWB: [12, 66], LCB: [28, 78], CB: [50, 80], RCB: [72, 78], RWB: [88, 66],
+    CDM: [50, 57], LCM: [33, 47], RCM: [67, 47],
+    LST: [37, 17], RST: [63, 17],
   },
 };
 
@@ -71,6 +72,27 @@ export function pitchCoords(formation: string | undefined, slot: string): [numbe
   if (overridden) return overridden;
   return FORMATION_PITCH_COORDS[slot];
 }
+
+// Unit tones: the formation reads as banks at a glance when each line of
+// the shape carries its own colour. GK stays amber, defenders sky,
+// midfielders emerald, forwards rose. The slot label always renders as
+// text next to the ring, so colour is never the only signal.
+export type UnitTone = 'gk' | 'def' | 'mid' | 'fwd';
+
+export function unitForSlot(slot: string): UnitTone {
+  const normalized = normalizedPosition(slot);
+  if (normalized === 'GK') return 'gk';
+  if (['LB', 'LCB', 'CB', 'RCB', 'RB', 'LWB', 'RWB'].includes(normalized)) return 'def';
+  if (['LDM', 'CDM', 'RDM', 'DM', 'LM', 'LCM', 'CM', 'RCM', 'RM', 'LAM', 'AM', 'CAM', 'RAM'].includes(normalized)) return 'mid';
+  return 'fwd';
+}
+
+export const UNIT_TONE_CLASSES: Record<UnitTone, { ring: string; pill: string }> = {
+  gk: { ring: 'border-amber-300/80', pill: 'bg-amber-300/15 text-amber-200' },
+  def: { ring: 'border-sky-300/80', pill: 'bg-sky-300/15 text-sky-200' },
+  mid: { ring: 'border-emerald-300/80', pill: 'bg-emerald-300/15 text-emerald-200' },
+  fwd: { ring: 'border-rose-300/80', pill: 'bg-rose-300/15 text-rose-200' },
+};
 
 // inferFormationFromSlots recovers the formation a lineup actually played
 // from the tactical slots the backend assigned: the shape whose slot set
