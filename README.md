@@ -86,8 +86,94 @@ that only starts Vite; you still need the Go server in another terminal.
 | `-dataset` | walks up for `dataset.json` | Club and player universe |
 | `-save` | `saves/career.json` (or `FOOTBALL_SIM_SAVE`) | Career snapshot |
 | `-static` | walks up for `frontend/dist` | Built React app |
+| `-fmoe` | (empty = disabled) | Load a FootballMoE model (`.fmoe`); verified at boot |
+| `-fmoe-features` | (empty) | AI feature flags: `match,injury,rotation,valuation` (requires `-fmoe`) |
+| `-fmoe-record` | `false` | Record simulation outcomes for future offline training |
+| `-fmoe-record-path` | `saves/fmoe_outcomes.jsonl` | Recorder output (JSONL, never trained on at runtime) |
 
 If `frontend/dist` is missing, the API still runs. Build the client, or use Vite as above. Generated frontend output is intentionally not committed.
+
+## FootballMoE (neural intelligence layer)
+
+FootballMoE is a small, self-contained mixture-of-experts neural network that
+adds a learned prediction layer to the simulator. It is pure Go — no Python
+runtime, no ML microservice, no LLM — and it never trains during gameplay.
+
+Architecture (~364k FP32 parameters):
+
+```
+request (typed, 81 feature slots)
+        |
+shared state encoder     Linear -> 96 -> 3x(96-160-96 residual) -> RMSNorm
+        |
+manager traits (24)  +  task embedding (16)
+        |
+top-2 router over four experts: Match | Player | Economy | Club
+        |
+weighted expert mixture (renormalized top-2)
+        |
+task heads: match xG, injury risk, rotation, development, decline,
+            valuation premium, negotiation, contract, board patience
+```
+
+Strict rules that keep the sim deterministic:
+
+- **Offline training only.** Weights change only through `cmd/train`; the
+  runtime loads an immutable `.fmoe` file. There is no self-training loop.
+- **Predictions, not decisions.** The model outputs probabilities and
+  expectations; the simulator's RNG and rules resolve what actually happens.
+- **Feature flags.** Nothing in the game uses the model unless explicitly
+  enabled with `-fmoe-features`; the default simulation is unchanged.
+- **Save compatibility.** Career saves record which model version and hash
+  they run with; a save pinned to a different model disables AI features for
+  the session with a logged notice, never a silent behavior change.
+- **Outcome recorder.** `-fmoe-record` captures pre-match states and later
+  outcomes as `simulation_outcome` JSONL rows for future offline training.
+
+Bootstrap training data lives in `trainingdata/` (~29,600 teacher-warmed
+examples across router, match, player, and economy tasks). Label sources are
+weighted (bootstrap 0.30, simulation 0.80, historical/human 1.00) so real
+outcomes eventually outweigh the teacher.
+
+Train, inspect, and benchmark:
+
+```powershell
+cd backend_go
+go run ./cmd/train -data ../trainingdata -epochs 25 -batch 512 -lr 0.001 -seed 42 `
+    -checkpoint models/football-v1.fmckpt -out models/football-v1.fmoe
+go run ./cmd/modeltool inspect models/football-v1.fmoe
+go run ./cmd/modeltool verify models/football-v1.fmoe
+go run ./cmd/modeltool tensors models/football-v1.fmoe
+go run ./cmd/modeltool benchmark models/football-v1.fmoe
+```
+
+The `.fmoe` format (`FBMOE001`) is a checksummed, little-endian binary with
+architecture metadata, normalization statistics, and a name-addressed tensor
+directory; incompatible weights are rejected at load. Training checkpoints
+(`.fmckpt`) additionally carry AdamW moments and resumable trainer state.
+
+### Gated simulation integration
+
+Three feature flags wire the model into the live simulation. Each site is
+bounded, fails open, and leaves rules, RNG, and world progression with the
+simulator:
+
+| Flag | Site | Effect |
+|---|---|---|
+| `match` | instant engine Poisson rates | learned xG blended at alpha 0.25 inside a `[0.6x, 1.67x]` corridor; implausible hints are rejected outright |
+| `injury` | weekly injury chance | medical base chance bent by at most ~[0.82x, 1.45x] via a calibrated model ratio; the RNG still decides |
+| `valuation` | AI transfer bids | deterministic anchor multiplied by a learned premium clamped to `[0.9, 1.15]`; budgets, caps, and clamps unchanged |
+| `rotation` | reserved | head is trained; wiring into lineup selection awaits its own validation |
+
+A/B evidence (`cmd/abtest`) builds two worlds from the same universe seed,
+advances both, and compares distributions — a model may only replace behavior
+while the goals-per-match band, home advantage, and injury volumes hold:
+
+```powershell
+cd backend_go
+go run ./cmd/abtest -dataset ../dataset.json -model models/football-v2.fmoe `
+    -weeks 22 -seed 777 -features match,injury,valuation
+```
 
 ## Tests
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"football_sim/pkg/datamanager"
+	"football_sim/pkg/footballai"
 	"football_sim/pkg/growth"
 	"football_sim/pkg/matchengine"
 	"football_sim/pkg/persistence"
@@ -37,6 +38,11 @@ type Server struct {
 	TournamentManager *tournament.TournamentManager
 	TransferEngine    *transfers.TransferEngine
 	LiveMatchEngine   *matchengine.LiveMatchEngine
+
+	// aiBrain is the optional FootballMoE runtime: a loaded immutable model
+	// plus an observational outcome recorder. Nil means AI-free simulation;
+	// every consumer must use the nil-safe accessors.
+	aiBrain *footballai.Brain
 
 	mux                       *http.ServeMux
 	upgrader                  websocket.Upgrader
@@ -373,4 +379,30 @@ func writeErrorJSON(w http.ResponseWriter, status int, detail string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"detail": detail})
+}
+
+// AIBrain returns the FootballMoE brain (nil-safe: nil when disabled).
+func (s *Server) AIBrain() *footballai.Brain {
+	if s == nil {
+		return nil
+	}
+	return s.aiBrain
+}
+
+// SetAIBrain installs the FootballMoE brain. Call once at boot, before the
+// mux starts; the brain is read-only afterwards.
+func (s *Server) SetAIBrain(b *footballai.Brain) {
+	if s == nil {
+		return
+	}
+	s.aiBrain = b
+}
+
+// AIModelInfoForSave returns the active model identity for career saves.
+func (s *Server) AIModelInfoForSave() *footballai.AIModelInfo {
+	if s == nil || s.aiBrain == nil || !s.aiBrain.Enabled() {
+		return nil
+	}
+	info := s.aiBrain.Info()
+	return &info
 }

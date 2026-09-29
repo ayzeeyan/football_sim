@@ -19,6 +19,19 @@ type InstantMatchConfig struct {
 	Referee     string // official name or personality: strict, lenient, balanced
 	Competition string // super-league, ucl, super-cup
 	Matchweek   int
+
+	// XGHint is an optional learned expected-goals overlay (FootballMoE).
+	// Nil keeps the engine's own calibrated Poisson rates untouched — the
+	// default simulation is byte-identical without it.
+	XGHint *XGHint
+}
+
+// XGHint carries learned expected goals for one fixture. The values are
+// advisory: SimulateInstantMatch blends them into its Poisson rates inside a
+// bounded corridor and the simulation RNG still resolves the scoreline.
+type XGHint struct {
+	Home float64
+	Away float64
 }
 
 // shootingAccuracyWeatherFactor returns the existing on-target accuracy
@@ -64,6 +77,25 @@ func managerDisplayName(m *managers.ManagerProfile, short string) string {
 		return m.Name
 	}
 	return short + " Manager"
+}
+
+// BlendLambdaWithHint blends a learned expected-goals value into the
+// engine's Poisson rate inside a bounded corridor. Exported so the corridor
+// policy is testable in one place.
+func BlendLambdaWithHint(base, learned float64) float64 {
+	const alpha = 0.25
+	blended := alpha*learned + (1-alpha)*base
+	lo, hi := 0.6*base, 1.67*base
+	if blended < lo {
+		blended = lo
+	}
+	if blended > hi {
+		blended = hi
+	}
+	if blended < 0.2 {
+		blended = 0.2
+	}
+	return blended
 }
 
 func instantOwnGoalCulprit(defendersOnPitch []*models.Player, rng *rand.Rand) *models.Player {
@@ -172,6 +204,10 @@ func SimulateInstantMatch(
 	}
 	homeLambda := math.Max(0.3, (1.45+0.09*delta+homeEdge)*snowFactor)
 	awayLambda := math.Max(0.3, (1.20-0.09*delta-homeEdge*0.5)*snowFactor)
+	if cfg.XGHint != nil {
+		homeLambda = BlendLambdaWithHint(homeLambda, cfg.XGHint.Home)
+		awayLambda = BlendLambdaWithHint(awayLambda, cfg.XGHint.Away)
+	}
 	rawHomeGoals := matchreport.Poisson(rng, homeLambda)
 	rawAwayGoals := matchreport.Poisson(rng, awayLambda)
 

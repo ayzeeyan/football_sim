@@ -24,7 +24,7 @@ func (s *Server) takeCareerSnapshotLocked() ([]byte, uint64) {
 	}
 	// Saves are machine-read snapshots. Compact encoding cuts allocation, disk
 	// writes and JSON parsing on every simulated slate.
-	data, err := json.Marshal(persistence.BuildSnapshot(s.TournamentManager, s.GrowthEngine, s.TransferEngine))
+	data, err := json.Marshal(persistence.BuildSnapshot(s.TournamentManager, s.GrowthEngine, s.TransferEngine, s.AIModelInfoForSave()))
 	if err != nil {
 		log.Printf("[Save] failed to encode career snapshot: %v", err)
 		return nil, 0

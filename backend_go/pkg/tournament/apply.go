@@ -549,6 +549,7 @@ func (tm *TournamentManager) MaybeInjure(homeClub, awayClub *models.Club, report
 				HighPress:     highPress,
 			})
 			chance *= mult
+			chance = tm.adjustInjuryChance(chance, player, fixtureID)
 			if rng.Float64() > chance {
 				continue
 			}

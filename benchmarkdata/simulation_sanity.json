@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "benchmark_version": 1,
+  "purpose": "Sanity guardrails for long simulation runs; not ground-truth realism targets.",
+  "recommended_runs": {
+    "seeds": 100,
+    "seasons_per_seed": 10
+  },
+  "hard_invariants": [
+    "same model hash + same sim version + same seed must reproduce exactly",
+    "no NaN or Inf in model outputs",
+    "probabilities must remain within [0,1]",
+    "currency values must be finite and non-negative where domain rules require it",
+    "no player may appear for two clubs simultaneously",
+    "lineups must obey project position/availability rules",
+    "model inference must not consume an uncontrolled random source"
+  ],
+  "distribution_checks": [
+    {
+      "metric": "goals_per_match",
+      "rule": "compare candidate vs baseline and historical reference; flag large unexplained shifts"
+    },
+    {
+      "metric": "home_draw_away_distribution",
+      "rule": "compare candidate vs baseline and historical reference"
+    },
+    {
+      "metric": "injuries_per_player_season",
+      "rule": "compare distribution, not only mean"
+    },
+    {
+      "metric": "transfers_per_club_season",
+      "rule": "compare median, p10, p90"
+    },
+    {
+      "metric": "manager_sack_rate",
+      "rule": "compare rate and tenure distribution"
+    },
+    {
+      "metric": "player_development_by_age",
+      "rule": "compare histogram by age band"
+    },
+    {
+      "metric": "player_decline_by_age",
+      "rule": "compare histogram by age/position"
+    },
+    {
+      "metric": "free_agent_rate",
+      "rule": "flag runaway accumulation"
+    },
+    {
+      "metric": "club_financial_health",
+      "rule": "flag systemic insolvency/explosive inflation"
+    }
+  ]
+}

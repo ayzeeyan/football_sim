@@ -166,6 +166,9 @@ func (tm *TournamentManager) computeSlateFixture(f *Fixture, rng *rand.Rand) (sl
 		Competition: f.Competition,
 		Matchweek:   f.Matchweek,
 	}
+	// Optional FootballMoE overlay (gated, bounded, nil when disabled).
+	tm.applyMatchModelHint(cfg, home, away, f)
+
 	homeMgr := tm.Managers[f.HomeID]
 	awayMgr := tm.Managers[f.AwayID]
 	report := matchengine.SimulateInstantMatch(home, away, homeMgr, awayMgr, tm.GrowthEngine, cfg, rng)

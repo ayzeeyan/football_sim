@@ -16,7 +16,12 @@ A career football simulator featuring:
 ```
 football_sim/
 ├── backend_go/            # Go server, engine, domain models, tests
-│   ├── cmd/server/        # Entrypoint (CLI flags: -host, -port, -dataset, -save, -static)
+│   ├── cmd/server/        # Entrypoint (CLI flags: -host, -port, -dataset, -save, -static, -fmoe*)
+│   ├── cmd/train/         # Offline FootballMoE trainer (the only weight writer)
+│   ├── cmd/modeltool/     # FootballMoE inspect / verify / tensors / benchmark
+│   ├── models/            # Exported .fmoe deployment models (immutable artifacts)
+│   ├── pkg/footballai/    # FootballMoE network, typed requests, runtime brain, recorder
+│   │   └── weights/       # Custom .fmoe / .fmckpt binary format (FBMOE001)
 │   ├── pkg/models/        # Core entities (Player, Club, Standings, Valuations, Personality, Tactics)
 │   ├── pkg/growth/        # Biometrics, puberty curves, progression, training, aging decline, +5 cap
 │   ├── pkg/datamanager/   # Ingestion of dataset.json, squad deduplication, wonderkid init, youth intakes
@@ -67,7 +72,18 @@ The full architecture breakdown (boot pipeline, weekly simulation lifecycle, dom
    - The Ballon d'Or score includes an explicit +10 bonus for players at the domestic league champion club.
    - Club crests are real assets mapped for all 96 dataset clubs in `frontend/src/lib/clubLogos.ts`; do not replace them with placeholders or introduce a fallback that masks missing mappings.
    - The UI is a neutral football-world viewer: every club, player, transfer, squad, and training decision is machine-selected by the AI world. Selecting a club or fixture provides inspection context only and never implies human club or player management; no endpoint may accept viewer-directed control of AI entities. The viewer's only verbs are simulate (advance the world) and inspect (read state).
-5. **Development & Verification**:
+5. **FootballMoE Neural Layer** (`pkg/footballai`):
+   - Training is offline-only. `cmd/train` is the only component that modifies model weights; the game runtime loads an immutable `.fmoe` and must never update, mutate, or self-train weights during a career. No live weight updates, no online RL, no hidden continual-learning loop.
+   - The network predicts probabilities and expectations; the simulation's deterministic RNG and rules resolve actual outcomes. FootballMoE must never roll events itself.
+   - All gameplay-affecting AI features sit behind `AIConfig` flags (`-fmoe` + `-fmoe-features`), default off. The default simulation path must remain byte-identical when the brain is disabled.
+   - Career saves persist `AIModelInfo` (format/model version + model hash). A save pinned to a different model hash keeps its behavior: the mismatch is logged and AI features stay disabled for the session — never a silent behavior change.
+   - The runtime outcome recorder (`-fmoe-record`) is observational only: it records (pre-state, later outcome) pairs as JSONL for future offline training and must not alter any simulation result.
+   - Inference must be deterministic: same `.fmoe` + same request + same world state = same output, no hidden neural RNG.
+   - The `.fmoe` format (`FBMOE001`, little-endian, checksummed) carries architecture metadata, feature-schema version, and normalization statistics. Loaders must reject incompatible weights and schema mismatches with an error, never fall back silently.
+   - `trainingdata/` bootstrap packs (`label_source = bootstrap_teacher_v1`) are warm-start data, not ground truth. Do not delete or overwrite them; weight label sources (bootstrap < simulation < historical/human) instead.
+   - Every live integration site (match xG hint in `computeSlateFixture`, injury chance in `apply.go`, bid valuation in `transfers`) must stay bounded inside its corridor, fail open on any model error, and reject implausible outputs outright. The corridors and gates live in `pkg/tournament/footballai_bridge.go`, `pkg/transfers/transfers.go`, and `matchengine.BlendLambdaWithHint`.
+   - Before enabling a flag in any release, run `cmd/abtest`: the AI-enabled world must stay inside the baseline realism bands (goals per match 2.2-3.4, home advantage intact). A flag that drifts outside the bands does not ship.
+6. **Development & Verification**:
    - Run backend tests with: `cd backend_go && go test ./...`
    - Run backend static checks with: `cd backend_go && go vet ./...`
    - Run frontend verification with: `cd frontend && bun test && bun run build`

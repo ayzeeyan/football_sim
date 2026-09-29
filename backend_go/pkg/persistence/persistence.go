@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"football_sim/pkg/footballai"
 	"football_sim/pkg/growth"
 	"football_sim/pkg/managers"
 	"football_sim/pkg/matchreport"
@@ -95,35 +96,39 @@ type TransfersSnapshot struct {
 
 // CareerSnapshot contains the full serialized state of the football universe across seasons.
 type CareerSnapshot struct {
-	Version               int                                  `json:"version"`
-	SeasonName            string                               `json:"season_name"`
-	CurrentMatchweek      int                                  `json:"current_matchweek"`
-	MaxMatchweeks         int                                  `json:"max_matchweeks"`
-	SeasonPhase           string                               `json:"season_phase"`
-	RecentResults         []map[string]interface{}             `json:"recent_results,omitempty"`
-	GrowthNotifications   []map[string]interface{}             `json:"growth_notifications,omitempty"`
-	PlayerOfTheWeek       interface{}                          `json:"player_of_the_week,omitempty"`
-	MonthlyAwards         []map[string]interface{}             `json:"monthly_awards,omitempty"`
-	SeasonHistory         []map[string]interface{}             `json:"season_history,omitempty"`
-	Inbox                 []tournament.InboxItem               `json:"inbox"`
-	DerbyHeat             map[string]int                       `json:"derby_heat"`
-	WonderkidMilestones   map[string]map[string]bool           `json:"wonderkid_milestones"`
-	ManagerConsecutiveHot map[string]int                       `json:"manager_consecutive_hot,omitempty"`
-	ManagerLastChange     map[string]int                       `json:"manager_last_change,omitempty"`
-	ManagerHistory        []tournament.ManagerHistoryEntry     `json:"manager_history,omitempty"`
-	Managers              map[string]*managers.ManagerProfile  `json:"managers,omitempty"`
-	Clubs                 map[string]*models.Club              `json:"clubs"`
-	Fixtures              []tournament.Fixture                 `json:"fixtures"`
-	UCLFixtures           []tournament.Fixture                 `json:"ucl_fixtures,omitempty"`
-	SuperCupFixtures      []tournament.Fixture                 `json:"super_cup_fixtures,omitempty"`
-	UCLStage              string                               `json:"ucl_stage,omitempty"`
-	UCLChampionID         string                               `json:"ucl_champion_id,omitempty"`
-	SuperCupStage         string                               `json:"super_cup_stage,omitempty"`
-	SuperCupChampionID    string                               `json:"super_cup_champion_id,omitempty"`
-	RecentTicker          []string                             `json:"recent_results_ticker,omitempty"`
-	Growth                GrowthSnapshot                       `json:"growth"`
-	Transfers             TransfersSnapshot                    `json:"transfers"`
-	ProdigyHomes          map[string]string                    `json:"prodigy_homes,omitempty"`
+	Version               int                                 `json:"version"`
+	SeasonName            string                              `json:"season_name"`
+	CurrentMatchweek      int                                 `json:"current_matchweek"`
+	MaxMatchweeks         int                                 `json:"max_matchweeks"`
+	SeasonPhase           string                              `json:"season_phase"`
+	RecentResults         []map[string]interface{}            `json:"recent_results,omitempty"`
+	GrowthNotifications   []map[string]interface{}            `json:"growth_notifications,omitempty"`
+	PlayerOfTheWeek       interface{}                         `json:"player_of_the_week,omitempty"`
+	MonthlyAwards         []map[string]interface{}            `json:"monthly_awards,omitempty"`
+	SeasonHistory         []map[string]interface{}            `json:"season_history,omitempty"`
+	Inbox                 []tournament.InboxItem              `json:"inbox"`
+	DerbyHeat             map[string]int                      `json:"derby_heat"`
+	WonderkidMilestones   map[string]map[string]bool          `json:"wonderkid_milestones"`
+	ManagerConsecutiveHot map[string]int                      `json:"manager_consecutive_hot,omitempty"`
+	ManagerLastChange     map[string]int                      `json:"manager_last_change,omitempty"`
+	ManagerHistory        []tournament.ManagerHistoryEntry    `json:"manager_history,omitempty"`
+	Managers              map[string]*managers.ManagerProfile `json:"managers,omitempty"`
+	Clubs                 map[string]*models.Club             `json:"clubs"`
+	Fixtures              []tournament.Fixture                `json:"fixtures"`
+	UCLFixtures           []tournament.Fixture                `json:"ucl_fixtures,omitempty"`
+	SuperCupFixtures      []tournament.Fixture                `json:"super_cup_fixtures,omitempty"`
+	UCLStage              string                              `json:"ucl_stage,omitempty"`
+	UCLChampionID         string                              `json:"ucl_champion_id,omitempty"`
+	SuperCupStage         string                              `json:"super_cup_stage,omitempty"`
+	SuperCupChampionID    string                              `json:"super_cup_champion_id,omitempty"`
+	RecentTicker          []string                            `json:"recent_results_ticker,omitempty"`
+	Growth                GrowthSnapshot                      `json:"growth"`
+	Transfers             TransfersSnapshot                   `json:"transfers"`
+	ProdigyHomes          map[string]string                   `json:"prodigy_homes,omitempty"`
+	// AIModel records which FootballMoE model the career runs with. Old
+	// saves have none; loading a different model into such a career is an
+	// explicit, logged decision — never silent.
+	AIModel               *footballai.AIModelInfo              `json:"ai_model,omitempty"`
 	ClubSeasonHistory     map[string][]map[string]interface{}  `json:"club_season_history,omitempty"`
 	MatchweekWeather      map[int]string                       `json:"matchweek_weather,omitempty"`
 	GrowthNotes           []string                             `json:"growth_notes,omitempty"`
@@ -171,10 +176,13 @@ func SavePath() string {
 }
 
 // BuildSnapshot extracts in-memory state into a CareerSnapshot structure.
+// The optional final argument stamps the active FootballMoE model identity
+// onto the save; omit it for save compatibility with AI-free careers.
 func BuildSnapshot(
 	tm *tournament.TournamentManager,
 	ge *growth.GrowthEngine,
 	te *transfers.TransferEngine,
+	aiModel ...*footballai.AIModelInfo,
 ) *CareerSnapshot {
 	if te != nil {
 		te.SyncAllManagerBudgets()
@@ -187,6 +195,7 @@ func BuildSnapshot(
 		sort.Strings(retiredIDs)
 	}
 	snap := &CareerSnapshot{
+		AIModel:               firstAIModel(aiModel),
 		Version:               SaveVersion,
 		SeasonName:            tm.SeasonName,
 		CurrentMatchweek:      tm.CurrentMatchweek,
@@ -285,6 +294,16 @@ func BuildSnapshot(
 	}
 
 	return snap
+}
+
+// firstAIModel returns the first optional AI model argument, if any.
+func firstAIModel(aiModel []*footballai.AIModelInfo) *footballai.AIModelInfo {
+	for _, m := range aiModel {
+		if m != nil {
+			return m
+		}
+	}
+	return nil
 }
 
 // SaveCareer snapshots the live world and writes it atomically to disk.

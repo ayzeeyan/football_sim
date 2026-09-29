@@ -20,8 +20,13 @@ func (s *Server) handleSimulateFixture(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	fid := r.PathValue("fixture_id")
+	obsID := s.recordMatchObservation(fid)
 	res := s.TournamentManager.SimulateFixture(fid)
-	if res["status"] == "error" {
+	simulated := res["status"] != "error"
+	if simulated {
+		s.completeMatchObservation(obsID, res)
+	}
+	if !simulated {
 		msg, _ := res["message"].(string)
 		if msg == "" {
 			msg = "Could not simulate."

@@ -10,10 +10,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"football_sim/pkg/datamanager"
+	"football_sim/pkg/footballai"
+	fmoeWeights "football_sim/pkg/footballai/weights"
 	"football_sim/pkg/growth"
 	"football_sim/pkg/persistence"
 	"football_sim/pkg/server"
@@ -86,12 +89,18 @@ func findUp(rel string) string {
 	return ""
 }
 
+func stdLogger() *log.Logger { return log.Default() }
+
 func main() {
 	hostFlag := flag.String("host", "127.0.0.1", "Host/IP to bind (use 0.0.0.0 explicitly for LAN access)")
 	portFlag := flag.Int("port", 8000, "Port to bind the HTTP and WebSocket server")
 	datasetFlag := flag.String("dataset", "", "Path to dataset.json")
 	saveFlag := flag.String("save", "", "Path to career.json save file")
 	staticFlag := flag.String("static", "", "Path to compiled frontend dist directory")
+	fmoeFlag := flag.String("fmoe", "", "Optional FootballMoE model (.fmoe). Empty keeps the AI-free simulation")
+	fmoeFeatures := flag.String("fmoe-features", "", "Comma-separated FootballMoE features to enable: match,injury,rotation,valuation (requires -fmoe)")
+	fmoeRecord := flag.Bool("fmoe-record", false, "Record simulation outcomes for future offline training (requires -fmoe)")
+	fmoeRecordPath := flag.String("fmoe-record-path", "saves/fmoe_outcomes.jsonl", "Outcome recorder output path")
 	flag.Parse()
 
 	// 1. Resolve asset and save paths
@@ -196,9 +205,56 @@ func main() {
 		log.Fatalf("[Server] FATAL: Universe failed startup validation: %v", err)
 	}
 
-	// 7. Configure the simulation-only HTTP server.
+	// 7. Load the optional FootballMoE brain. All feature flags default to
+	// off; a career whose save pins a different model hash keeps its
+	// behavior — mismatches disable AI features for the session with a log
+	// line, never a silent behavior change.
+	aiCfg := footballai.AIConfig{ModelPath: *fmoeFlag}
+	if *fmoeFlag != "" {
+		// Verify checksum and architecture before the universe boots so a
+		// corrupt model is a hard, early failure — never a mid-career one.
+		if err := fmoeWeights.Verify(*fmoeFlag); err != nil {
+			log.Fatalf("[Server] FATAL: FootballMoE model failed verification: %v", err)
+		}
+		for _, f := range strings.Split(*fmoeFeatures, ",") {
+			switch strings.TrimSpace(f) {
+			case "match":
+				aiCfg.UseMatchModel = true
+			case "injury":
+				aiCfg.UseInjuryModel = true
+			case "rotation":
+				aiCfg.UseRotationModel = true
+			case "valuation":
+				aiCfg.UseValuationModel = true
+			}
+		}
+		if *fmoeRecord {
+			aiCfg.RecordOutcomes = true
+			aiCfg.RecordPath = resolveFile(*fmoeRecordPath, "../"+*fmoeRecordPath)
+		}
+	}
+	brain, err := footballai.NewBrain(aiCfg, stdLogger())
+	if err != nil {
+		log.Fatalf("[Server] FATAL: FootballMoE model failed to load: %v", err)
+	}
+	if brain.Enabled() && snapshot != nil && snapshot.AIModel != nil {
+		if !snapshot.AIModel.Matches(brain.Info()) {
+			log.Printf("[Server] Career pins a different FootballMoE model (save hash %s, loaded hash %s).", snapshot.AIModel.ModelHash, brain.Info().ModelHash)
+			log.Printf("[Server] AI features stay disabled for this session; the career keeps its deterministic behavior.")
+			brain.DisableFeatures()
+		}
+	}
+
+	// 7a. Hand the brain to the world and market engines. Feature flags stay
+	// default-off: nil brain or disabled flags leave both engines on their
+	// existing deterministic paths.
+	tm.AIBrain = brain
+	te.AIBrain = brain
+
+	// 7b. Configure the simulation-only HTTP server.
 	port := getFreePort(*hostFlag, *portFlag)
 	srv := server.NewServer(dm, ge, tm, te, savePath, staticDir)
+	srv.SetAIBrain(brain)
 
 	httpServer := &http.Server{
 		Addr:              net.JoinHostPort(*hostFlag, fmt.Sprintf("%d", port)),
@@ -226,6 +282,7 @@ func main() {
 	log.Printf("[Server] Shutting down gracefully...")
 
 	srv.Stop()
+	brain.Close()
 
 	// Persist state on shutdown. The universe seed remains in its sidecar for
 	// this career and is restored before any simulation system is initialized.

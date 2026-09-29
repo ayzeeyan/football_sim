@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"football_sim/pkg/footballai"
 	"football_sim/pkg/growth"
 	"football_sim/pkg/managers"
 	"football_sim/pkg/matchreport"
@@ -46,11 +47,15 @@ type TournamentManager struct {
 	SeasonHistory         []map[string]interface{}
 	ClubSeasonHistory     map[string][]map[string]interface{}
 	TransferEngine        *transfers.TransferEngine // optional; enables market-watch wire
-	ProdigyHomes          map[string]string
-	LastCareerShuffle     bool
-	FavouriteClubID       string
-	Watch                 WatchlistState
-	RNG                   *rand.Rand
+	// AIBrain is the optional FootballMoE runtime. Nil (or all feature flags
+	// off) keeps every simulation decision on the existing deterministic
+	// paths; it is never persisted and is set once at boot.
+	AIBrain           *footballai.Brain
+	ProdigyHomes      map[string]string
+	LastCareerShuffle bool
+	FavouriteClubID   string
+	Watch             WatchlistState
+	RNG               *rand.Rand
 
 	RecentResults       []string
 	GrowthNotifications []string

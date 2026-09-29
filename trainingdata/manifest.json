@@ -1,0 +1,34 @@
+{
+  "name": "football_sim FootballMoE bootstrap pack",
+  "version": 1,
+  "generated_seed": 20260928,
+  "datasets": [
+    {
+      "file": "router_seed.jsonl",
+      "rows": 5600,
+      "purpose": "Warm-start the top-2 MoE router across football task types."
+    },
+    {
+      "file": "match_seed.jsonl",
+      "rows": 8000,
+      "purpose": "Warm-start match prediction from ratings, form, fitness, fatigue, tactics, absences, and context."
+    },
+    {
+      "file": "player_seed.jsonl",
+      "rows": 8000,
+      "purpose": "Warm-start injury, rotation, development, and decline heads."
+    },
+    {
+      "file": "economy_club_seed.jsonl",
+      "rows": 8000,
+      "purpose": "Warm-start valuation, negotiation, contract, and board-patience heads."
+    }
+  ],
+  "expert_order": [
+    "match",
+    "player",
+    "economy",
+    "club"
+  ],
+  "warning": "These are bootstrap/teacher labels, not historical ground truth. Replace or fine-tune with recorded simulator outcomes and real public football data."
+}

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 
+	"football_sim/pkg/footballai"
 	"football_sim/pkg/managers"
 	"football_sim/pkg/models"
 )
@@ -218,6 +219,76 @@ func sellerCounterPremium(club *models.Club) float64 {
 	return 0.10 + float64(100-club.Identity.Clamp().SellingTendency)*0.002
 }
 
+// valuationPremium returns a bounded learned premium multiplier for one
+// bid (1.0 when the model is disabled or unavailable). The corridor keeps
+// prices within the range the deterministic market already tolerates.
+func (te *TransferEngine) valuationPremium(player *models.Player, buyer *models.Club) float64 {
+	brain := te.AIBrain
+	if brain == nil || !brain.Config().UseValuationModel {
+		return 1
+	}
+	model := brain.Model()
+	if model == nil || player == nil {
+		return 1
+	}
+	pred, err := model.PredictValuation(footballai.ValuationRequest{
+		Player: valuationPlayerFeatures(player),
+		Club: footballai.ClubFeatures{
+			Reputation:          float32(clubReputation(buyer)),
+			FinancialPower:      float32(clubFinancialPower(buyer)),
+			RecruitmentAmbition: 0.5,
+		},
+		Fin: footballai.FinancialContext{
+			ContractYears:     player.ContractYears,
+			SquadRole:         footballai.SquadRoleStarter,
+			BaselineAnchorEUR: float32(models.BaselineValue(player.OVR, player.Age, player.UniverseWonderkid)),
+		},
+	})
+	if err != nil {
+		return 1
+	}
+	premium := float64(pred.PremiumMultiplier)
+	if premium < 0.9 {
+		premium = 0.9
+	}
+	if premium > 1.15 {
+		premium = 1.15
+	}
+	return premium
+}
+
+// valuationPlayerFeatures maps a player for the valuation head. The transfer
+// engine has no growth biometrics, so potential stays neutral (OVR).
+func valuationPlayerFeatures(p *models.Player) footballai.PlayerFeatures {
+	return footballai.PlayerFeatures{
+		Age:          p.Age,
+		OVR:          float32(p.OVR),
+		Potential:    float32(p.OVR),
+		Fitness:      float32(p.Fitness),
+		Sharpness:    float32(p.Sharpness),
+		Morale:       float32(p.Morale),
+		FormModifier: float32(p.FormModifier()),
+		Position:     footballai.PositionFromGamePos(p.Position),
+	}
+}
+
+func clubReputation(c *models.Club) int {
+	if c == nil {
+		return 0
+	}
+	if c.OverallTeamRating > 0 {
+		return c.OverallTeamRating
+	}
+	return 0
+}
+
+func clubFinancialPower(c *models.Club) int {
+	if c == nil {
+		return 0
+	}
+	return int(c.Finances.TransferBudget / 1_000_000)
+}
+
 func transferPriceAnchor(player *models.Player) int64 {
 	if player == nil {
 		return 0
@@ -347,9 +418,13 @@ func (te *TransferEngine) committedSquadSize(clubID string) int {
 
 // TransferEngine oversees the transfer market, negotiations, roster mutations, and news wire.
 type TransferEngine struct {
-	mu                    sync.RWMutex
-	Clubs                 map[string]*models.Club
-	Managers              map[string]*managers.ManagerProfile
+	mu       sync.RWMutex
+	Clubs    map[string]*models.Club
+	Managers map[string]*managers.ManagerProfile
+
+	// AIBrain is the optional FootballMoE runtime, set once at boot. Nil or
+	// flag-off keeps every price and negotiation on the deterministic path.
+	AIBrain               *footballai.Brain
 	CurrentMatchweek      int
 	CurrentDay            int
 	CurrentWeek           int
@@ -1199,6 +1274,10 @@ func (te *TransferEngine) TriggerSpecificBid(buyerID, sellerID, playerID string)
 	if isCanonicalWonderkid(player) {
 		mult = 1.30
 	}
+	// Optional FootballMoE valuation premium over the deterministic anchor,
+	// inside a tight corridor; all downstream caps, clamps, and budget checks
+	// still apply unchanged.
+	mult *= te.valuationPremium(player, buyer)
 	initialBid := int64(float64(transferPriceAnchor(player)) * mult)
 	cap := int64(float64(models.BaselineValue(player.OVR, player.Age, player.UniverseWonderkid)) * 2.5)
 	if cap > 0 && initialBid > cap {
