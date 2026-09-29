@@ -247,8 +247,8 @@ export const PostMatchBroadcast: React.FC<PostMatchBroadcastProps> = ({
             away={away}
             homeRows={homeRows}
             awayRows={awayRows}
-            homeFormation={fixture?.home_formation}
-            awayFormation={fixture?.away_formation}
+            homeFormation={fixture?.home_formation ?? fixture?.report_summary?.home_formation}
+            awayFormation={fixture?.away_formation ?? fixture?.report_summary?.away_formation}
             motmId={motm?.player_id}
             onOpenPlayer={onOpenPlayer}
           />

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Medal, Trophy, Star } from 'lucide-react';
-import { fetchCareerHistory, fetchNXGN50, type CareerHistory, type HistoryResultRow, type SeasonHistoryRow } from '../../services/api';
+import { fetchCareerHistory, fetchFixture, fetchNXGN50, type CareerHistory, type HistoryResultRow, type SeasonHistoryRow } from '../../services/api';
 import type { Fixture, NXGNPlayer } from '../../types';
 import { Card, ClubCrest, EmptyState, LoadingState, PanelHeader } from '../ui/ui';
 import { cx } from '../../lib/format';
@@ -110,11 +110,18 @@ export const HistoryTab: React.FC = () => {
   const [nxgnLoading, setNxgnLoading] = useState(false);
   const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
 
-  const openCompleted = (row: HistoryResultRow) => {
+  const openCompleted = async (row: HistoryResultRow) => {
     const id = row.fixture_id || row.id;
     if (!id) return;
     soundManager.playClick();
-    setOpenFixture({ ...row, id, fixture_id: id } as unknown as Fixture);
+    // Summary rows carry no lineups: load the full fixture so the report
+    // renders its true formation and player rows.
+    try {
+      const detail = await fetchFixture(id);
+      setOpenFixture(detail ?? ({ ...row, id, fixture_id: id } as unknown as Fixture));
+    } catch {
+      setOpenFixture({ ...row, id, fixture_id: id } as unknown as Fixture);
+    }
   };
 
   const load = useCallback(() => {

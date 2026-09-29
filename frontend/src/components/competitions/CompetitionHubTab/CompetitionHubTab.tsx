@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CompetitionDetail, CompetitionFixtureRow, CompetitionSummary, Fixture } from '../../../types';
-import { fetchClubs, fetchCompetition, fetchCompetitions, fetchFavourite, fetchNationsCup } from '../../../services/api';
+import { fetchClubs, fetchCompetition, fetchCompetitions, fetchFavourite, fetchFixture, fetchNationsCup } from '../../../services/api';
 import { PostMatchModal } from '../../postmatch/PostMatchBroadcast';
 import { useAsyncData } from '../../../hooks/useAsyncData';
 import { Crown } from 'lucide-react';
@@ -20,10 +20,17 @@ export const CompetitionHubTab: React.FC<CompetitionHubTabProps> = ({ onWatchFix
   const [fixtureFilter, setFixtureFilter] = useState<'all' | 'results' | 'upcoming'>('all');
   const [pane, setPane] = useState<'overview' | 'table' | 'fixtures' | 'results' | 'stats' | 'history'>('overview');
   const [openFixture, setOpenFixture] = useState<Fixture | null>(null);
-  const openCompleted = (row: CompetitionFixtureRow) => {
+  const openCompleted = async (row: CompetitionFixtureRow) => {
     const id = row.fixture_id || row.id;
     if (!id) return;
-    setOpenFixture({ ...row, id, fixture_id: id } as unknown as Fixture);
+    // Summary rows carry no lineups: load the full fixture so the report
+    // renders its true formation and player rows.
+    try {
+      const detail = await fetchFixture(id);
+      setOpenFixture(detail ?? ({ ...row, id, fixture_id: id } as unknown as Fixture));
+    } catch {
+      setOpenFixture({ ...row, id, fixture_id: id } as unknown as Fixture);
+    }
   };
   const { openPlayer } = usePlayerSheet();
 

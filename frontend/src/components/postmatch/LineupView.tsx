@@ -32,6 +32,22 @@ function contribution(player: MatchPlayerRow): string {
   return bits.join(' ');
 }
 
+// ArchivedLineupNote replaces the pitch for fixtures whose full report was
+// aged out by the retention policy: the shape is still known from the
+// archival summary, the player-level lineup is not.
+function ArchivedLineupNote({ formation }: { formation?: string }) {
+  return (
+    <div className="grid h-[390px] place-items-center rounded-lg border border-line bg-ink/30 px-6 text-center sm:h-[430px]">
+      <div>
+        <p className="text-[12px] font-semibold text-bone">Lineup archived</p>
+        <p className="mt-1 text-[11px] text-sage">
+          Played as a {normalizeFormation(formation)}. Full player lineups are kept for recent matchweeks only.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function ReportPitch({
   club,
   players,
@@ -208,11 +224,19 @@ export function LineupView({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="min-w-0">
           {sideHeader(home, homeXI.length ? homeXI : homeRows, resolvedHomeFormation)}
-          <ReportPitch club={home} players={homeXI.length ? homeXI : homeRows} formation={resolvedHomeFormation} motmId={motmId} onOpen={onOpenPlayer} />
+          {(homeXI.length ? homeXI : homeRows).length ? (
+            <ReportPitch club={home} players={homeXI.length ? homeXI : homeRows} formation={resolvedHomeFormation} motmId={motmId} onOpen={onOpenPlayer} />
+          ) : (
+            <ArchivedLineupNote formation={resolvedHomeFormation} />
+          )}
         </div>
         <div className="min-w-0">
           {sideHeader(away, awayXI.length ? awayXI : awayRows, resolvedAwayFormation)}
-          <ReportPitch club={away} players={awayXI.length ? awayXI : awayRows} formation={resolvedAwayFormation} motmId={motmId} onOpen={onOpenPlayer} />
+          {(awayXI.length ? awayXI : awayRows).length ? (
+            <ReportPitch club={away} players={awayXI.length ? awayXI : awayRows} formation={resolvedAwayFormation} motmId={motmId} onOpen={onOpenPlayer} />
+          ) : (
+            <ArchivedLineupNote formation={resolvedAwayFormation} />
+          )}
         </div>
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
