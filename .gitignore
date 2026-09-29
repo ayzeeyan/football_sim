@@ -24,3 +24,7 @@ saves/*.tmp
 Thumbs.db
 .vscode/
 .idea/
+
+# Training and benchmark data
+.benchmarkdata/
+.trainingdata/
