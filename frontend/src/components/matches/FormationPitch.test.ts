@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Player } from '../../types';
-import { FORMATION_PITCH_COORDS, FORMATION_SLOTS, REPORT_PITCH_COORDS } from '../../lib/tactics';
+import { FORMATION_COORD_OVERRIDES, FORMATION_PITCH_COORDS, FORMATION_SLOTS, REPORT_PITCH_COORDS, inferFormationFromSlots, pitchCoords, resolveLineupFormation } from '../../lib/tactics';
 import { assignFormationSlots } from './FormationPitch';
 
 function player(player_id: string, position: string, category: Player['category']): Player {
@@ -159,5 +159,77 @@ describe('formation pitch slot assignment', () => {
     expect(reversed.map((slot) => `${slot.slot}:${slot.x}:${slot.y}`).sort()).toEqual(
       slots.map((slot) => `${slot.slot}:${slot.x}:${slot.y}`).sort(),
     );
+  });
+  test('pitchCoords applies formation-specific overrides for the newer shapes', () => {
+    // 4-3-3 keeps the historical base positions.
+    expect(pitchCoords('4-3-3', 'LCB')).toEqual([38, 77]);
+    // A back three spreads wide instead of squeezing into the centre-half channel.
+    expect(pitchCoords('3-4-3', 'LCB')).toEqual([26, 76]);
+    expect(pitchCoords('3-5-2', 'RCB')).toEqual([74, 76]);
+    expect(pitchCoords('5-3-2', 'CB')).toEqual([50, 79]);
+    // A flat midfield bank spreads evenly instead of leaving a central hole.
+    expect(pitchCoords('4-1-4-1', 'LCM')).toEqual([38, 50]);
+    // Unlisted slots fall back to the shared base table.
+    expect(pitchCoords('3-4-3', 'GK')).toEqual(FORMATION_PITCH_COORDS.GK);
+  });
+
+  test('every formation renders eleven distinct positions under its overrides', () => {
+    Object.entries(FORMATION_SLOTS).forEach(([formation, slots]) => {
+      const positions = slots.map((slot) => (pitchCoords(formation, slot) ?? [0, 0]).join(':'));
+      expect(new Set(positions).size, formation).toBe(11);
+      slots.forEach((slot) => {
+        expect(pitchCoords(formation, slot), formation + ' coordinate for ' + slot).toBeDefined();
+      });
+    });
+  });
+
+  test('override tables only name slots their formation owns', () => {
+    Object.entries(FORMATION_COORD_OVERRIDES).forEach(([formation, overrides]) => {
+      const owned = new Set(FORMATION_SLOTS[formation as keyof typeof FORMATION_SLOTS] ?? []);
+      Object.keys(overrides).forEach((slot) => {
+        expect(owned.has(slot), formation + ' override for foreign slot ' + slot).toBe(true);
+      });
+    });
+  });
+
+  test('inferFormationFromSlots recovers the played shape from XI slots', () => {
+    (Object.keys(FORMATION_SLOTS) as Array<keyof typeof FORMATION_SLOTS>).forEach((formation) => {
+      const xi = FORMATION_SLOTS[formation].map((slot, index) => ({
+        player_id: 'P' + index,
+        position: slot,
+        tactical_slot: slot,
+      }));
+      const inferred = inferFormationFromSlots(xi);
+      // 3-5-2 and 5-3-2 field the same eleven slots: inference can only
+      // return a member of that pair, never a foreign shape.
+      expect(new Set(FORMATION_SLOTS[inferred as keyof typeof FORMATION_SLOTS])).toEqual(new Set(FORMATION_SLOTS[formation]));
+    });
+  });
+
+  test('resolveLineupFormation reconciles the declaration with the observed slots', () => {
+    const xi = (formation: keyof typeof FORMATION_SLOTS) => FORMATION_SLOTS[formation].map((slot, index) => ({
+      player_id: 'P' + index,
+      position: slot,
+      tactical_slot: slot,
+    }));
+    // A compatible declaration wins and disambiguates the 3-5-2 / 5-3-2 pair.
+    expect(resolveLineupFormation('5-3-2', xi('5-3-2'))).toBe('5-3-2');
+    expect(resolveLineupFormation('3-5-2', xi('5-3-2'))).toBe('3-5-2');
+    // No declaration: the recovered slot-set shape renders.
+    expect(resolveLineupFormation(undefined, xi('5-3-2'))).toBe('3-5-2');
+    // A stale declaration loses to the slots the XI actually played.
+    expect(resolveLineupFormation('4-3-3', xi('3-4-3'))).toBe('3-4-3');
+    // Legacy rows without slots keep the declared shape.
+    expect(resolveLineupFormation('4-4-2', [{ player_id: 'P', position: 'ST' }])).toBe('4-4-2');
+    expect(resolveLineupFormation(undefined, [{ player_id: 'P', position: 'ST' }])).toBe('4-3-3');
+  });
+
+  test('inferFormationFromSlots returns undefined for missing or unknown slot sets', () => {
+    expect(inferFormationFromSlots([])).toBeUndefined();
+    expect(inferFormationFromSlots([{ player_id: 'P', position: 'ST' }])).toBeUndefined();
+    expect(inferFormationFromSlots([
+      { player_id: 'A', position: 'GK', tactical_slot: 'GK' },
+      { player_id: 'B', position: 'ST', tactical_slot: 'ST' },
+    ])).toBeUndefined();
   });
 });

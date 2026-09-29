@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import type { Player } from '../../types';
 import { cx } from '../../lib/format';
-import { FORMATION_PITCH_COORDS, FORMATION_SLOTS, isOutOfPosition, normalizeFormation, positionFit, resolveTacticalAssignments } from '../../lib/tactics';
+import { FORMATION_SLOTS, isOutOfPosition, pitchCoords, positionFit, resolveLineupFormation, resolveTacticalAssignments } from '../../lib/tactics';
 import { AlertTriangle } from 'lucide-react';
 import { PlayerPortrait } from '../ui/ui';
 
@@ -25,12 +25,16 @@ interface PitchSlot {
 }
 
 function assignFormationSlots(players: Player[], formation?: string): PitchSlot[] {
-  const formationSlots = new Set(FORMATION_SLOTS[normalizeFormation(formation)]);
+  // The backend-assigned tactical slots are ground truth for the shape the
+  // XI actually fields; the declared formation only disambiguates or
+  // provides the fallback when a payload carries no slot information.
+  const effectiveFormation = resolveLineupFormation(formation, players);
+  const formationSlots = new Set(FORMATION_SLOTS[effectiveFormation]);
   const usedSlots = new Set<string>();
   const placed: PitchSlot[] = [];
 
   for (const { player, naturalPosition, tacticalSlot, positionFit } of resolveTacticalAssignments(players, formation)) {
-    const coords = FORMATION_PITCH_COORDS[tacticalSlot];
+    const coords = pitchCoords(effectiveFormation, tacticalSlot);
     if (!coords || !formationSlots.has(tacticalSlot) || usedSlots.has(tacticalSlot)) {
       continue;
     }
@@ -52,7 +56,7 @@ export const FormationPitch: React.FC<FormationPitchProps> = ({ players, formati
   const slots = useMemo(() => {
     if (assignments && assignments.length > 0) {
       return assignments.map(({ slot, player }) => {
-        const coords = FORMATION_PITCH_COORDS[slot] ?? [50, 50];
+        const coords = pitchCoords(formation, slot) ?? [50, 50];
         return {
           player,
           x: coords[0],

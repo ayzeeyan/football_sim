@@ -32,6 +32,95 @@ export const REPORT_PITCH_COORDS: Record<string, [number, number]> = {
   LST: [38, 112], ST: [50, 113], RST: [62, 112],
 };
 
+// Formation-specific layout overrides. The base table was drawn for the
+// original four shapes: reused verbatim it squeezes a back three into the
+// centre-half channel and leaves a hole between a flat midfield bank's
+// interior pairs. Each newer shape gets explicit slot positions so every
+// bank reads correctly on the pitch.
+export const FORMATION_COORD_OVERRIDES: Record<FormationName, Record<string, [number, number]>> = {
+  '4-3-3': {},
+  '4-3-3 Attack': {},
+  '4-2-3-1': {},
+  '4-4-2': {},
+  '3-4-3': {
+    LCB: [26, 76], CB: [50, 79], RCB: [74, 76],
+    LM: [15, 50], LCM: [38, 52], RCM: [62, 52], RM: [85, 50],
+  },
+  '3-5-2': {
+    LCB: [26, 76], CB: [50, 79], RCB: [74, 76],
+    LWB: [12, 62], RWB: [88, 62],
+    CDM: [50, 58], LCM: [33, 48], RCM: [67, 48],
+    LST: [38, 17], RST: [62, 17],
+  },
+  '4-1-4-1': {
+    CDM: [50, 60],
+    LM: [15, 48], LCM: [38, 50], RCM: [62, 50], RM: [85, 48],
+  },
+  '5-3-2': {
+    LWB: [12, 64], LCB: [30, 76], CB: [50, 79], RCB: [70, 76], RWB: [88, 64],
+    CDM: [50, 56], LCM: [33, 47], RCM: [67, 47],
+    LST: [38, 17], RST: [62, 17],
+  },
+};
+
+// pitchCoords resolves a slot's pitch position for a specific formation:
+// the formation's override first, then the shared base table.
+export function pitchCoords(formation: string | undefined, slot: string): [number, number] | undefined {
+  const overrides = FORMATION_COORD_OVERRIDES[normalizeFormation(formation)];
+  const overridden = overrides?.[slot];
+  if (overridden) return overridden;
+  return FORMATION_PITCH_COORDS[slot];
+}
+
+// inferFormationFromSlots recovers the formation a lineup actually played
+// from the tactical slots the backend assigned: the shape whose slot set
+// exactly matches the observed slots. Returns undefined when the payload
+// carries no slot information (legacy saves) or matches no known shape.
+export function inferFormationFromSlots<T extends TacticalPlayerLike>(players: T[]): FormationName | undefined {
+  const slots = new Set<string>();
+  for (const player of players) {
+    const slot = normalizedPosition(player.tactical_slot || player.starting_slot);
+    if (slot) slots.add(slot);
+  }
+  if (slots.size === 0) return undefined;
+  const names = Object.keys(FORMATION_SLOTS) as FormationName[];
+  for (const name of names) {
+    const defined = FORMATION_SLOTS[name] ?? [];
+    if (defined.length !== slots.size) continue;
+    let matches = true;
+    for (const slot of slots) {
+      if (!defined.includes(slot)) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return name;
+  }
+  return undefined;
+}
+
+function sameSlotSet(a: FormationName, b: FormationName): boolean {
+  const left = FORMATION_SLOTS[a] ?? [];
+  const right = FORMATION_SLOTS[b] ?? [];
+  if (left.length !== right.length) return false;
+  const seen = new Set(right);
+  return left.every((slot) => seen.has(slot));
+}
+
+// resolveLineupFormation picks the shape a lineup should render as.
+// The backend-assigned tactical slots are ground truth: a stale declared
+// formation loses to the observed slots. A declared formation that is
+// compatible with the observed slots wins, though — 3-5-2 and 5-3-2 field
+// the same eleven slots, and only the declaration can tell them apart.
+// Payloads with no slot information keep the declared (or default) shape.
+export function resolveLineupFormation<T extends TacticalPlayerLike>(formation: string | undefined, players: T[]): FormationName {
+  const inferred = inferFormationFromSlots(players);
+  if (!inferred) return normalizeFormation(formation);
+  const declared = normalizeFormation(formation);
+  if (sameSlotSet(declared, inferred)) return declared;
+  return inferred;
+}
+
 interface TacticalPlayerLike {
   player_id: string;
   full_name?: string;

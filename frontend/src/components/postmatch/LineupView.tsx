@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, Star } from 'lucide-react';
 import type { Club, MatchPlayerRow } from '../../types';
 import { cx, rgbCss } from '../../lib/format';
-import { FORMATION_PITCH_COORDS, FORMATION_SLOTS, isOutOfPosition, normalizeFormation, resolveTacticalAssignments } from '../../lib/tactics';
+import { FORMATION_SLOTS, isOutOfPosition, normalizeFormation, pitchCoords, resolveLineupFormation, resolveTacticalAssignments } from '../../lib/tactics';
 import { ClubCrest, PlayerPortrait } from '../ui/ui';
 
 function ratingClass(rating: number, played: boolean): string {
@@ -45,12 +45,15 @@ function ReportPitch({
   motmId?: string;
   onOpen: (id: string) => void;
 }) {
+  // Finished-match fixtures do not carry a formation field: recover the
+  // shape from the tactical slots the report's XI actually played.
   const slots = useMemo(() => {
-    const assigned = resolveTacticalAssignments(players, formation);
-    const allowed = new Set(FORMATION_SLOTS[normalizeFormation(formation)]);
+    const effectiveFormation = resolveLineupFormation(formation, players);
+    const assigned = resolveTacticalAssignments(players, effectiveFormation);
+    const allowed = new Set(FORMATION_SLOTS[effectiveFormation]);
     const used = new Set<string>();
     return assigned.flatMap(({ player, tacticalSlot }) => {
-      const coords = FORMATION_PITCH_COORDS[tacticalSlot];
+      const coords = pitchCoords(effectiveFormation, tacticalSlot);
       if (!coords || !allowed.has(tacticalSlot) || used.has(tacticalSlot)) return [];
       used.add(tacticalSlot);
       return [{ player, slot: tacticalSlot, x: coords[0], y: coords[1] }];
@@ -187,6 +190,8 @@ export function LineupView({
 }) {
   const homeXI = homeRows.filter((row) => row.starter);
   const awayXI = awayRows.filter((row) => row.starter);
+  const resolvedHomeFormation = resolveLineupFormation(homeFormation, homeXI);
+  const resolvedAwayFormation = resolveLineupFormation(awayFormation, awayXI);
   const sideHeader = (club: Club | null, rows: MatchPlayerRow[], formation?: string) => {
     const rated = rows.filter((row) => row.played !== false && row.rating > 0);
     const average = rated.length ? rated.reduce((sum, row) => sum + row.rating, 0) / rated.length : 0;
@@ -202,12 +207,12 @@ export function LineupView({
       <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="match-section-title">Starting lineups</p><p className="mt-1 text-[11px] text-sage">Select a player for their full profile. Rating colours run from red to elite green.</p></div><div className="flex items-center gap-3 text-[9px] text-sage"><span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full bg-[#1fbd72]" />8.0+</span><span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full bg-[#8fcf58]" />7.0+</span><span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full bg-[#efd36c]" />6.0+</span></div></div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="min-w-0">
-          {sideHeader(home, homeXI.length ? homeXI : homeRows, homeFormation)}
-          <ReportPitch club={home} players={homeXI.length ? homeXI : homeRows} formation={homeFormation} motmId={motmId} onOpen={onOpenPlayer} />
+          {sideHeader(home, homeXI.length ? homeXI : homeRows, resolvedHomeFormation)}
+          <ReportPitch club={home} players={homeXI.length ? homeXI : homeRows} formation={resolvedHomeFormation} motmId={motmId} onOpen={onOpenPlayer} />
         </div>
         <div className="min-w-0">
-          {sideHeader(away, awayXI.length ? awayXI : awayRows, awayFormation)}
-          <ReportPitch club={away} players={awayXI.length ? awayXI : awayRows} formation={awayFormation} motmId={motmId} onOpen={onOpenPlayer} />
+          {sideHeader(away, awayXI.length ? awayXI : awayRows, resolvedAwayFormation)}
+          <ReportPitch club={away} players={awayXI.length ? awayXI : awayRows} formation={resolvedAwayFormation} motmId={motmId} onOpen={onOpenPlayer} />
         </div>
       </div>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
