@@ -32,6 +32,14 @@ jobs:
           # Adapter-only fixes discovered by compile gate; simulator code stays untouched.
           sed -i 's/b\.Points/b.points/g; s/b\.Morale/b.morale/g; s/b\.Played/b.played/g' backend_go/cmd/gen2pretrain/main.go
           sed -i 's/club\.points/club.Points/g; s/club\.morale/club.Morale/g; s/club\.played/club.Played/g' backend_go/cmd/gen2pretrain/main.go
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('backend_go/cmd/gen2pretrain/main.go')
+          s=p.read_text()
+          s=s.replace('"missing_mask": mask}', '"missing_mask": maskInts(mask)}')
+          s += '\nfunc maskInts(m []uint8) []int { out := make([]int, len(m)); for i, v := range m { out[i] = int(v) }; return out }\n'
+          p.write_text(s)
+          PY
           gofmt -w backend_go/cmd/gen2pretrain/main.go
           test -s backend_go/cmd/gen2pretrain/main.go
 
