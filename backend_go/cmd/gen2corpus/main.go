@@ -16,7 +16,7 @@ import (
 
 	"football_sim/pkg/datamanager"
 	"football_sim/pkg/growth"
-	"football_sim/pkg/medical"
+	"football_sim/pkg/medical"\n\t"football_sim/pkg/managers"
 	"football_sim/pkg/models"
 	"football_sim/pkg/tournament"
 	"football_sim/pkg/transfers"
