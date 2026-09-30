@@ -257,7 +257,8 @@ func emitLongTemporal(w *writer,dataset string,root int64) error {
 	}
 	return nil
 }
-\nfunc main(){
+
+func main(){
 	mode:=flag.String("mode","pilot","pilot or full");out:=flag.String("out","","candidate JSONL.GZ");dataset:=flag.String("dataset","../../dataset.json","dataset path");root:=flag.Int64("seed",2609302026,"root seed");flag.Parse()
 	if *out==""{fmt.Fprintln(os.Stderr,"-out required");os.Exit(2)}
 	worlds,weeks,sample,matchPerWeek:=4,8,320,3
