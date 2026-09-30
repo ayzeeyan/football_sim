@@ -176,6 +176,7 @@ func matchFeatures(tm *tournament.TournamentManager,f tournament.Fixture) map[st
 	h,a:=tm.Clubs[f.HomeID],tm.Clubs[f.AwayID]; hm,am:=tm.Managers[f.HomeID],tm.Managers[f.AwayID]
 	hform,aform:="4-3-3","4-3-3"; if hm!=nil{hform=models.FormationForManager(hm.CanonicalStyle(),h.ClubID)}; if am!=nil{aform=models.FormationForManager(am.CanonicalStyle(),a.ClubID)}
 	if hform=="4-3-3 Attack"{hform="4-3-3"}; if aform=="4-3-3 Attack"{aform="4-3-3"}
+	valid:=func(x string)bool{switch x{case "4-3-3","4-2-3-1","3-4-3","3-5-2","4-4-2","4-1-4-1":return true};return false}; if !valid(hform)||!valid(aform){return nil}
 	return map[string]interface{}{"home_team_quality":h.OverallTeamRating,"away_team_quality":a.OverallTeamRating,"home_advantage":.18,
 		"tactical_matchup":clamp(float64(h.OverallTeamRating-a.OverallTeamRating)/100.0,-1,1),"home_formation":hform,"away_formation":aform,
 		"home_fatigue":clamp(squadAvgFatigue(h),0,100),"away_fatigue":clamp(squadAvgFatigue(a),0,100),"home_fitness":clamp(squadAvgFitness(h),0,100),"away_fitness":clamp(squadAvgFitness(a),0,100),
@@ -269,7 +270,7 @@ func main(){
 		for mw:=1;mw<=weeks;mw++ {
 			sel:=selectedPlayers(tm,derive(*root,world,fmt.Sprint(mw)),sample); pre:=map[string]int{}; rec:=map[string]int{}; for _,p:=range sel{pre[p.PlayerID]=p.OVR;rec[p.PlayerID]=tr.recent(p.PlayerID)}
 			slate:=tm.GetSlate(mw);count:=0
-			for _,f:=range slate { if count>=matchPerWeek{break}; if f.Status!="scheduled"{continue}; mt,conf,conv:=matchTargets(tm,f,derive(*root,world,"rollout",fmt.Sprint(mw)),24);if mt==nil{continue};mf:=matchFeatures(tm,f);parent:=fmt.Sprintf("%s_match_%s",world,f.FixtureID); mr:=record("match_competition","match_competition",world,ids(world,"",f.HomeID,parent,""),mf,mt,"repeated_simulator_rollout","MULTI_ROLLOUT","hard",24,conf); if !conv{mr["quality"]=quality(.9,false)}; if err:=w.emit(mr);err!=nil{panic(err)}; if count%2==0{cf:=map[string]interface{}{"source_task_fields":mf};ct:=map[string]interface{}{"dynamic":mt};if err:=w.emit(record("calibration_uncertainty","calibration_uncertainty",world,ids(world,"",f.HomeID,parent,""),cf,ct,"repeated_simulator_rollout","MULTI_ROLLOUT","hard",24,conf));err!=nil{panic(err)}};count++ }
+			for _,f:=range slate { if count>=matchPerWeek{break}; if f.Status!="scheduled"{continue}; mt,conf,conv:=matchTargets(tm,f,derive(*root,world,"rollout",fmt.Sprint(mw)),24);if mt==nil{continue};mf:=matchFeatures(tm,f);if mf==nil{continue};parent:=fmt.Sprintf("%s_match_%s",world,f.FixtureID); mr:=record("match_competition","match_competition",world,ids(world,"",f.HomeID,parent,""),mf,mt,"repeated_simulator_rollout","MULTI_ROLLOUT","hard",24,conf); if !conv{mr["quality"]=quality(.9,false)}; if err:=w.emit(mr);err!=nil{panic(err)}; if count%2==0{cf:=map[string]interface{}{"source_task_fields":mf};ct:=map[string]interface{}{"dynamic":mt};if err:=w.emit(record("calibration_uncertainty","calibration_uncertainty",world,ids(world,"",f.HomeID,parent,""),cf,ct,"repeated_simulator_rollout","MULTI_ROLLOUT","hard",24,conf));err!=nil{panic(err)}};count++ }
 			if res:=tm.SimulateMatchweek(mw);res["status"]!="success"{panic(fmt.Sprintf("world %s matchweek %d: %v",world,mw,res))}
 			tr.advance(tm)
 			for i,p0:=range sel { p:=p0; c:=clubOf(tm,p); if c==nil{continue}; if err:=emitPlayerViews(w,tm,ge,world,p,rec[p.PlayerID],mw,i,pre[p.PlayerID]);err!=nil{panic(err)} }
