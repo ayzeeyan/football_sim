@@ -37,6 +37,9 @@ jobs:
           p=Path('backend_go/cmd/gen2pretrain/main.go')
           s=p.read_text()
           s=s.replace('"missing_mask": mask}', '"missing_mask": maskInts(mask)}')
+          marker='\tif i == 1 {\n\t\treturn "holdout_internal"\n\t}'
+          replacement='\tif i == 2 {\n\t\treturn "val"\n\t}\n'+marker
+          s=s.replace(marker,replacement,1)
           s += '\nfunc maskInts(m []uint8) []int { out := make([]int, len(m)); for i, v := range m { out[i] = int(v) }; return out }\n'
           p.write_text(s)
           PY
