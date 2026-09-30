@@ -188,7 +188,7 @@ func matchTargets(tm *tournament.TournamentManager,f tournament.Fixture,root int
 	ok:=0
 	for i:=0;i<rollouts;i++{r,e:=tm.WhatIfSandbox(f.FixtureID,derive(root,f.FixtureID,fmt.Sprint(i)));if e!=""||r==nil{continue};ok++;g:=float64(r.Hypothetical.HomeGoals-r.Hypothetical.AwayGoals);vals=append(vals,g);sxh+=r.Hypothetical.HomeXG;sxa+=r.Hypothetical.AwayXG;if g>0{hw++}else if g<0{aw++}else{dw++}}
 	if ok==0{return nil,0,false}; mean:=0.0; for _,v:=range vals{mean+=v};mean/=float64(ok);for _,v:=range vals{d:=v-mean;vg+=d*d};if ok>1{vg/=float64(ok-1)};se:=math.Sqrt(vg/float64(ok));conv:=ok>=16&&se<=.5
-	return map[string]interface{}{"home_scoring_intensity":clamp(sxh/float64(ok),0,4),"away_scoring_intensity":clamp(sxa/float64(ok),0,4),"expected_home_goals":clamp(sxh/float64(ok),0,4),"expected_away_goals":clamp(sxa/float64(ok),0,4),"expected_goal_difference":clamp(mean,-4,4),"home_probability":float64(hw)/float64(ok),"draw_probability":float64(dw)/float64(ok),"away_probability":float64(aw)/float64(ok),"rollout_variance":vg,"rollout_standard_error":se},clamp(1-se,.5,1),conv
+	return map[string]interface{}{"home_scoring_intensity":clamp(sxh/float64(ok),0,4),"away_scoring_intensity":clamp(sxa/float64(ok),0,4),"expected_home_goals":clamp(sxh/float64(ok),0,4),"expected_away_goals":clamp(sxa/float64(ok),0,4),"expected_goal_difference":clamp(mean,-4,4),"home_probability":float64(hw)/float64(ok),"draw_probability":float64(dw)/float64(ok),"away_probability":float64(aw)/float64(ok)},clamp(1-se,.5,1),conv
 }
 func makeWorld(dataset string,root int64,index int)(*tournament.TournamentManager,*growth.GrowthEngine,error){
 	ws:=derive(root,"world",fmt.Sprint(index)); ge:=growth.NewGrowthEngine(derive(ws,"development")); dm:=datamanager.NewDataManager(dataset,ge); dm.SetSeed(derive(ws,"datamanager"))
@@ -245,11 +245,11 @@ func trajectorySnapshot(tm *tournament.TournamentManager,ge *growth.GrowthEngine
 	return out
 }
 func emitLongTemporal(w *writer,dataset string,root int64) error {
-	tm,ge,err:=makeWorld(dataset,root,9000);if err!=nil{return err};world:="world_temporal_9000"; snaps:=[]map[string]trajState{trajectorySnapshot(tm,ge,900,derive(root,world,"s0"))}
+	tm,ge,err:=makeWorld(dataset,root,9000);if err!=nil{return err};world:="world_temporal_9000"; snaps:=[]map[string]trajState{trajectorySnapshot(tm,ge,900,derive(root,world,"cohort"))}
 	for season:=1;season<=12;season++ {
 		for mw:=1;mw<=tm.MaxMatchweeks;mw++ { res:=tm.SimulateMatchweek(mw);if res["status"]!="success"{return fmt.Errorf("temporal season %d week %d: %v",season,mw,res)} }
 		if res:=tm.ResetNewSeason();res["status"]!="success"{return fmt.Errorf("temporal reset season %d: %v",season,res)}
-		snaps=append(snaps,trajectorySnapshot(tm,ge,900,derive(root,world,fmt.Sprint(season))))
+		snaps=append(snaps,trajectorySnapshot(tm,ge,900,derive(root,world,"cohort")))
 	}
 	horizons:=[]int{1,2,3,5,8,10,12}
 	for _,h:=range horizons {
