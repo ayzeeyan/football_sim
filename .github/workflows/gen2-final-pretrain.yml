@@ -1,0 +1,105 @@
+name: Gen2 Final Pretrain Corpus
+
+on:
+  push:
+    branches:
+      - chatgpt/gen2-final-pretrain-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      ROOT: training_pipeline/pretrain/gen2_final_v1
+      GEN2_GO_VERSION: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/gen2-final-pretrain-v1
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend_go/go.mod
+      - name: Record toolchain
+        run: |
+          echo "GEN2_GO_VERSION=$(go version)" >> "$GITHUB_ENV"
+          git rev-parse HEAD
+          git status --porcelain
+      - name: Build and test simulator
+        working-directory: backend_go
+        run: |
+          go test ./...
+          go vet ./...
+          go build ./cmd/server
+          go build ./cmd/gen2corpus
+      - name: Install Parquet writer
+        run: python -m pip install --disable-pip-version-check pyarrow==17.0.0
+      - name: Generate real simulator-backed pilot
+        working-directory: backend_go
+        run: |
+          go run ./cmd/gen2corpus -mode pilot -dataset ../dataset.json -seed 2609302026 -out ../$ROOT/generation/pilot_candidates.jsonl.gz
+      - name: Validate pilot
+        run: |
+          python $ROOT/generation/finalize.py --mode pilot --candidates $ROOT/generation/pilot_candidates.jsonl.gz --root $ROOT
+          test -f $ROOT/generation/PILOT_PASS
+      - name: Full simulator generation
+        working-directory: backend_go
+        run: |
+          go run ./cmd/gen2corpus -mode full -dataset ../dataset.json -seed 2609302026 -out ../$ROOT/generation/full_candidates.jsonl.gz
+      - name: Finalize Parquet corpus
+        run: |
+          python $ROOT/generation/finalize.py --mode full --candidates $ROOT/generation/full_candidates.jsonl.gz --root $ROOT
+      - name: Physical verification
+        run: |
+          python - <<'PY'
+          import json, pathlib, random, hashlib
+          import pyarrow.parquet as pq
+          root=pathlib.Path("training_pipeline/pretrain/gen2_final_v1")
+          man=json.load(open(root/"manifests/dataset_manifest.json"))
+          assert man["accepted_count"] >= 500000
+          assert man["split_counts"]["train"] > 0
+          shards=man["shards"]
+          assert shards
+          checked=0
+          for s in shards:
+              p=root/s["file"]
+              assert p.stat().st_size>0
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==s["sha256"]
+              t=pq.read_table(p)
+              assert t.num_rows==s["row_count"] and t.num_rows>0
+              if checked<1000:
+                  take=min(1000-checked,t.num_rows)
+                  for i in range(take):
+                      json.loads(t["features_json"][i].as_py())
+                      json.loads(t["targets_json"][i].as_py())
+                  checked+=take
+          assert checked>=1000
+          print("physical rows checked",checked)
+          PY
+      - name: Remove transient candidate streams
+        run: |
+          rm -f $ROOT/generation/pilot_candidates.jsonl.gz $ROOT/generation/full_candidates.jsonl.gz
+          rm -rf $ROOT/generation/pilot_accepted $ROOT/generation/full_accepted
+          rm -f $ROOT/quality/pilot_accepted_feature_fingerprints.txt.gz $ROOT/quality/pilot_accepted_row_fingerprints.txt.gz
+      - name: Package corpus
+        run: |
+          zip -q -r FMoE_Gen2_FinalPretrain_v1.zip training_pipeline/pretrain/gen2_final_v1
+          unzip -t FMoE_Gen2_FinalPretrain_v1.zip
+          sha256sum FMoE_Gen2_FinalPretrain_v1.zip | tee FMoE_Gen2_FinalPretrain_v1.zip.sha256
+      - name: Upload corpus artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FMoE_Gen2_FinalPretrain_v1
+          path: |
+            FMoE_Gen2_FinalPretrain_v1.zip
+            FMoE_Gen2_FinalPretrain_v1.zip.sha256
+            training_pipeline/pretrain/gen2_final_v1/reports/
+            training_pipeline/pretrain/gen2_final_v1/manifests/
+            training_pipeline/pretrain/gen2_final_v1/quality/full_accepted_feature_fingerprints.txt.gz
+            training_pipeline/pretrain/gen2_final_v1/quality/full_accepted_row_fingerprints.txt.gz
+          if-no-files-found: warn
+          retention-days: 7
