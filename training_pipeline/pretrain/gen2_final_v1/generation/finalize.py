@@ -147,7 +147,11 @@ def finalize(args):
             g=group_id(r);sp=split_of(g);groups[g].add(sp);r["split"]=sp
             eid="ex_"+hashlib.sha256((r.get("generation_version","")+"|"+g+"|"+r["task"]+"|"+sfp).encode()).hexdigest()[:24];r["example_id"]=eid
             score=float(r["quality"]["quality_score"]);r["acceptance_class"]=accepted_class(score)
-            outs[sp].write(canon(r)+"\n");accepted[sp]+=1;tasks[r["task"]]+=1;families[r.get("task_family","")]+=1;diffs[r.get("difficulty","core")]+=1;sources[r["metadata"]["label_source"]]+=1;classes[r["acceptance_class"]]+=1; quality_values.append(score)\n            if r["task"]=="temporal_transition": horizons[str(int(r["features"]["horizon_seasons"]))]+=1\n            if r["task"]=="counterfactual": cf_parents.add(str(r.get("ids",{}).get("parent_state_id","")))
+            outs[sp].write(canon(r)+"\n");accepted[sp]+=1;tasks[r["task"]]+=1;families[r.get("task_family","")]+=1;diffs[r.get("difficulty","core")]+=1;sources[r["metadata"]["label_source"]]+=1;classes[r["acceptance_class"]]+=1; quality_values.append(score)
+            if r["task"]=="temporal_transition":
+                horizons[str(int(r["features"]["horizon_seasons"]))]+=1
+            if r["task"]=="counterfactual":
+                cf_parents.add(str(r.get("ids",{}).get("parent_state_id","")))
             if sp=="train":
                 for k,v in scalar_leaves(r["features"]):stats[k].add(v,eid+"|"+k)
             if len(inspections)<400:inspections.append(r)
