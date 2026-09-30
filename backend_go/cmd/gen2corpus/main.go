@@ -228,7 +228,7 @@ func main(){
 	mode:=flag.String("mode","pilot","pilot or full");out:=flag.String("out","","candidate JSONL.GZ");dataset:=flag.String("dataset","../../dataset.json","dataset path");root:=flag.Int64("seed",2609302026,"root seed");flag.Parse()
 	if *out==""{fmt.Fprintln(os.Stderr,"-out required");os.Exit(2)}
 	worlds,weeks,sample,matchPerWeek:=4,8,320,3
-	if *mode=="full"{worlds,weeks,sample,matchPerWeek=32,24,220,4}
+	if *mode=="full"{worlds,weeks,sample,matchPerWeek=40,28,260,4}
 	w,err:=newWriter(*out);if err!=nil{panic(err)};defer w.close()
 	for wi:=0;wi<worlds;wi++ {
 		tm,ge,err:=makeWorld(*dataset,*root,wi);if err!=nil{panic(err)}; world:=fmt.Sprintf("world_%03d",wi);tr:=newTracker();tr.advance(tm)
