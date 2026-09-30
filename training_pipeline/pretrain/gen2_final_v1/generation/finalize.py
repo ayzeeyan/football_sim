@@ -129,7 +129,7 @@ def finalize(args):
     tmp=root/"generation"/f"{args.mode}_accepted"; tmp.mkdir(exist_ok=True)
     outs={s:gzip.open(tmp/f"{s}.jsonl.gz","wt",encoding="utf-8") for s in ("train","val","holdout_internal")}
     seen_state=set();seen_ex=set();reject=Counter();accepted=Counter();tasks=Counter();families=Counter();diffs=Counter();sources=Counter();classes=Counter();groups=defaultdict(set)
-    stats=defaultdict(Stats); inspections=[]; feat_fp_path=root/"quality"/f"{args.mode}_accepted_feature_fingerprints.txt.gz"; row_fp_path=root/"quality"/f"{args.mode}_accepted_row_fingerprints.txt.gz"
+    stats=defaultdict(Stats); inspections=[]; horizons=Counter(); quality_values=[]; cf_parents=set(); feat_fp_path=root/"quality"/f"{args.mode}_accepted_feature_fingerprints.txt.gz"; row_fp_path=root/"quality"/f"{args.mode}_accepted_row_fingerprints.txt.gz"
     ff=gzip.open(feat_fp_path,"wt",encoding="utf-8");rf=gzip.open(row_fp_path,"wt",encoding="utf-8")
     opener=gzip.open if args.candidates.endswith(".gz") else open
     cand=0
@@ -147,7 +147,7 @@ def finalize(args):
             g=group_id(r);sp=split_of(g);groups[g].add(sp);r["split"]=sp
             eid="ex_"+hashlib.sha256((r.get("generation_version","")+"|"+g+"|"+r["task"]+"|"+sfp).encode()).hexdigest()[:24];r["example_id"]=eid
             score=float(r["quality"]["quality_score"]);r["acceptance_class"]=accepted_class(score)
-            outs[sp].write(canon(r)+"\n");accepted[sp]+=1;tasks[r["task"]]+=1;families[r.get("task_family","")]+=1;diffs[r.get("difficulty","core")]+=1;sources[r["metadata"]["label_source"]]+=1;classes[r["acceptance_class"]]+=1
+            outs[sp].write(canon(r)+"\n");accepted[sp]+=1;tasks[r["task"]]+=1;families[r.get("task_family","")]+=1;diffs[r.get("difficulty","core")]+=1;sources[r["metadata"]["label_source"]]+=1;classes[r["acceptance_class"]]+=1; quality_values.append(score)\n            if r["task"]=="temporal_transition": horizons[str(int(r["features"]["horizon_seasons"]))]+=1\n            if r["task"]=="counterfactual": cf_parents.add(str(r.get("ids",{}).get("parent_state_id","")))
             if sp=="train":
                 for k,v in scalar_leaves(r["features"]):stats[k].add(v,eid+"|"+k)
             if len(inspections)<400:inspections.append(r)
@@ -193,6 +193,19 @@ def finalize(args):
     write_json(root/"schema"/"numerical_normalization.json",{"football_sim_commit_sha":SIM_COMMIT,"fit_split":"train_only","features":norm})
     write_json(root/"schema"/"categorical_vocabulary.json",{"football_sim_commit_sha":SIM_COMMIT,"unk_index":0,"vocabularies":{k:["<UNK>"]+sorted(v) for k,v in VOCAB.items()}})
     write_json(root/"schema"/"feature_order.json",{"football_sim_commit_sha":SIM_COMMIT,"architecture_id":ARCH,"numerical_feature_order":NUM_ORDER,"missing_mask_order":NUM_ORDER,"categorical_feature_order":CAT_ORDER,"multi_hot_order":["changed_features"],"task_target_order":TARGET_ORDER})
+    # Per-task causal leakage contracts: model-visible inputs and targets only.
+    task_contracts={}
+    for task in sorted(TASKS):
+        task_contracts[task]={
+            "football_sim_commit_sha":SIM_COMMIT,
+            "task":task,
+            "input_features":"governed by frozen model schema / feature_order.json",
+            "target_fields":TARGET_ORDER.get(task,["dynamic"]),
+            "forbidden_fields":["post_outcome_fields","future_state_except_declared_target","identity_database_ids","generation_seed","row_number","shard_number"],
+            "future_derived_fields":[],
+            "metadata_only_fields":["example_id","world_id","career_id","trajectory_id","parent_state_id","player_id","club_id","generation_version","simulator_commit","split","quality_score","label_confidence"],
+        }
+        write_json(root/"schema"/"task_leakage_contracts"/f"{task}.json",task_contracts[task])
     write_json(root/"schema"/"safetensors_model_contract.json",{"football_sim_commit_sha":SIM_COMMIT,"architecture_id":ARCH,"architecture_version":1,"tensor_schema_version":"helix_gen2_s_w128_r24_raw_v1","parameters":473543,"width":128,"expert_rank":24,"numerical_representation":"RAW normalized scalar + missing mask","categorical_representation":"CURRENT frozen categorical encoding","weight_format":"safetensors","pickle_weight_dependency":"NONE","required_metadata":["architecture_id","architecture_version","tensor_schema_version","feature_order_hash","schema_hash","normalization_hash","categorical_vocabulary_hash","training_dataset_manifest_hash","dtype","model_version"]})
     capability={"football_sim_commit_sha":SIM_COMMIT,"tasks":[
       {"task":"match_competition","go_packages":["tournament","matchengine","matchreport"],"structs":["TournamentManager","Fixture","WhatIfResult"],"functions":["GetSlate","WhatIfSandbox","SimulateMatchweek"],"label_source":"repeated simulator rollout","stochastic":True,"multi_rollout":True,"limitations":"rollout labels are sampled only for a subset of weekly fixtures"},
@@ -207,9 +220,15 @@ def finalize(args):
     write_json(root/"generation"/"split_policy.json",{"football_sim_commit_sha":SIM_COMMIT,"grouping":"highest dependency group; world first","train":.94,"val":.04,"holdout_internal":.02,"method":"sha256(group_id) modulo 10000"})
     write_json(root/"generation"/"simulator_build_report.json",{"football_sim_commit_sha":SIM_COMMIT,"go_version":os.environ.get("GEN2_GO_VERSION","unknown"),"platform":os.environ.get("RUNNER_OS","unknown"),"test_command":"go test ./...","test_result":"PASS","vet_command":"go vet ./...","vet_result":"PASS","build_result":"PASS","failed_tests":[]})
     write_json(root/"quality"/"rejection_report.json",{"football_sim_commit_sha":SIM_COMMIT,"candidate_count":cand,"accepted_count":total,"rejections":dict(reject)})
-    manifest={"dataset_name":DATASET,"dataset_generation_version":"gen2_final_v1","architecture_id":ARCH,"football_sim_repository":"ayzeeyan/football_sim","football_sim_commit_sha":SIM_COMMIT,"go_version":os.environ.get("GEN2_GO_VERSION","unknown"),"candidate_count":cand,"accepted_count":total,"rejection_breakdown":dict(reject),"split_counts":dict(accepted),"task_counts":dict(tasks),"task_family_counts":dict(families),"difficulty_distribution":dict(diffs),"label_source_distribution":dict(sources),"acceptance_classes":dict(classes),"shards":shard_manifest,"protected_decontamination_status":"PENDING_EXACT_EXTERNAL_CHECK","architecture_search_manifest_sha256":"e9bcf66e8507427693bc5497074fe0ff9e3fee17c1fb9d94730f8a952973110f","architecture_search_evaluation_spec_sha256":"da9860d03a9654552376d62ea93fe3c57438485ee32d4722a2ea938087c40ed7","complete_for_production":complete}
+    manifest={"dataset_name":DATASET,"dataset_generation_version":"gen2_final_v1","architecture_id":ARCH,"football_sim_repository":"ayzeeyan/football_sim","football_sim_commit_sha":SIM_COMMIT,"go_version":os.environ.get("GEN2_GO_VERSION","unknown"),"candidate_count":cand,"accepted_count":total,"rejection_breakdown":dict(reject),"split_counts":dict(accepted),"task_counts":dict(tasks),"task_family_counts":dict(families),"difficulty_distribution":dict(diffs),"label_source_distribution":dict(sources),"acceptance_classes":dict(classes),"temporal_horizon_counts":dict(horizons),"counterfactual_parent_states":len([x for x in cf_parents if x]),"shards":shard_manifest,"protected_decontamination_status":"PENDING_EXACT_EXTERNAL_CHECK","architecture_search_manifest_sha256":"e9bcf66e8507427693bc5497074fe0ff9e3fee17c1fb9d94730f8a952973110f","architecture_search_evaluation_spec_sha256":"da9860d03a9654552376d62ea93fe3c57438485ee32d4722a2ea938087c40ed7","complete_for_production":complete}
     feature_order_hash=hash_file(root/"schema"/"feature_order.json");normalization_hash=hash_file(root/"schema"/"numerical_normalization.json");vocab_hash=hash_file(root/"schema"/"categorical_vocabulary.json");quality_hash=hash_file(root/"generation"/"quality_thresholds.json");split_hash=hash_file(root/"generation"/"split_policy.json")
-    manifest.update({"feature_order_hash":feature_order_hash,"normalization_hash":normalization_hash,"categorical_vocabulary_hash":vocab_hash,"quality_threshold_hash":quality_hash,"split_policy_hash":split_hash})
+    schema_files=sorted((root/"schema").rglob("*.json"))
+    schema_hash=sha_obj({str(p.relative_to(root)):hash_file(p) for p in schema_files})
+    generator_path=Path("backend_go/cmd/gen2corpus/main.go")
+    generation_code_hash=sha_obj({"finalize.py":hash_file(Path(__file__)),"gen2corpus":hash_file(generator_path) if generator_path.exists() else "unavailable"})
+    qmean=(sum(quality_values)/len(quality_values)) if quality_values else 0.0
+    qmedian=statistics.median(quality_values) if quality_values else 0.0
+    manifest.update({"feature_order_hash":feature_order_hash,"normalization_hash":normalization_hash,"categorical_vocabulary_hash":vocab_hash,"quality_threshold_hash":quality_hash,"split_policy_hash":split_hash,"schema_hash":schema_hash,"generation_code_hash":generation_code_hash,"quality_distribution":{"mean":qmean,"median":qmedian,"min":min(quality_values) if quality_values else 0.0,"max":max(quality_values) if quality_values else 0.0}})
     write_json(root/"manifests"/"shard_manifest.json",{"football_sim_commit_sha":SIM_COMMIT,"shards":shard_manifest})
     manifest["shard_manifest_hash"]=hash_file(root/"manifests"/"shard_manifest.json")
     write_json(root/"manifests"/"dataset_manifest.json",manifest)
@@ -220,7 +239,7 @@ def finalize(args):
         for r in inspections[:200]:f.write(canon(r)+"\n")
     status="QUALITY TARGET ACHIEVED" if complete else "QUALITY TARGET PARTIALLY ACHIEVED"
     write_text(root/"reports"/"quality_report.md",f"# Quality Report\n\nStatus: **{status}**\n\nCandidates: {cand:,}\nAccepted: {total:,}\nTrain: {accepted['train']:,}\nValidation: {accepted['val']:,}\nInternal holdout: {accepted['holdout_internal']:,}\n\nExact architecture-search decontamination is marked pending until the protected 17,500 fingerprints are checked outside the Actions runner.\n")
-    for name in ("simulator_integration_report","temporal_report","counterfactual_report","rollout_report","feature_distribution_report"):
+    write_text(root/"reports"/"temporal_report.md","# Temporal Report\\n\\nfootball_sim commit: "+SIM_COMMIT+"\\n\\nHorizon accepted counts:\\n\\n```json\\n"+json.dumps(dict(horizons),indent=2)+"\\n```\\n")\n    write_text(root/"reports"/"counterfactual_report.md","# Counterfactual Report\\n\\nfootball_sim commit: "+SIM_COMMIT+f"\\n\\nAccepted counterfactual parent states: {len([x for x in cf_parents if x]):,}\\n")\n    for name in ("simulator_integration_report","rollout_report","feature_distribution_report"):
         write_text(root/"reports"/f"{name}.md",f"# {name.replace('_',' ').title()}\n\nfootball_sim commit: {SIM_COMMIT}\n\nSee dataset_manifest.json and simulator_capability_map.json for measured counts and limitations.\n")
     write_text(root/"README.md",f"# {DATASET}\n\nSimulator-grounded pretraining corpus for **{ARCH}**.\n\nPinned simulator: ayzeeyan/football_sim@{SIM_COMMIT}.\n\nRows are stored as Parquet+Zstandard. Model-visible features and targets are canonical JSON columns governed by schema/feature_order.json.\n\nStatus before external protected-fingerprint verification: {status}.\n")
     print("\nFOOTBALLMOE GEN-2 FINAL PRETRAINING CORPUS v1")
