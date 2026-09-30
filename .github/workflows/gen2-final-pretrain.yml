@@ -31,6 +31,7 @@ jobs:
           cat .gen2/gen_rows.b64.part* | tr -d '\n\r' | base64 -d > backend_go/cmd/gen2pretrain/main.go
           # Adapter-only fixes discovered by compile gate; simulator code stays untouched.
           sed -i 's/b\.Points/b.points/g; s/b\.Morale/b.morale/g; s/b\.Played/b.played/g' backend_go/cmd/gen2pretrain/main.go
+          sed -i 's/club\.points/club.Points/g; s/club\.morale/club.Morale/g; s/club\.played/club.Played/g' backend_go/cmd/gen2pretrain/main.go
           gofmt -w backend_go/cmd/gen2pretrain/main.go
           test -s backend_go/cmd/gen2pretrain/main.go
 
