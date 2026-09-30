@@ -245,16 +245,57 @@ func trajectorySnapshot(tm *tournament.TournamentManager,ge *growth.GrowthEngine
 	return out
 }
 func emitLongTemporal(w *writer,dataset string,root int64) error {
-	tm,ge,err:=makeWorld(dataset,root,9000);if err!=nil{return err};world:="world_temporal_9000"; snaps:=[]map[string]trajState{trajectorySnapshot(tm,ge,1800,derive(root,world,"cohort"))}
+	tm,ge,err:=makeWorld(dataset,root,9000)
+	if err!=nil{return err}
+	world:="world_temporal_9000"
+	cohortSeed:=derive(root,world,"cohort")
+	snaps:=[]map[string]trajState{trajectorySnapshot(tm,ge,1800,cohortSeed)}
 	for season:=1;season<=12;season++ {
-		for mw:=1;mw<=tm.MaxMatchweeks;mw++ { res:=tm.SimulateMatchweek(mw);if res["status"]!="success"{return fmt.Errorf("temporal season %d week %d: %v",season,mw,res)} }
+		for mw:=1;mw<=tm.MaxMatchweeks;mw++ {
+			res:=tm.SimulateMatchweek(mw)
+			if res["status"]!="success"{return fmt.Errorf("temporal season %d week %d: %v",season,mw,res)}
+		}
 		if res:=tm.ResetNewSeason();res["status"]!="success"{return fmt.Errorf("temporal reset season %d: %v",season,res)}
-		snaps=append(snaps,trajectorySnapshot(tm,ge,900,derive(root,world,"cohort")))
+		snaps=append(snaps,trajectorySnapshot(tm,ge,1800,cohortSeed))
 	}
 	horizons:=[]int{1,2,3,5,8,10,12}
-	for _,h:=range horizons {
-		start:=snaps[0];future:=snaps[h]
-		for pid,a:=range start { b,ok:=future[pid];if !ok{continue}; tf:=map[string]interface{}{"state_t_age":a.Age,"state_t_ability":a.OVR,"state_t_potential":a.Potential,"state_t_injury_burden":a.Injury,"state_t_contract_remaining":clamp(float64(a.Contract),0,6),"state_t_squad_role":a.Role,"coaching_quality":a.Coach,"facility_quality":a.Facility,"mobility_pressure":a.Mobility,"horizon_seasons":h};moved:=0.0;if a.Club!=b.Club{moved=1};tt:=map[string]interface{}{"state_t1_age":b.Age,"state_t1_ability":b.OVR,"state_t1_injury_burden":b.Injury,"state_t1_availability":b.Available,"state_t1_contract_remaining":clamp(float64(b.Contract),0,6),"club_moved_probability":moved,"ability_delta":clamp(float64(b.OVR-a.OVR),-30,30)};parent:=fmt.Sprintf("%s_s%d_%s_h%d",world,startSeason,pid,h);family:="temporal_transitions";if h>=5{family="career_trajectories"};if err:=w.emit(record("temporal_transition",family,world,ids(world,pid,a.Club,parent,"trajectory_"+pid),tf,tt,"direct_simulator_outcome","TRAJECTORY_VIEW","hard",0,1));err!=nil{return err} }
+	for startSeason:=0;startSeason<len(snaps);startSeason++ {
+		for _,h:=range horizons {
+			if startSeason+h>=len(snaps){continue}
+			startSnap:=snaps[startSeason]
+			future:=snaps[startSeason+h]
+			for pid,a:=range startSnap {
+				b,ok:=future[pid]
+				if !ok{continue}
+				tf:=map[string]interface{}{
+					"state_t_age":a.Age,
+					"state_t_ability":a.OVR,
+					"state_t_potential":a.Potential,
+					"state_t_injury_burden":a.Injury,
+					"state_t_contract_remaining":clamp(float64(a.Contract),0,6),
+					"state_t_squad_role":a.Role,
+					"coaching_quality":a.Coach,
+					"facility_quality":a.Facility,
+					"mobility_pressure":a.Mobility,
+					"horizon_seasons":h,
+				}
+				moved:=0.0
+				if a.Club!=b.Club{moved=1}
+				tt:=map[string]interface{}{
+					"state_t1_age":b.Age,
+					"state_t1_ability":b.OVR,
+					"state_t1_injury_burden":b.Injury,
+					"state_t1_availability":b.Available,
+					"state_t1_contract_remaining":clamp(float64(b.Contract),0,6),
+					"club_moved_probability":moved,
+					"ability_delta":clamp(float64(b.OVR-a.OVR),-30,30),
+				}
+				parent:=fmt.Sprintf("%s_s%d_%s_h%d",world,startSeason,pid,h)
+				family:="temporal_transitions"
+				if h>=5{family="career_trajectories"}
+				if err:=w.emit(record("temporal_transition",family,world,ids(world,pid,a.Club,parent,"trajectory_"+pid),tf,tt,"direct_simulator_outcome","TRAJECTORY_VIEW","hard",0,1));err!=nil{return err}
+			}
+		}
 	}
 	return nil
 }
