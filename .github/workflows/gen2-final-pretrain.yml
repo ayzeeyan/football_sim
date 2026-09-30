@@ -1,0 +1,139 @@
+name: Gen2 Final Pretrain Dataset
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.head_ref, 'gen2-final-pretrain-v1-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend_go/go.mod
+          cache-dependency-path: backend_go/go.sum
+
+      - name: Reconstruct pinned generator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backend_go/cmd/gen2pretrain
+          cat .gen2/gen_rows.b64.part* | tr -d '\n\r' | base64 -d > backend_go/cmd/gen2pretrain/main.go
+          gofmt -w backend_go/cmd/gen2pretrain/main.go
+          test -s backend_go/cmd/gen2pretrain/main.go
+
+      - name: Compile generator
+        working-directory: backend_go
+        run: go test ./cmd/gen2pretrain
+
+      - name: Simulator tests
+        working-directory: backend_go
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Pilot generation - 25K
+        working-directory: backend_go
+        run: |
+          go run ./cmd/gen2pretrain \
+            -dataset ../dataset.json \
+            -out ../gen2_pilot \
+            -simulator-commit 0cff407625f090fba11b1408e9e10f8aca355d7e \
+            -accepted 25000 \
+            -max-worlds 20
+
+      - name: Validate pilot
+        shell: python
+        run: |
+          import gzip, json, pathlib
+          root = pathlib.Path("gen2_pilot")
+          s = json.loads((root/"summary.json").read_text())
+          assert s["accepted"] == 25000, s
+          n = 0
+          tasks = set()
+          for name in ["train.jsonl.gz","val.jsonl.gz","holdout_internal.jsonl.gz"]:
+              with gzip.open(root/name, "rt", encoding="utf-8") as f:
+                  for line in f:
+                      row=json.loads(line)
+                      n += 1
+                      tasks.add(row["task"])
+                      assert len(row["model_slots"]) > 0
+                      assert len(row["model_slots"]) == len(row["missing_mask"])
+          assert n == 25000, n
+          assert len(tasks) == 11, tasks
+          print("PILOT PASS", n, sorted(tasks))
+
+      - name: Full generation - 500K minimum production corpus
+        working-directory: backend_go
+        run: |
+          go run ./cmd/gen2pretrain \
+            -dataset ../dataset.json \
+            -out ../gen2_full \
+            -simulator-commit 0cff407625f090fba11b1408e9e10f8aca355d7e \
+            -accepted 500000 \
+            -max-worlds 64
+
+      - name: Validate full corpus and shard to 25K
+        shell: python
+        run: |
+          import gzip, hashlib, json, pathlib, shutil
+          src=pathlib.Path("gen2_full")
+          summary=json.loads((src/"summary.json").read_text())
+          assert summary["accepted"] >= 500000, summary
+          out=pathlib.Path("FMoE_Gen2_FinalPretrain_v1")
+          if out.exists(): shutil.rmtree(out)
+          for split in ["train","val","holdout_internal"]:
+              (out/split).mkdir(parents=True,exist_ok=True)
+          (out/"generation").mkdir()
+          (out/"manifests").mkdir()
+          shutil.copy2(src/"summary.json",out/"generation"/"simulator_generation_summary.json")
+          manifest={"dataset":"FMoE_Gen2_FinalPretrain_v1","simulator_commit":"0cff407625f090fba11b1408e9e10f8aca355d7e","accepted":summary["accepted"],"shards":[]}
+          total=0
+          for split in ["train","val","holdout_internal"]:
+              shard_i=0; rows=0; gzout=None; path=None
+              def open_shard(i):
+                  p=out/split/f"shard-{i:05d}.jsonl.gz"
+                  return p,gzip.open(p,"wt",encoding="utf-8",compresslevel=1)
+              path,gzout=open_shard(shard_i)
+              with gzip.open(src/f"{split}.jsonl.gz","rt",encoding="utf-8") as f:
+                  for line in f:
+                      if rows==25000:
+                          gzout.close()
+                          b=path.read_bytes()
+                          manifest["shards"].append({"file":str(path.relative_to(out)),"rows":rows,"sha256":hashlib.sha256(b).hexdigest(),"size_bytes":len(b),"split":split})
+                          shard_i+=1;rows=0;path,gzout=open_shard(shard_i)
+                      row=json.loads(line)
+                      assert row["split"]==split
+                      gzout.write(json.dumps(row,separators=(",",":"))+"\n")
+                      rows+=1;total+=1
+              gzout.close()
+              if rows:
+                  b=path.read_bytes()
+                  manifest["shards"].append({"file":str(path.relative_to(out)),"rows":rows,"sha256":hashlib.sha256(b).hexdigest(),"size_bytes":len(b),"split":split})
+          assert total == summary["accepted"], (total,summary["accepted"])
+          (out/"manifests"/"shard_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
+          print("FULL CORPUS PASS",total,len(manifest["shards"]))
+
+      - name: Package raw simulator corpus
+        shell: bash
+        run: |
+          zip -q -r FMoE_Gen2_FinalPretrain_v1_RAW_SIMULATOR.zip FMoE_Gen2_FinalPretrain_v1
+          sha256sum FMoE_Gen2_FinalPretrain_v1_RAW_SIMULATOR.zip
+
+      - name: Upload corpus artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FMoE_Gen2_FinalPretrain_v1_RAW_SIMULATOR
+          path: FMoE_Gen2_FinalPretrain_v1_RAW_SIMULATOR.zip
+          compression-level: 0
+          retention-days: 7
