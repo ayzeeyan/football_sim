@@ -29,6 +29,8 @@ jobs:
           set -euo pipefail
           mkdir -p backend_go/cmd/gen2pretrain
           cat .gen2/gen_rows.b64.part* | tr -d '\n\r' | base64 -d > backend_go/cmd/gen2pretrain/main.go
+          # Adapter-only fixes discovered by compile gate; simulator code stays untouched.
+          sed -i 's/b\.Points/b.points/g; s/b\.Morale/b.morale/g; s/b\.Played/b.played/g' backend_go/cmd/gen2pretrain/main.go
           gofmt -w backend_go/cmd/gen2pretrain/main.go
           test -s backend_go/cmd/gen2pretrain/main.go
 
@@ -100,7 +102,7 @@ jobs:
           manifest={"dataset":"FMoE_Gen2_FinalPretrain_v1","simulator_commit":"0cff407625f090fba11b1408e9e10f8aca355d7e","accepted":summary["accepted"],"shards":[]}
           total=0
           for split in ["train","val","holdout_internal"]:
-              shard_i=0; rows=0; gzout=None; path=None
+              shard_i=0; rows=0
               def open_shard(i):
                   p=out/split/f"shard-{i:05d}.jsonl.gz"
                   return p,gzip.open(p,"wt",encoding="utf-8",compresslevel=1)
