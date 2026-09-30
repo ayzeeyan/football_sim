@@ -174,16 +174,51 @@ func competitionLevel(f tournament.Fixture) string {
 	if strings.Contains(s,"league"){return "top"}; return "mid"
 }
 func matchFeatures(tm *tournament.TournamentManager,f tournament.Fixture) map[string]interface{} {
-	h,a:=tm.Clubs[f.HomeID],tm.Clubs[f.AwayID]; hm,am:=tm.Managers[f.HomeID],tm.Managers[f.AwayID]
-	hform,aform:="4-3-3","4-3-3"; if hm!=nil{hform=models.FormationForManager(hm.CanonicalStyle(),h.ClubID)}; if am!=nil{aform=models.FormationForManager(am.CanonicalStyle(),a.ClubID)}
-	if hform=="4-3-3 Attack"{hform="4-3-3"}; if aform=="4-3-3 Attack"{aform="4-3-3"}
-	valid:=func(x string)bool{switch x{case "4-3-3","4-2-3-1","3-4-3","3-5-2","4-4-2","4-1-4-1":return true};return false}; if !valid(hform)||!valid(aform){return nil}
-	return map[string]interface{}{"home_team_quality":h.OverallTeamRating,"away_team_quality":a.OverallTeamRating,"home_advantage":.18,
-		"tactical_matchup":clamp(float64(h.OverallTeamRating-a.OverallTeamRating)/100.0,-1,1),"home_formation":hform,"away_formation":aform,
-		"home_fatigue":clamp(squadAvgFatigue(h),0,100),"away_fatigue":clamp(squadAvgFatigue(a),0,100),"home_fitness":clamp(squadAvgFitness(h),0,100),"away_fitness":clamp(squadAvgFitness(a),0,100),
-		"home_morale":clamp(float64(h.Morale-50)/50,-1,1),"away_morale":clamp(float64(a.Morale-50)/50,-1,1),"home_form":recentForm(h),"away_form":recentForm(a),
-		"home_squad_depth":clamp(squadDepth(h),0,100),"away_squad_depth":clamp(squadDepth(a),0,100),"home_fixture_congestion":0.0,"away_fixture_congestion":0.0,"competition_level":competitionLevel(f)}
+	h,a:=tm.Clubs[f.HomeID],tm.Clubs[f.AwayID]
+	hm,am:=tm.Managers[f.HomeID],tm.Managers[f.AwayID]
+	hform,aform:="4-3-3","4-3-3"
+	if hm!=nil{hform=models.FormationForManager(hm.CanonicalStyle(),h.ClubID)}
+	if am!=nil{aform=models.FormationForManager(am.CanonicalStyle(),a.ClubID)}
+	if hform=="4-3-3 Attack"{hform="4-3-3"}
+	if aform=="4-3-3 Attack"{aform="4-3-3"}
+	valid:=func(x string)bool{switch x{case "4-3-3","4-2-3-1","3-4-3","3-5-2","4-4-2","4-1-4-1":return true};return false}
+	if !valid(hform)||!valid(aform){return nil}
+
+	homeStyle,awayStyle:="possession","possession"
+	if hm!=nil&&hm.Style!=""{homeStyle=hm.Style}
+	if am!=nil&&am.Style!=""{awayStyle=am.Style}
+	edge:=managers.TacticEdge(homeStyle,awayStyle)
+	tactical:=0.0
+	if edge>0{tactical=clamp(edge/0.16,-1,1)}
+	if edge<0{tactical=clamp(edge/0.12,-1,1)}
+	// Production matchengine/instant.go applies +1.5 XI-rating points at home.
+	// The frozen model field is unitless [0,1], so this is an analytic scaling
+	// of the simulator constant onto a 0..10 rating-point reference range.
+	homeAdvantage:=clamp(1.5/10.0,0,1)
+
+	return map[string]interface{}{
+		"home_team_quality":h.OverallTeamRating,
+		"away_team_quality":a.OverallTeamRating,
+		"home_advantage":homeAdvantage,
+		"tactical_matchup":tactical,
+		"home_formation":hform,
+		"away_formation":aform,
+		"home_fatigue":clamp(squadAvgFatigue(h),0,100),
+		"away_fatigue":clamp(squadAvgFatigue(a),0,100),
+		"home_fitness":clamp(squadAvgFitness(h),0,100),
+		"away_fitness":clamp(squadAvgFitness(a),0,100),
+		"home_morale":clamp(float64(h.Morale-50)/50,-1,1),
+		"away_morale":clamp(float64(a.Morale-50)/50,-1,1),
+		"home_form":recentForm(h),
+		"away_form":recentForm(a),
+		"home_squad_depth":clamp(squadDepth(h),0,100),
+		"away_squad_depth":clamp(squadDepth(a),0,100),
+		"home_fixture_congestion":0.0,
+		"away_fixture_congestion":0.0,
+		"competition_level":competitionLevel(f),
+	}
 }
+
 func matchTargets(tm *tournament.TournamentManager,f tournament.Fixture,root int64,rollouts int)(map[string]interface{},float64,bool){
 	hw,dw,aw:=0,0,0; sxh,sxa,vg:=0.0,0.0,0.0; vals:=[]float64{}
 	ok:=0
